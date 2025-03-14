@@ -859,3 +859,177 @@ which will terminate both the coroutine waiting for new connections and all coro
    **Note:** 
    This example contains a circular dependency between objects, which should be avoided in real-world development.
 
+Coroutines belonging to a `Scope` do not increase its reference count.  
+This rule has several important consequences:
+
+```php
+function test(): void
+{
+    $scope = new CoroutineScope();
+    
+    $scope->spawn(function {
+        sleep(1);
+    });
+    
+    $scope->spawn(function {
+        sleep(2);        
+    });
+    
+    // No coroutine will ever be started.
+    unset($scope);
+}
+
+spawn test();
+```
+
+### Error Handling
+
+An uncaught exception in a coroutine follows this flow:
+
+1. If the coroutine is awaited using the `await` operator, 
+the exception is propagated to the awaiting points. 
+If multiple points are awaiting, each will receive the exception.
+2. The exception is passed to the `CoroutineScope`.
+3. If the `CoroutineScope` has an exception handler defined, it will be invoked.
+4. If the `CoroutineScope` does not have an exception handler, the `cancel()` method is called, 
+canceling all coroutines in this scope from top to bottom in the hierarchy, including all child scopes.
+5. If the `CoroutineScope` has responsibility points, i.e., the construction `await $scope`, 
+all responsibility points receive the exception.
+6. Otherwise, the exception is passed to the parent scope if it is defined.
+7. If there is no parent scope, the exception falls into `globalScope`, 
+where the same rules apply as for a regular scope.
+
+```puml
+@startuml
+start
+:Unhandled Exception Occurred;
+if (Await operator is used?) then (Yes)
+    :Exception is propagated to await points;
+else (No)
+    while (CoroutineScope exists?)
+        :Exception is passed to CoroutineScope;
+        if (CoroutineScope has an exception handler?) then (Yes)
+            :Invoke exception handler;
+            stop
+        else (No)
+            :CoroutineScope::cancel();
+        endif
+        if (CoroutineScope has responsibility points?) then (Yes)
+            :All responsibility points receive the exception;
+            stop
+        endif
+        if (Parent Scope exists?) then (Yes)
+            :Pass exception to Parent Scope;
+        else (No)
+            :Pass exception to globalScope;
+            break
+        endif
+    endwhile
+endif
+stop
+@enduml
+```
+
+If an exception reaches `globalScope` and is not handled in any way, 
+it triggers **Graceful Shutdown Mode**, which will terminate the entire application.
+
+#### Responsibility points
+
+A **responsibility point** is code that explicitly waits for the completion of a coroutine or a `Scope`:
+
+```php
+$scope = new CoroutineScope();
+
+$scope->spawn function {
+  throw new Exception("Task 1");        
+};
+
+try {
+    await $scope;
+} catch (Exception $e) {
+     echo "Caught exception: {$e->getMessage()}\n";
+}      
+```
+
+A **responsibility point** has a chance to receive 
+not only the result of the coroutine execution but also an unhandled exception.
+
+#### Exception Handling
+
+The `BoundedCoroutineScope` class provides a method for handling exceptions:
+
+```php
+$scope = new BoundedCoroutineScope();
+
+$scope->spawn function {
+  throw new Exception("Task 1");        
+};
+
+$scope->setExceptionHandler(function (Exception $e) {
+    echo "Caught exception: {$e->getMessage()}\n";
+});
+
+await $scope;
+```
+
+An exception handler has the right to suppress the exception.  
+However, if the exception handler throws another exception, 
+the exception propagation algorithm will continue.
+
+#### onExit
+
+The `onExit` method allows defining a callback function that will be invoked when a coroutine or scope completes.  
+This method can be considered a direct analog of `defer` in Go.
+
+```php
+$scope = new CoroutineScope();
+
+$scope->spawn function {
+  throw new Exception("Task 1");        
+};
+
+$scope->onExit(function () {
+    echo "Task 1 completed\n";
+});
+
+await $scope;
+```
+
+Or for coroutines:
+
+```php
+function task(): void 
+{
+    onExit(function () {
+        echo "Task completed\n";
+    });
+    
+    throw new Exception("Task 1");
+}
+
+spawn task();
+```
+
+The `onExit` semantics are most commonly used to release resources, 
+serving as a shorter alternative to `try-finally` blocks:
+
+```php
+function task(): void 
+{
+    $file = fopen('file.txt', 'r');    
+    onExit(fn() => fclose($file));
+    
+    throw new Exception("Task 1");
+}
+
+spawn task();
+```
+
+### Cancellation
+
+#### exit and die operators
+
+The `exit`/`die` operators called within a coroutine result in the immediate termination of the application.  
+Unlike the `cancel()` operation, they do not allow for proper resource cleanup.
+
+### Graceful Shutdown
