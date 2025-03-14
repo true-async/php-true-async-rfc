@@ -782,3 +782,80 @@ $childScope->spawn(function {
 
 await $parentScope;
 ```
+
+#### Coroutine Scope Lifetime
+
+The lifetime of a `Scope` is determined by the lifetime of the PHP object `$scope`. 
+The lifetime of coroutines belonging to a `Scope` is restricted by the lifetime of that `Scope`. 
+This rule allows the creation of coroutine groups that can be tied to the lifetime of a service.
+
+Let's consider an example:
+
+```php
+final class SocketPoll
+{
+    private $serverSocket;
+    private CoroutineScope $scope;
+
+    public function __construct(string $host, int $port)
+    {
+        $this->serverSocket = stream_socket_server("tcp://$host:$port", $errno, $errstr);
+        
+        if (!$this->serverSocket) {
+            throw new RuntimeException("Failed to create server socket: $errstr ($errno)");
+        }
+        
+        $this->scope = new CoroutineScope();
+    }
+    
+    public function __destruct()
+    {
+        $this->stop();
+    }
+
+    public function start(): void
+    {
+        $this->scope->spawn(function () {
+           try {
+              while (($clientSocket = stream_socket_accept($this->serverSocket, 0)) !== null) {
+                  $this->scope->spawn($this->handleConnection(...), $clientSocket);
+              }           
+           } finally {
+               fclose($this->serverSocket);
+           }
+        });   
+    }
+
+    private function handleConnection($clientSocket): void
+    {
+         try {
+             fwrite($clientSocket, "Hello! You're connected.\n");
+         
+             while (!feof($clientSocket)) {
+                 $data = fread($clientSocket, 1024);
+                 if ($data === false || $data === '') {
+                     break;
+                 }
+                 
+                 fwrite($clientSocket, "Received: $data");
+             }
+         } finally {
+             fclose($clientSocket);
+         }         
+    }
+
+    public function stop(): void
+    {
+        fclose($this->serverSocket);
+        $this->scope->cancel();
+    }
+}
+```
+
+The `SocketPoll` service creates a separate private `Scope` for all the coroutines it starts.  
+This allows it to easily cancel the connection handling process, 
+which will terminate both the coroutine waiting for new connections and all coroutines processing them.
+
+   **Note:** 
+   This example contains a circular dependency between objects, which should be avoided in real-world development.
+
