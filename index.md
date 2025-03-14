@@ -382,7 +382,8 @@ function task(): void
 spawn task();
 ```
 
-You can use the `CoroutineScope` primitive to write similar code:
+The `CoroutineScope` primitive allows implementing **Bottom-Up** behavior within the **Top-Down** model.  
+In the following example, the parent coroutine will wait for the completion of all child coroutines at every depth level.
 
 ```php
 function task(): void 
@@ -399,13 +400,10 @@ function task(): void
         echo "Hello, PHP!";
     });
     
+    // parent lifetime is extended to all descendants
     await $coroutineScope;
 }
 ```
-
-The **Top-down** model does not provide a way to wait for all descendants without depth restrictions.  
-This can be considered an advantage of the model, as it forces the programmer to explicitly define  
-the expectations of parent coroutines.
 
 A drawback of the **Top-down** model, as well as the **Bottom-up** model,  
 is the need for a special syntax to create a coroutine that will execute independently of the parent.
@@ -438,15 +436,15 @@ function task(): void
 
 Let's briefly review typical use cases for each model:
 
-| Use Case                                   | No Limitation                         | Bottom-up                                | Top-down                                        |
-|--------------------------------------------|---------------------------------------|------------------------------------------|-------------------------------------------------|
-| Asynchronous tasks in UI                   | ± Allows independent execution        | - May delay UI responsiveness            | - May prematurely interrupt child tasks         |
-| Data processing where tasks spawn subtasks | - Requires manual synchronization     | + Ensures subtasks finish before parent  | - Risk of losing subtasks and data              |
-| **Long-running background tasks**          | + Suitable for independent execution  | + Guarantees complete execution          | - Risks premature cancellation                  |
-| **Server request handling**                | - Risk of resource leaks              | - Can lead to high memory consumption    | + Ensures resource cleanup                      |
-| Parallel execution of independent tasks    | + Best for unrelated concurrent tasks | - Additional structure required          | - Poor; risks unwanted task cancellations       |
-| **Hierarchical task management**           | - No built-in hierarchy               | ± Acceptable, but not ideal              | + Strongly hierarchical, controlled             |
-| Actor-based concurrency                    | - Requires manual management          | - Actors may unintentionally block parent| + Ideal for actor-based concurrency             |
+| Use Case                                   | No Limitation                         | Bottom-up                                    | Top-down                                        |
+|--------------------------------------------|---------------------------------------|----------------------------------------------|-------------------------------------------------|
+| Asynchronous tasks in UI                   | ± Allows independent execution        | - May delay UI responsiveness                | - May prematurely interrupt child tasks         |
+| Data processing where tasks spawn subtasks | - Requires manual synchronization     | + Ensures subtasks finish before parent      | - Risk of losing subtasks and data              |
+| **Long-running background tasks**          | + Suitable for independent execution  | + Guarantees complete execution              | - Risks premature cancellation                  |
+| **Server request handling**                | - Risk of resource leaks              | - Can lead to high memory consumption        | + Ensures resource cleanup                      |
+| Parallel execution of independent tasks    | + Best for unrelated concurrent tasks | - Additional structure required              | - Poor; risks unwanted task cancellations       |
+| **Hierarchical task management**           | - No built-in hierarchy               | + Ensures the execution of child coroutines. | + Strongly hierarchical, controlled             |
+| Actor-based concurrency                    | - Requires manual management          | - Actors may unintentionally block parent    | + Ideal for actor-based concurrency             |
 
 
 To make a choice in favor of a particular model, we should consider the nature of **PHP** as a language  
@@ -464,3 +462,323 @@ implementing specific patterns or algorithms while hiding complexity behind cont
 The **primary argument** for choosing the **Top-down** model is that it forces the programmer to extend 
 the lifetime of coroutines when necessary, rather than restricting them as in the Bottom-up model, 
 which leads to resource minimization.
+
+### Structured concurrency
+
+Structural concurrency helps a programmer bind execution using code blocks organized in a hierarchy.  
+Programming languages use two approaches:
+* Coroutine functions themselves are structural elements.
+* Additional syntactic blocks can complement control.
+
+When making a choice within PHP, we will follow the rule of minimizing syntax.
+
+This is why coroutine functions will be the primary and only syntactic blocks for structural concurrency, 
+but not the only semantic tools.  
+The order of coroutine execution forms a hierarchy that follows the rules of the Top-down strategy:
+
+```php
+function subsubtask(): void 
+{
+    sleep(1);
+    echo "Subsubtask\n";
+}
+
+function subtask(): void 
+{
+    echo "Subtask\n";
+    await spawn subsubtask();
+}
+
+function task(): void 
+{
+    await spawn subtask();    
+}
+
+spawn task();
+```
+
+Hierarchy of calls:
+
+```plaintext
+GLOBAL
+└── task()
+    └── subtask()
+        └── subsubtask()
+```
+
+Execution flow:
+1. `task()` is spawned.
+2. `subtask()` is spawned and awaited.
+    - Prints: **"Subtask"**
+3. `subsubtask()` is spawned and awaited inside `subtask()`.
+    - Sleeps for 1 second.
+    - Prints: **"Subsubtask"**
+
+The lifetime of child coroutines cannot exceed the lifetime of their parent.  
+In the example above, parents explicitly await the execution of child coroutines,  
+so the total lifetime of `task` equals the execution time of `subsubtask`.
+
+```php
+function mainTask(): void 
+{
+    // watcher pattern
+    spawn function {
+        while (true) {
+            sleep(2);
+            echo "Cleanup: removing dead connections...\n";
+        }
+    };
+
+   while(...) {       
+       echo "Worker: processing connection $i...\n";
+       ...
+       suspend();
+   }
+}
+
+spawn mainTask();
+```
+
+The example above demonstrates the **Watcher** pattern.  
+The `mainTask` function creates a child coroutine **Watcher**, 
+which periodically cleans up resources in an infinite loop, while `mainTask` performs useful work.  
+The **Watcher** will be terminated as soon as the task completes its work.
+
+### Coroutine Scope
+
+In **structural concurrency**, a **Scope** is a mechanism that ensures coroutines are properly managed 
+within a defined execution context. 
+It provides control over **lifetime, cancellation, and completion** of coroutines.
+
+Child coroutines inherit the parent's Scope:
+
+```php
+function task(): void 
+{
+    $scope = new CoroutineScope();
+    $scope->set('connections', 0);
+    
+    $scope->spawn function {
+        sleep(1);
+        echo currentScope()->get('connections')."\n";
+    };
+    
+    $scope->spawn function {
+        sleep(2);
+        echo currentScope()->get('connections')."\n";
+    };
+    
+    await $scope;
+}
+
+spawn task();
+```
+
+The `Scope` primitive can be used in an `await` expression, 
+in which case the code will pause until all child tasks are completed.
+
+#### Coroutine Scope waiting
+
+The `await` operator can be used with a `Scope` object:
+
+```php
+function task(): void 
+{
+    $scope = new CoroutineScope();
+    
+    $scope->spawn function {
+        spawn function {
+            sleep(1);
+            echo "Task 1-1\n";
+        };
+        
+        sleep(1);
+        echo "Task 1\n";
+    };
+    
+    $scope->spawn function {
+        sleep(2);
+        echo "Task 2\n";
+    };
+    
+    // wait for all child coroutines
+    await $scope;
+}
+
+spawn task();
+```
+
+If you need to wait only for direct descendants, use the method `awaitDirectChildren`: 
+
+```php
+$scope = new CoroutineScope();
+// create child coroutines        
+$scope->awaitDirectChildren();
+```
+
+#### Scope cancellation
+
+The `cancel` method cancels all child coroutines:
+
+```php
+$scope = new CoroutineScope();
+$scope->spawn function {
+    sleep(1);
+    echo "Task 1\n";
+};
+$scope->spawn function {
+    sleep(2);
+    echo "Task 2\n";
+};
+
+$scope->cancel();
+```
+
+#### BoundedCoroutineScope
+
+The `BoundedCoroutineScope` class is designed to create explicit constraints 
+that will be applied to all coroutines spawned within the specified Scope.
+
+| Method                                 | Description                                                                                             |
+|----------------------------------------|---------------------------------------------------------------------------------------------------------|
+| `withTimeout(int $milliseconds)`       | Creates a new scope with a specified timeout, automatically canceling coroutines when the time expires. |
+| `spawnAndBound(callable $coroutine)`   | Spawns a coroutine and restricts the lifetime of the entire Scope to match the coroutine’s lifetime.    |
+| `boundedBy(mixed $constraint)`         | Limits the scope’s lifetime based on a **Cancellation token, Future, or another coroutine's lifetime**. |
+
+```php
+$scope = new BoundedCoroutineScope();
+$scope->withTimeout(1000);
+
+$scope->spawnAndBound(function {
+    sleep(2);
+    echo "Task 1\n";
+});
+
+await $scope;
+```
+
+#### Coroutine Scope Slots
+
+| Method                                                                | Description                                         |
+|-----------------------------------------------------------------------|-----------------------------------------------------|
+| `find(string\|object $key): mixed`                                    | Find a value by key in the current or parent Scope. |
+| `get(string\|object $key): mixed`                                     | Get a value by key in the current Scope.            |
+| `has(string\|object $key): bool`                                      | Check if a key exists in the current Scope.         |
+| `findLocal(string\|object $key): mixed`                               | Find a value by key only in the local Scope.        |
+| `getLocal(string\|object $key): mixed`                                | Get a value by key only in the local Scope.         |
+| `hasLocal(string\|object $key): bool`                                 | Check if a key exists in the local Scope.           |
+| `set(string\|object $key, mixed $value, bool $replace = false): self` | Set a value by key in the Scope.                    |
+| `del(string\|object $key): self`                                      | Delete a value by key from the Scope.               |
+
+
+The `CoroutineScope` class provides a mechanism 
+for storing data that is accessible to all child coroutines.
+
+```php
+$scope = new CoroutineScope();
+$scope->set('connections', 0);
+
+$scope->spawn(function {
+    sleep(1);
+    echo currentScope()->get('connections')."\n";
+});
+
+$scope->spawn(function {
+    sleep(2);
+    echo currentScope()->get('connections')."\n";
+});
+
+await $scope;
+```
+
+**Coroutine Scope Slots** are an efficient mechanism for managing memory 
+associated with coroutine lifetimes.  
+Once all coroutines owning the Scope complete, 
+or the Scope itself is terminated, all data in the slots will be released.
+
+This helps the programmer associate data with coroutines without writing explicit cleanup code.
+
+To ensure data encapsulation between different components, 
+**Coroutine Scope Slots** provide the ability to associate data using **key objects**.  
+An object instance is unique across the entire application, 
+so code that does not have access to the object cannot read the data associated with it.
+
+This pattern is used in many programming languages and is represented in JavaScript by a special class, **Symbol**.
+
+```php
+$key = new ScopeKey('pdo connection');
+
+if(currentScope()->has($key)) {
+    $pdo = currentScope()->get($key);
+} else {
+    $pdo = new PDO('sqlite::memory:');
+    currentScope()->set($key, new PDO('sqlite::memory:'));
+}
+```
+
+**Coroutine Scope Slots** can automatically dereference **WeakReference**.  
+If you assign a **WeakReference** to a slot and then call `find()`, 
+you will receive the original object or `NULL`.
+
+```php
+function task(): void 
+{
+    // Should return the original object
+    $pdo = currentScope()->find('pdo');
+}
+
+$pdo = new PDO('sqlite::memory:');
+currentScope()->set('pdo', new WeakReference($pdo));
+
+spawn task();
+```
+
+#### Coroutine Scope Inheritance
+
+Scope primitives, like coroutines, can be structured into a hierarchy. 
+To create a Scope object that inherits from another, use the static method `inherit()`.
+
+```php
+$parentScope = new CoroutineScope();
+$parentScope->set('connections', 0);
+$parentScope->set('pdo', new PDO('sqlite::memory:'));
+$childScope = CoroutineScope::inherit($parentScope);
+$childScope->set('connections', 1);
+
+$childScope->spawn(function {
+    echo "Child\n";
+    echo currentScope()->get('connections')."\n";
+});
+
+$parentScope->spawn(function {
+    echo "Parent\n";
+    echo currentScope()->get('connections')."\n";
+});
+
+await $parentScope;
+```
+
+A child `Scope` overrides the parent's memory slots. 
+If a slot with the same key is defined in the child `Scope`, 
+the `get` method will return the value from the child slot; 
+otherwise, it will return the value from the parent.
+
+Waiting for a parent Scope extends to waiting for all child Scopes in the hierarchy.
+
+The restrictions of a parent `Scope` do not directly apply to child `Scope` instances. 
+However, the lifetime of child `Scope` instances cannot exceed that of the parent. 
+Therefore, if the parent is completed or canceled, the same will happen to all child `Scope` instances.
+
+
+```php
+$parentScope = new BoundCoroutineScope();
+$parentScope->withTimeout(1000);
+$childScope = CoroutineScope::inherit($parentScope);
+
+$childScope->spawn(function {
+    sleep(2);
+    echo "This code will not be executed";
+});
+
+await $parentScope;
+```
