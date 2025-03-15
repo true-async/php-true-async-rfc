@@ -558,15 +558,15 @@ function task(): void
     $scope = new CoroutineScope();
     $scope->set('connections', 0);
     
-    $scope->spawn function {
+    $scope->spawn(function {
         sleep(1);
         echo currentScope()->get('connections')."\n";
-    };
+    });
     
-    $scope->spawn function {
+    $scope->spawn(function {
         sleep(2);
         echo currentScope()->get('connections')."\n";
-    };
+    });
     
     await $scope;
 }
@@ -586,7 +586,7 @@ function task(): void
 {
     $scope = new CoroutineScope();
     
-    $scope->spawn function {
+    $scope->spawn(function {
         spawn function {
             sleep(1);
             echo "Task 1-1\n";
@@ -594,12 +594,12 @@ function task(): void
         
         sleep(1);
         echo "Task 1\n";
-    };
+    });
     
-    $scope->spawn function {
+    $scope->spawn(function {
         sleep(2);
         echo "Task 2\n";
-    };
+    });
     
     // wait for all child coroutines
     await $scope;
@@ -622,14 +622,15 @@ The `cancel` method cancels all child coroutines:
 
 ```php
 $scope = new CoroutineScope();
-$scope->spawn function {
+$scope->spawn(function {
     sleep(1);
     echo "Task 1\n";
-};
-$scope->spawn function {
+});
+
+$scope->spawn(function {
     sleep(2);
     echo "Task 2\n";
-};
+});
 
 $scope->cancel();
 ```
@@ -940,9 +941,9 @@ A **responsibility point** is code that explicitly waits for the completion of a
 ```php
 $scope = new CoroutineScope();
 
-$scope->spawn function {
+$scope->spawn(function {
   throw new Exception("Task 1");        
-};
+});
 
 try {
     await $scope;
@@ -961,9 +962,9 @@ The `BoundedCoroutineScope` class provides a method for handling exceptions:
 ```php
 $scope = new BoundedCoroutineScope();
 
-$scope->spawn function {
+$scope->spawn(function {
   throw new Exception("Task 1");        
-};
+});
 
 $scope->setExceptionHandler(function (Exception $e) {
     echo "Caught exception: {$e->getMessage()}\n";
@@ -984,9 +985,9 @@ This method can be considered a direct analog of `defer` in Go.
 ```php
 $scope = new CoroutineScope();
 
-$scope->spawn function {
+$scope->spawn(function {
   throw new Exception("Task 1");        
-};
+});
 
 $scope->onExit(function () {
     echo "Task 1 completed\n";
