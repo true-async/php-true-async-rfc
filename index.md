@@ -264,6 +264,18 @@ spawn function {
 `await` suspends the execution of the current coroutine until 
 the awaited one returns a final result or completes with an exception.
 
+### Edge Behavior
+
+The use of `spawn`/`await`/`suspend` is allowed in almost any part of a PHP program.
+This is possible because the PHP script entry point forms the **main execution thread**, 
+which is also considered a coroutine.  
+
+As a result, functions like `suspend()` and `currentCoroutine()` will behave the same way as in other cases.
+
+If only **one coroutine** exists in the system, calling `suspend()` will immediately return control.
+
+Creating coroutines is **forbidden** inside the `register_shutdown_function()` handler.
+
 ### Lifetime limitation
 
     The lifecycle of a coroutine is the time limit within which the coroutine is allowed to execute.
