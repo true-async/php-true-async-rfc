@@ -1105,6 +1105,106 @@ stop
 If an exception reaches `globalScope` and is not handled in any way, 
 it triggers **Graceful Shutdown Mode**, which will terminate the entire application.
 
+The `BoundedScope` class allows defining an exception handler that can prevent exception propagation.
+
+For this purpose, two methods are used:
+- **`setExceptionHandler`** – triggers for any exceptions thrown within this **Scope**.
+- **`setChildScopeExceptionHandler`** – triggers for exceptions from **child Scopes**.
+
+**Example:**
+
+```php
+$scope = new BoundedScope();
+$scope->setExceptionHandler(function (Async\Scope $scope, Async\Coroutine $coroutine, Throwable $e) {
+    echo "Caught exception: {$e->getMessage()}\n in coroutine: {$coroutine->getSpawnLocation()}\n";
+});
+
+$scope->spawn(function() {
+    throw new Exception("Task 1");
+});
+
+Async\await($scope);
+```
+
+Using these handlers, 
+you can implement the **Supervisor** pattern, i.e., 
+a **Scope** that will not be canceled when an exception occurs in coroutines.
+
+The **`setChildScopeExceptionHandler`** method allows handling exceptions only from **child Scopes**, 
+which can be useful for implementing an algorithm where the **main Scope** runs core tasks, 
+while **child Scopes** handle additional ones.
+
+For example:
+
+```php
+final class Service
+{
+    private Scope $scope;
+    
+    public function __construct()
+    {
+        $this->scope = new Scope();
+        
+        $this->scope->setChildScopeExceptionHandler(
+        static function (Scope $scope, Coroutine $coroutine, \Throwable $exception): void {
+            echo "Occurred an exception: {$exception->getMessage()} in Coroutine {$coroutine->getSpawnLocation()}\n";
+        });
+    }
+    
+    public function start(): void
+    {
+        $this->scope->spawn($this->run(...));
+    }
+    
+    public function stop(): void 
+    {
+        $this->scope->cancel();
+    }
+    
+    private function run(): void
+    {
+        while (($socket = $this->service->receive()) !== null) {
+            Scope::inherit($this->scope)->spawn($this->handleRequest(...), $socket);
+        }
+    }
+}
+```
+
+`$this->scope` listens for new connections on the server socket.  
+Canceling `$this->scope` means shutting down the entire service.
+
+Each new connection is handled in a separate **Scope**, which is inherited from `$this->scope`.  
+If an exception occurs in a coroutine created within a **child Scope**, 
+it will be passed to the `setChildScopeExceptionHandler` handler and will not affect 
+the operation of the service as a whole.
+
+```puml
+@startuml
+actor Client
+participant "Service (Main Scope)" as Service
+participant "Request Handler (Child Scope)" as Handler
+
+Client -> Service : New connection request
+Service -> Handler : Create child scope and spawn coroutine
+
+loop For each request
+    Client -> Handler : Send request
+    Handler -> Client : Send response
+end
+
+alt Exception in child scope
+    Handler -> Service : Exception propagated to setChildScopeExceptionHandler
+    note right: Exception is logged, service continues running
+end
+
+alt Main scope cancelled
+    Service -> Handler : Cancel all child scopes
+    Handler -> Client : Disconnect
+end
+
+@enduml
+```
+
 #### Responsibility points
 
 A **responsibility point** is code that explicitly waits for the completion of a coroutine or a `Scope`:
@@ -1118,7 +1218,7 @@ $scope->spawn(function() {
 
 try {
     await $scope;
-} catch (Exception $e) {
+} catch (\Throwable $e) {
      echo "Caught exception: {$e->getMessage()}\n";
 }      
 ```

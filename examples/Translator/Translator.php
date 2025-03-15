@@ -29,7 +29,7 @@ final class Translator
         // Handling exceptions from child **Scopes** ensures that errors in child coroutines do not propagate
         // to the current **Scope** and do not crash the entire application.
         $this->scope->setChildScopeExceptionHandler(static function (Scope $scope, Coroutine $coroutine, \Throwable $exception): void {
-            echo "Occurred an exception: {$exception->getMessage()} in Coroutine {$coroutine->spawnedIn()}\n";
+            echo "Occurred an exception: {$exception->getMessage()} in Coroutine {$coroutine->getSpawnLocation()}\n";
         });
     }
     
