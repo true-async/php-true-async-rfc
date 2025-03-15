@@ -1315,9 +1315,12 @@ The `Async\getCoroutines()` method returns an array of all coroutines in the app
 
 ### Prototypes
 
-```php
-
-```
+* [Async functions](./examples/Async/Async.php)
+* [Coroutine](./examples/Async/Coroutine.php)
+* [Coroutine Context](./examples/Async/Context.php)
+* [Coroutine Scope](./examples/Async/Scope.php)
+* [Coroutine BoundedScope](./examples/Async/BoundedScope.php)
+* [Coroutine Key](./examples/Async/Key.php)
 
 ## Backward Incompatible Changes
 
