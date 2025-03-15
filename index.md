@@ -28,10 +28,33 @@ but its behavior is not defined within this **RFC**.
 > These components **MUST** implement the contracts defined in this document. 
 > The **Scheduler** and **Reactor** **MAY** extend the behavior of this **RFC** by providing additional functionalities.
 
-### **Possible Syntax**
+### Possible Syntax
 
-In this RFC, you can see a potential new syntax for describing concurrency.  
+In this **RFC**, you can see a potential new syntax for describing concurrency.  
 This syntax is **NOT a mandatory** part of this **RFC** and may be adopted separately.
+
+### Limitations
+
+This **RFC** does not implement "colored functions" 
+(see: https://journal.stuffwithstuff.com/2015/02/01/what-color-is-your-function/). 
+Instead, it provides **transparent concurrency**, allowing **any function** to be asynchronous.
+
+This **RFC** does not contradict a potential multitasking implementation 
+where possible but does not assume its existence.
+
+This **RFC** assumes the ability to create coroutines in other **Threads** using the **Scheduler API** 
+or separate extensions but does not describe this capability.
+
+This **RFC** also assumes functionality expansion using **SharedMemory**, 
+specifically designed shared memory objects, through a separate API that is not part of this **RFC**.
+
+This RFC is a core part of the **PHP TRUE ASYNC** contracts 
+but assumes the development and approval of the following RFCs:
+
+- **True Async API** – a low-level API for PHP extensions
+- **Scheduler/Reactor API** – additional API for managing coroutines and the event loop
+- **Primitives:** `Channel`, `Future`, `Iterator`, `Interval`
+- **Inter-thread communication / Shared Memory objects**
 
 ### Coroutine
 
@@ -1280,3 +1303,14 @@ about what the coroutine is waiting for, if it is in a waiting state.
 The format of this array depends on the implementation of the **Scheduler** and the **Reactor**.
 
 The `Async\getCoroutines()` method returns an array of all coroutines in the application.
+
+## Backward Incompatible Changes
+
+Simultaneous use of the **True Async API** and the **Fiber API** is not possible.
+
+- If `new Fiber()` is called first, the `Async\spawn` function will fail with an error.
+- If `Async\spawn` is called first, any attempt to create a **Fiber** will result in an error.
+
+## Proposed PHP Version(s)
+
+PHP 8.6/ PHP 9.0
