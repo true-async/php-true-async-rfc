@@ -30,26 +30,27 @@ function suspend(): void {}
  *
  * @return mixed
  */
-function await(Awaitable $awaitable): mixed
-{
+function await(Awaitable $awaitable): mixed {}
 
-}
+/**
+ * Returns the current Scope.
+ */
+function currentScope(): Scope {}
 
-function currentScope(): Scope
-{
-}
+/**
+ * Returns the current coroutine.
+ */
+function currentCoroutine(): Coroutine {}
 
-function currentCoroutine(): Coroutine
-{
-}
+/**
+ * Returns the global Scope.
+ */
+function globalScope(): Scope {}
 
-function globalScope(): Scope
-{
-}
-
-function rootScope(): Scope
-{
-}
+/**
+ * Returns the root Scope.
+ */
+function rootScope(): Scope {}
 
 /**
  * Returns the list of all coroutines

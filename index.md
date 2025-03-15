@@ -1313,6 +1313,12 @@ The format of this array depends on the implementation of the **Scheduler** and 
 
 The `Async\getCoroutines()` method returns an array of all coroutines in the application.
 
+### Prototypes
+
+```php
+
+```
+
 ## Backward Incompatible Changes
 
 Simultaneous use of the **True Async API** and the **Fiber API** is not possible.
