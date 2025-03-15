@@ -1028,6 +1028,56 @@ spawn task();
 
 ### Cancellation
 
+The cancellation operation is available for coroutines and scopes 
+using the `cancel()` method:
+
+```php
+function task(): void {}
+
+$coroutine = spawn task();
+
+// cancel the coroutine
+$coroutine->cancel(new Async\CancellationException('Task was cancelled'));
+```
+
+The cancellation operation is implemented as follows:
+
+1. If a coroutine has not started, it will never start.
+2. If a coroutine is suspended, its execution will resume with an exception.
+3. If a coroutine has already completed, nothing happens.
+
+The `CancellationException`, if unhandled within a coroutine, is automatically suppressed after the coroutine completes.
+
+> ⚠️ **Warning:** You should not attempt to suppress `CancellationException` exception, 
+> as it may cause application malfunctions.
+
+```php
+$scope = new CoroutineScope();
+
+$scope->spawn(function() {
+    sleep(1);        
+    echo "Task 1\n";
+});
+
+$scope->cancel(new Async\CancellationException('Task was cancelled'));
+```
+
+Canceling a `Scope` triggers the cancellation of all coroutines 
+within that `Scope` and all child `Scopes` in hierarchical order.
+
+#### CancellationException propagation
+
+The `CancellationException` affects PHP standard library functions differently. 
+If it is thrown inside one of these functions that previously did not throw exceptions, 
+the PHP function will terminate with an error.
+
+In other words, the `cancel()` mechanism does not alter the existing function contract. 
+PHP standard library functions behave as if the operation had failed.
+
+Additionally, the `CancellationException` will not appear in `get_last_error()`, 
+but it may trigger an `E_WARNING` to maintain compatibility with expected behavior 
+for functions like `fwrite` (if such behavior is specified in the documentation).
+
 #### exit and die operators
 
 The `exit`/`die` operators called within a coroutine result in the immediate termination of the application.  
