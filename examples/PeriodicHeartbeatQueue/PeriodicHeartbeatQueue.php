@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace PeriodicHeartbeatQueue;
 
-use Async\CoroutineScope;
+use Async\Scope;
 use function Async\spawn;
 use WeakReference;
 
@@ -13,9 +13,9 @@ use WeakReference;
  */
 final class PeriodicHeartbeatQueue
 {
-    private array          $clients = [];
-    private CoroutineScope $scope;
-    private int            $heartbeatPeriod;
+    private array $clients = [];
+    private Scope $scope;
+    private int   $heartbeatPeriod;
     private int            $queuedPingLimit;
     
     public function __construct(int $heartbeatPeriod = 60, int $queuedPingLimit = 2)
@@ -23,7 +23,7 @@ final class PeriodicHeartbeatQueue
         $this->heartbeatPeriod = $heartbeatPeriod;
         $this->queuedPingLimit = $queuedPingLimit;
         
-        $this->scope           = new CoroutineScope();
+        $this->scope           = new Scope();
         // Stop the queue when an exception occurs.
         $this->scope->setExceptionHandler($this->stop(...));
         

@@ -436,13 +436,13 @@ function task(): void
 spawn task();
 ```
 
-The `CoroutineScope` primitive allows implementing **Bottom-Up** behavior within the **Top-Down** model.  
+The `Scope` primitive allows implementing **Bottom-Up** behavior within the **Top-Down** model.  
 In the following example, the parent coroutine will wait for the completion of all child coroutines at every depth level.
 
 ```php
 function task(): void 
 {
-    $coroutineScope = new CoroutineScope();
+    $coroutineScope = new Scope();
     
     $coroutineScope->spawn(function() {    
         sleep(10);
@@ -607,9 +607,11 @@ It provides control over **lifetime, cancellation, and completion** of coroutine
 Child coroutines inherit the parent's Scope:
 
 ```php
+use Async\Scope;
+
 function task(): void 
 {
-    $scope = new CoroutineScope();
+    $scope = new Scope();
     $scope->set('connections', 0);
     
     $scope->spawn(function() {
@@ -638,7 +640,7 @@ The `await` operator can be used with a `Scope` object:
 ```php
 function task(): void 
 {
-    $scope = new CoroutineScope();
+    $scope = new Scope();
     
     $scope->spawn(function() {
         spawn function {
@@ -665,7 +667,7 @@ spawn task();
 If you need to wait only for direct descendants, use the method `awaitDirectChildren`: 
 
 ```php
-$scope = new CoroutineScope();
+$scope = new Scope();
 // create child coroutines        
 $scope->awaitDirectChildren();
 ```
@@ -675,7 +677,7 @@ $scope->awaitDirectChildren();
 The `cancel` method cancels all child coroutines:
 
 ```php
-$scope = new CoroutineScope();
+$scope = new Scope();
 $scope->spawn(function() {
     sleep(1);
     echo "Task 1\n";
@@ -689,9 +691,9 @@ $scope->spawn(function() {
 $scope->cancel();
 ```
 
-#### BoundedCoroutineScope
+#### BoundedScope
 
-The `BoundedCoroutineScope` class is designed to create explicit constraints 
+The `BoundedScope` class is designed to create explicit constraints 
 that will be applied to all coroutines spawned within the specified Scope.
 
 | Method                                 | Description                                                                                             |
@@ -701,7 +703,7 @@ that will be applied to all coroutines spawned within the specified Scope.
 | `boundedBy(mixed $constraint)`         | Limits the scope’s lifetime based on a **Cancellation token, Future, or another coroutine's lifetime**. |
 
 ```php
-$scope = new BoundedCoroutineScope();
+$scope = new BoundedScope();
 $scope->withTimeout(1000);
 
 $scope->spawnAndBound(function() {
@@ -723,14 +725,14 @@ await $scope;
 | `getLocal(string\|object $key): mixed`                                | Get a value by key only in the local Scope.         |
 | `hasLocal(string\|object $key): bool`                                 | Check if a key exists in the local Scope.           |
 | `set(string\|object $key, mixed $value, bool $replace = false): self` | Set a value by key in the Scope.                    |
-| `del(string\|object $key): self`                                      | Delete a value by key from the Scope.               |
+| `unset(string\|object $key): self`                                    | Delete a value by key from the Scope.               |
 
 
-The `CoroutineScope` class provides a mechanism 
+The `Scope` class provides a mechanism 
 for storing data that is accessible to all child coroutines.
 
 ```php
-$scope = new CoroutineScope();
+$scope = new Scope();
 $scope->set('connections', 0);
 
 $scope->spawn(function() {
@@ -761,7 +763,7 @@ so code that does not have access to the object cannot read the data associated 
 This pattern is used in many programming languages and is represented in JavaScript by a special class, **Symbol**.
 
 ```php
-$key = new ScopeKey('pdo connection');
+$key = new Async\Key('pdo connection');
 
 if(currentScope()->has($key)) {
     $pdo = currentScope()->get($key);
@@ -794,10 +796,10 @@ Scope primitives, like coroutines, can be structured into a hierarchy.
 To create a Scope object that inherits from another, use the static method `inherit()`.
 
 ```php
-$parentScope = new CoroutineScope();
+$parentScope = new Scope();
 $parentScope->set('connections', 0);
 $parentScope->set('pdo', new PDO('sqlite::memory:'));
-$childScope = CoroutineScope::inherit($parentScope);
+$childScope = Scope::inherit($parentScope);
 $childScope->set('connections', 1);
 
 $childScope->spawn(function() {
@@ -826,9 +828,9 @@ Therefore, if the parent is completed or canceled, the same will happen to all c
 
 
 ```php
-$parentScope = new BoundCoroutineScope();
+$parentScope = new BoundScope();
 $parentScope->withTimeout(1000);
-$childScope = CoroutineScope::inherit($parentScope);
+$childScope = Scope::inherit($parentScope);
 
 $childScope->spawn(function() {
     sleep(2);
@@ -850,7 +852,7 @@ Let's consider an example:
 final class SocketPoll
 {
     private $serverSocket;
-    private CoroutineScope $scope;
+    private Scope $scope;
 
     public function __construct(string $host, int $port)
     {
@@ -860,7 +862,7 @@ final class SocketPoll
             throw new RuntimeException("Failed to create server socket: $errstr ($errno)");
         }
         
-        $this->scope = new CoroutineScope();
+        $this->scope = new Scope();
     }
     
     public function __destruct()
@@ -920,7 +922,7 @@ This rule has several important consequences:
 ```php
 function test(): void
 {
-    $scope = new CoroutineScope();
+    $scope = new Scope();
     
     $scope->spawn(function() {
         sleep(1);
@@ -960,7 +962,7 @@ function task(): void
 ```
 
 Using a coroutine's local context can be useful for associating objects with a coroutine that **MUST** be unique to each coroutine.  
-For example: a database connection.
+For example, a database connection.
 
 ```php
 <?php
@@ -1059,11 +1061,11 @@ An uncaught exception in a coroutine follows this flow:
 1. If the coroutine is awaited using the `await` operator, 
 the exception is propagated to the awaiting points. 
 If multiple points are awaiting, each will receive the exception.
-2. The exception is passed to the `CoroutineScope`.
-3. If the `CoroutineScope` has an exception handler defined, it will be invoked.
-4. If the `CoroutineScope` does not have an exception handler, the `cancel()` method is called, 
+2. The exception is passed to the `Scope`.
+3. If the `Scope` has an exception handler defined, it will be invoked.
+4. If the `Scope` does not have an exception handler, the `cancel()` method is called, 
 canceling all coroutines in this scope from top to bottom in the hierarchy, including all child scopes.
-5. If the `CoroutineScope` has responsibility points, i.e., the construction `await $scope`, 
+5. If the `Scope` has responsibility points, i.e., the construction `await $scope`, 
 all responsibility points receive the exception.
 6. Otherwise, the exception is passed to the parent scope if it is defined.
 7. If there is no parent scope, the exception falls into `globalScope`, 
@@ -1076,15 +1078,15 @@ start
 if (Await operator is used?) then (Yes)
     :Exception is propagated to await points;
 else (No)
-    while (CoroutineScope exists?)
-        :Exception is passed to CoroutineScope;
-        if (CoroutineScope has an exception handler?) then (Yes)
+    while (Scope exists?)
+        :Exception is passed to Scope;
+        if (Scope has an exception handler?) then (Yes)
             :Invoke exception handler;
             stop
         else (No)
-            :CoroutineScope::cancel();
+            :Scope::cancel();
         endif
-        if (CoroutineScope has responsibility points?) then (Yes)
+        if (Scope has responsibility points?) then (Yes)
             :All responsibility points receive the exception;
             stop
         endif
@@ -1108,7 +1110,7 @@ it triggers **Graceful Shutdown Mode**, which will terminate the entire applicat
 A **responsibility point** is code that explicitly waits for the completion of a coroutine or a `Scope`:
 
 ```php
-$scope = new CoroutineScope();
+$scope = new Scope();
 
 $scope->spawn(function() {
   throw new Exception("Task 1");        
@@ -1126,10 +1128,10 @@ not only the result of the coroutine execution but also an unhandled exception.
 
 #### Exception Handling
 
-The `BoundedCoroutineScope` class provides a method for handling exceptions:
+The `BoundedScope` class provides a method for handling exceptions:
 
 ```php
-$scope = new BoundedCoroutineScope();
+$scope = new BoundedScope();
 
 $scope->spawn(function() {
   throw new Exception("Task 1");        
@@ -1152,7 +1154,7 @@ The `onExit` method allows defining a callback function that will be invoked whe
 This method can be considered a direct analog of `defer` in Go.
 
 ```php
-$scope = new CoroutineScope();
+$scope = new Scope();
 
 $scope->spawn(function() {
   throw new Exception("Task 1");        
@@ -1221,7 +1223,7 @@ The `CancellationException`, if unhandled within a coroutine, is automatically s
 > as it may cause application malfunctions.
 
 ```php
-$scope = new CoroutineScope();
+$scope = new Scope();
 
 $scope->spawn(function() {
     sleep(1);        
@@ -1292,16 +1294,17 @@ and the exact lines of code where they were suspended.
 
 ### Tools
 
-The `Coroutine` class and `Scope` class implements methods for inspecting the state of a coroutine.
+The `Coroutine` class implements methods for inspecting the state of a coroutine.
 
-| Method                            | Description                                                                                                                                                                                            |
-|-----------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **`spawnedInFileLine():array`**   | Returns an array of two elements: the file name and the line number where the coroutine was spawned.                                                                                                   |
-| **`spawnedIn():string`**          | Returns a string representation of the location where the coroutine was spawned, typically in the format `"file:line"`.                                                                                |
-| **`suspendedInFileLine():array`** | Returns an array of two elements: the file name and the line number where the coroutine was last suspended. If the coroutine has not been suspended, it may return `['',0]`.                           |
-| **`suspendedIn():string`**        | Returns a string representation of the location where the coroutine was last suspended, typically in the format `"file:line"`. If the coroutine has not been suspended, it may return an empty string. |
-| **`isSuspended():bool`**          | Returns `true` if the coroutine has been suspended                                                                                                                                                     |
-| **`isCancelled():bool`**          | Returns `true` if the coroutine has been cancelled, otherwise `false`.                                                                                                                                 |
+| Method                                 | Description                                                                                                                                                                                            |
+|----------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **`getSpawnFileAndLine():array`**      | Returns an array of two elements: the file name and the line number where the coroutine was spawned.                                                                                                   |
+| **`getSpawnLocation():string`**        | Returns a string representation of the location where the coroutine was spawned, typically in the format `"file:line"`.                                                                                |
+| **`getSuspendFileAndLine():array`**    | Returns an array of two elements: the file name and the line number where the coroutine was last suspended. If the coroutine has not been suspended, it may return `['',0]`.                           |
+| **`getSuspendLocation():string`**      | Returns a string representation of the location where the coroutine was last suspended, typically in the format `"file:line"`. If the coroutine has not been suspended, it may return an empty string. |
+| **`isSuspended():bool`**               | Returns `true` if the coroutine has been suspended                                                                                                                                                     |
+| **`isCancelled():bool`**               | Returns `true` if the coroutine has been cancelled, otherwise `false`.                                                                                                                                 |
+| **`getTrace():array`**                 | Returns the stack trace of the coroutine.                                                                                                                                                              |
 
 The `Coroutine::getAwaitingInfo()` method returns an array with debugging information 
 about what the coroutine is waiting for, if it is in a waiting state.

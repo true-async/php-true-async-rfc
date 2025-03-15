@@ -7,21 +7,21 @@ namespace AsyncRabbitMQ;
 use PhpAmqpLib\Connection\AMQPStreamConnection;
 use PhpAmqpLib\Message\AMQPMessage;
 use Async\Coroutine;
-use Async\CoroutineScope;
+use Async\Scope;
 use function Async\spawn;
 use function Async\await;
 
 final class RabbitMQListener
 {
     private AMQPStreamConnection $connection;
-    private CoroutineScope $scope;
-    private CoroutineScope $consumeScope;
+    private Scope                $scope;
+    private Scope                $consumeScope;
     
     public function __construct(string $host, int $port, string $user, string $password)
     {
         $this->connection = new AMQPStreamConnection($host, $port, $user, $password);
-        $this->scope = new CoroutineScope();
-        $this->consumeScope = new CoroutineScope();
+        $this->scope = new Scope();
+        $this->consumeScope = new Scope();
     }
     
     public function __destruct()

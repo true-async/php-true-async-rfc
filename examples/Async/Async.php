@@ -4,11 +4,56 @@ declare(strict_types=1);
 
 namespace Async;
 
-function spawn(callable $fn, ...$args): Coroutine
+/**
+ * Initiates the execution of the function $fn in an asynchronous context with arguments.
+ * Returns a Coroutine object that describes the coroutine.
+ *
+ * @param \Closure $fn
+ * @param          ...$args
+ *
+ * @return Coroutine
+ */
+function spawn(\Closure $fn, ...$args): Coroutine {}
+
+/**
+ * Suspends the execution of the current coroutine.
+ */
+function suspend(): void {}
+
+/**
+ * Suspends the execution of the current coroutine until the awaitable completing.
+ * The awaitable can be a Coroutine or a CoroutineScope object.
+ *
+ * Returns the result of the awaitable or throws an exception if the awaitable fails.
+ *
+ * @param Awaitable $awaitable
+ *
+ * @return mixed
+ */
+function await(Awaitable $awaitable): mixed
+{
+
+}
+
+function currentScope(): Scope
 {
 }
 
-function await(Coroutine|CoroutineScope $awaitable): mixed
+function currentCoroutine(): Coroutine
 {
-
 }
+
+function globalScope(): Scope
+{
+}
+
+function rootScope(): Scope
+{
+}
+
+/**
+ * Returns the list of all coroutines
+ *
+ * @return Coroutine[]
+ */
+function getCoroutines(): array {}

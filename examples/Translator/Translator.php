@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Translator;
 
 use Async\Coroutine;
-use Async\CoroutineScope;
+use Async\Scope;
 use function Async\spawn;
 use LongPoll;
 
@@ -19,16 +19,16 @@ use LongPoll;
  */
 final class Translator
 {
-    private CoroutineScope $scope;
+    private Scope $scope;
     
     public function __construct(private LongPoll $longPoll, private \TranslatorHttpClient $translatorClient)
     {
-        $this->scope = new CoroutineScope();
+        $this->scope = new Scope();
         
         // Define an exception handle for all child scopes
         // Handling exceptions from child **Scopes** ensures that errors in child coroutines do not propagate
         // to the current **Scope** and do not crash the entire application.
-        $this->scope->setChildScopeExceptionHandler(static function (CoroutineScope $scope, Coroutine $coroutine, \Throwable $exception): void {
+        $this->scope->setChildScopeExceptionHandler(static function (Scope $scope, Coroutine $coroutine, \Throwable $exception): void {
             echo "Occurred an exception: {$exception->getMessage()} in Coroutine {$coroutine->spawnedIn()}\n";
         });
     }
@@ -41,7 +41,7 @@ final class Translator
     private function run(): void
     {
         while (($socket = $this->longPoll->receive()) !== null) {
-            CoroutineScope::inherit($this->scope)->spawn($this->handleRequest(...), $socket);
+            Scope::inherit($this->scope)->spawn($this->handleRequest(...), $socket);
         }
     }
     
