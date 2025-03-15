@@ -48,7 +48,7 @@ or separate extensions but does not describe this capability.
 This **RFC** also assumes functionality expansion using **SharedMemory**, 
 specifically designed shared memory objects, through a separate API that is not part of this **RFC**.
 
-This RFC is a core part of the **PHP TRUE ASYNC** contracts 
+This *RFC* is a core part of the **PHP TRUE ASYNC** contracts 
 but assumes the development and approval of the following RFCs:
 
 - **True Async API** – a low-level API for PHP extensions
