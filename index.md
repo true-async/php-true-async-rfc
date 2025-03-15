@@ -8,6 +8,31 @@
 
 ## Proposal
 
+### Scheduler and Reactor
+
+The **Scheduler** and **Reactor** components should be described in a separate **RFC**, 
+which should focus on the low-level implementation in **C** and define **API** contracts for PHP extensions. 
+These components should be developed as extensions that may be included 
+in the PHP standard library but can also be replaced with custom implementations.
+
+The **Scheduler** is a component responsible for managing the execution order of coroutines.  
+
+> ⚠️ **Warning:** Users should not make assumptions about the execution order of coroutines unless 
+> this is a specific goal of a particular **Scheduler** implementation.
+
+The **Reactor** is a component that implements the **Event Loop**. 
+It may be exposed as a separate API in **PHP-land**, 
+but its behavior is not defined within this **RFC**.
+
+> ⚠️ **Notice:** The logic of **Scheduler** and **Reactor** **MUST NOT** contradict the logic of this RFC!
+> These components **MUST** implement the contracts defined in this document. 
+> The **Scheduler** and **Reactor** **MAY** extend the behavior of this **RFC** by providing additional functionalities.
+
+### **Possible Syntax**
+
+In this RFC, you can see a potential new syntax for describing concurrency.  
+This syntax is **NOT a mandatory** part of this **RFC** and may be adopted separately.
+
 ### Coroutine
 
 A `Coroutine` is an `execution container`, transparent to the code, 
@@ -187,7 +212,7 @@ while in reality, operations occur asynchronously.
 
 ### Await
 
-The `await` function is used to wait for the completion of another coroutine:
+The `await` function/operator is used to wait for the completion of another coroutine:
 
 ```php
 
@@ -207,7 +232,7 @@ spawn function {
 };
 ```
 
-await suspends the execution of the current coroutine until 
+`await` suspends the execution of the current coroutine until 
 the awaited one returns a final result or completes with an exception.
 
 ### Lifetime limitation
@@ -883,6 +908,121 @@ function test(): void
 spawn test();
 ```
 
+#### Coroutine local context
+
+While a `Scope` can serve as a shared context in the coroutine hierarchy, 
+a coroutine's **local context** is a personal data store strictly tied to the coroutine's lifetime. 
+The local context allows associating data slots that are automatically freed once the coroutine completes.
+
+The local coroutine context is accessible via the `Async\localContext()` function, 
+which returns an `Async\Context` object. 
+The `Async\Context` class provides the same methods for working with slots as the `Scope` class:
+
+```php
+function task(): void 
+{
+    localContext()->set('data', 'This local data');
+    
+    spawn function {
+         // No data will be found
+         echo localContext()->find('data')."\n";
+    };
+}
+```
+
+Using a coroutine's local context can be useful for associating objects with a coroutine that **MUST** be unique to each coroutine.  
+For example: a database connection.
+
+```php
+<?php
+
+namespace Async;
+
+use PDO;
+use RuntimeException;
+
+class ConnectionProxy
+{
+    private PDO $connection;
+
+    public function __construct(PDO $connection)
+    {
+        $this->connection = $connection;
+    }
+    
+    public function __destruct()
+    {
+        getGlobalConnectionPool()->releaseConnection($this->connection);
+    }
+}
+
+class ConnectionPool
+{
+    private array $pool = [];
+    private int $maxConnections = 10;
+
+    public function getConnection(): ConnectionProxy
+    {
+        if (!empty($this->pool)) {
+            return new ConnectionProxy(array_pop($this->pool));
+        }
+
+        if (count($this->pool) < $this->maxConnections) {
+            return new ConnectionProxy(PDO("mysql:host=localhost;dbname=test", "user", "password"));
+        }
+
+        throw new RuntimeException("No available database connections.");
+    }
+
+    public function releaseConnection(PDO $connection): void
+    {
+        $this->pool[] = $connection;
+    }
+}
+
+function getDb(): ConnectionProxy
+{
+    static $key = new Async\Key('db_connection');
+    
+    $context = Async\localContext();
+
+    if ($context->has($key)) {
+        return $context->get($key);
+    }
+
+    $pool = getGlobalConnectionPool();
+    $connection = $pool->getConnection();
+
+    $context->set($key, $connection);
+
+    return $connection;
+}
+
+function getGlobalConnectionPool(): ConnectionPool
+{
+    static $pool = null;
+    if ($pool === null) {
+        $pool = new ConnectionPool();
+    }
+    return $pool;
+}
+
+function printUser(int $id): void 
+{
+    $db = getDb();
+    $stmt = $db->query("SELECT * FROM users WHERE id = $id");
+    $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    print_r($users);
+}
+
+spawn printUser(1);
+spawn printUser(2);
+```
+
+This code relies on the fact that an instance of the `ConnectionProxy` 
+class will be destroyed as soon as the coroutine completes.  
+The destructor will be called, and the connection will automatically return to the pool.
+
 ### Error Handling
 
 An uncaught exception in a coroutine follows this flow:
@@ -1084,3 +1224,59 @@ The `exit`/`die` operators called within a coroutine result in the immediate ter
 Unlike the `cancel()` operation, they do not allow for proper resource cleanup.
 
 ### Graceful Shutdown
+
+When an **unhandled exception** occurs in a **Coroutine**
+the **Graceful Shutdown** mode is initiated. 
+Its goal is to safely terminate the application.
+
+**Graceful Shutdown** cancels all coroutines in `globalScope`, 
+then continues execution without restrictions, allowing the application to shut down naturally.  
+**Graceful Shutdown** does not prevent the creation of new coroutines or close connection descriptors. 
+However, if another unhandled exception is thrown during the **Graceful Shutdown** process, 
+the second phase is triggered.
+
+**Second Phase of Graceful Shutdown**
+- All **Event Loop descriptors** are closed.
+- All **timers** are destroyed.
+- Any remaining coroutines that were not yet canceled will be **forcibly canceled**.
+
+The further shutdown logic may depend on the specific implementation of the **Scheduler** component, 
+which can be an external system and is beyond the scope of this **RFC**.
+
+The **Graceful Shutdown** mode can also be triggered using the function:
+
+```php
+Async\gracefulShutdown(\Throwable|null $throwable = null): void {}
+```
+
+from anywhere in the application.
+
+### Deadlocks
+
+A situation may arise where there are no active **Coroutines** in the execution queue 
+and no active handlers in the event loop. 
+This condition is called a **Deadlock**, and it represents a serious logical error.
+
+When a **Deadlock** is detected, the application enters **Graceful Shutdown** mode 
+and generates warnings containing information about which **Coroutines** are in a waiting state 
+and the exact lines of code where they were suspended.
+
+### Tools
+
+The `Coroutine` class and `Scope` class implements methods for inspecting the state of a coroutine.
+
+| Method                            | Description                                                                                                                                                                                            |
+|-----------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **`spawnedInFileLine():array`**   | Returns an array of two elements: the file name and the line number where the coroutine was spawned.                                                                                                   |
+| **`spawnedIn():string`**          | Returns a string representation of the location where the coroutine was spawned, typically in the format `"file:line"`.                                                                                |
+| **`suspendedInFileLine():array`** | Returns an array of two elements: the file name and the line number where the coroutine was last suspended. If the coroutine has not been suspended, it may return `['',0]`.                           |
+| **`suspendedIn():string`**        | Returns a string representation of the location where the coroutine was last suspended, typically in the format `"file:line"`. If the coroutine has not been suspended, it may return an empty string. |
+| **`isSuspended():bool`**          | Returns `true` if the coroutine has been suspended                                                                                                                                                     |
+| **`isCancelled():bool`**          | Returns `true` if the coroutine has been cancelled, otherwise `false`.                                                                                                                                 |
+
+The `Coroutine::getAwaitingInfo()` method returns an array with debugging information 
+about what the coroutine is waiting for, if it is in a waiting state.
+
+The format of this array depends on the implementation of the **Scheduler** and the **Reactor**.
+
+The `Async\getCoroutines()` method returns an array of all coroutines in the application.
