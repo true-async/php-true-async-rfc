@@ -199,12 +199,12 @@ spawn function {
     };
             
     echo "End reading file1.txt\n";
-}
+};
 
 spawn function {
     echo "Sleep\n";
     sleep(1);    
-}
+};
 ```
 
 await suspends the execution of the current coroutine until 
@@ -308,12 +308,12 @@ aims to release resources as quickly as possible.
 ```php
 function task(): void 
 {
-    spawn(function {
+    spawn(function() {
         sleep(10);
         echo "Hello, World!";
     });
 
-    await spawn(function {
+    await spawn(function() {
         sleep(1);
         echo "Hello, PHP!";
     });    
@@ -332,12 +332,12 @@ To wait for direct descendants, the `await children` operator can be used:
 ```php
 function task(): void 
 {
-    spawn(function {
+    spawn(function() {
         sleep(10);
         echo "Hello, World!";
     });
 
-    spawn(function {
+    spawn(function() {
         sleep(1);
         echo "Hello, PHP!";
     });
@@ -390,12 +390,12 @@ function task(): void
 {
     $coroutineScope = new CoroutineScope();
     
-    $coroutineScope->spawn(function {    
+    $coroutineScope->spawn(function() {    
         sleep(10);
         echo "Hello, World!";
     });
 
-    $coroutineScope->spawn(function {
+    $coroutineScope->spawn(function() {
         sleep(1);
         echo "Hello, PHP!";
     });
@@ -558,12 +558,12 @@ function task(): void
     $scope = new CoroutineScope();
     $scope->set('connections', 0);
     
-    $scope->spawn(function {
+    $scope->spawn(function() {
         sleep(1);
         echo currentScope()->get('connections')."\n";
     });
     
-    $scope->spawn(function {
+    $scope->spawn(function() {
         sleep(2);
         echo currentScope()->get('connections')."\n";
     });
@@ -586,7 +586,7 @@ function task(): void
 {
     $scope = new CoroutineScope();
     
-    $scope->spawn(function {
+    $scope->spawn(function() {
         spawn function {
             sleep(1);
             echo "Task 1-1\n";
@@ -596,7 +596,7 @@ function task(): void
         echo "Task 1\n";
     });
     
-    $scope->spawn(function {
+    $scope->spawn(function() {
         sleep(2);
         echo "Task 2\n";
     });
@@ -622,12 +622,12 @@ The `cancel` method cancels all child coroutines:
 
 ```php
 $scope = new CoroutineScope();
-$scope->spawn(function {
+$scope->spawn(function() {
     sleep(1);
     echo "Task 1\n";
 });
 
-$scope->spawn(function {
+$scope->spawn(function() {
     sleep(2);
     echo "Task 2\n";
 });
@@ -650,7 +650,7 @@ that will be applied to all coroutines spawned within the specified Scope.
 $scope = new BoundedCoroutineScope();
 $scope->withTimeout(1000);
 
-$scope->spawnAndBound(function {
+$scope->spawnAndBound(function() {
     sleep(2);
     echo "Task 1\n";
 });
@@ -679,12 +679,12 @@ for storing data that is accessible to all child coroutines.
 $scope = new CoroutineScope();
 $scope->set('connections', 0);
 
-$scope->spawn(function {
+$scope->spawn(function() {
     sleep(1);
     echo currentScope()->get('connections')."\n";
 });
 
-$scope->spawn(function {
+$scope->spawn(function() {
     sleep(2);
     echo currentScope()->get('connections')."\n";
 });
@@ -746,12 +746,12 @@ $parentScope->set('pdo', new PDO('sqlite::memory:'));
 $childScope = CoroutineScope::inherit($parentScope);
 $childScope->set('connections', 1);
 
-$childScope->spawn(function {
+$childScope->spawn(function() {
     echo "Child\n";
     echo currentScope()->get('connections')."\n";
 });
 
-$parentScope->spawn(function {
+$parentScope->spawn(function() {
     echo "Parent\n";
     echo currentScope()->get('connections')."\n";
 });
@@ -776,7 +776,7 @@ $parentScope = new BoundCoroutineScope();
 $parentScope->withTimeout(1000);
 $childScope = CoroutineScope::inherit($parentScope);
 
-$childScope->spawn(function {
+$childScope->spawn(function() {
     sleep(2);
     echo "This code will not be executed";
 });
@@ -868,11 +868,11 @@ function test(): void
 {
     $scope = new CoroutineScope();
     
-    $scope->spawn(function {
+    $scope->spawn(function() {
         sleep(1);
     });
     
-    $scope->spawn(function {
+    $scope->spawn(function() {
         sleep(2);        
     });
     
@@ -941,7 +941,7 @@ A **responsibility point** is code that explicitly waits for the completion of a
 ```php
 $scope = new CoroutineScope();
 
-$scope->spawn(function {
+$scope->spawn(function() {
   throw new Exception("Task 1");        
 });
 
@@ -962,7 +962,7 @@ The `BoundedCoroutineScope` class provides a method for handling exceptions:
 ```php
 $scope = new BoundedCoroutineScope();
 
-$scope->spawn(function {
+$scope->spawn(function() {
   throw new Exception("Task 1");        
 });
 
@@ -985,7 +985,7 @@ This method can be considered a direct analog of `defer` in Go.
 ```php
 $scope = new CoroutineScope();
 
-$scope->spawn(function {
+$scope->spawn(function() {
   throw new Exception("Task 1");        
 });
 
