@@ -56,6 +56,12 @@ but assumes the development and approval of the following RFCs:
 - **Primitives:** `Channel`, `Future`, `Iterator`, `Interval`
 - **Inter-thread communication / Shared Memory objects**
 
+### Namespace
+
+All functions, classes, and constants defined in this **RFC** are located in the `Async` namespace.
+Extensions for **Scheduler/Reactor** are allowed to extend this namespace with functions and classes, 
+provided that they are directly related to concurrency functionality.
+
 ### Coroutine
 
 A `Coroutine` is an `execution container`, transparent to the code, 
