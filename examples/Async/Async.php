@@ -7,3 +7,8 @@ namespace Async;
 function spawn(callable $fn, ...$args): Coroutine
 {
 }
+
+function await(Coroutine|CoroutineScope $awaitable): mixed
+{
+
+}

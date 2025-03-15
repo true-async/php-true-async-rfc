@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Async;
 
-class Coroutine
+final class Coroutine
 {
     public function spawnedIn(): string
     {
