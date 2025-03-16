@@ -440,7 +440,7 @@ the second child coroutine since the parent explicitly waits for its completion.
 The line of code echo `"Hello, World!"` will never execute because 
 the parent will be terminated earlier.
 
-To wait for direct descendants, the `await children` operator can be used:
+To wait for direct descendants, the `await spawned` operator can be used:
 
 ```php
 function task(): void 
@@ -456,7 +456,7 @@ function task(): void
     });
     
     // parent lifetime is limited by direct descendants
-    await children;
+    await spawned;
 }
 
 spawn task();
@@ -489,7 +489,7 @@ function task(): void
     };
     
     // parent lifetime is limited by direct descendants
-    await children;
+    await spawned;
 }
 
 spawn task();
@@ -541,7 +541,7 @@ function task(): void
     };
     
     // await only "Hello, PHP!" and "Hello, PHP2!"
-    await children;
+    await spawned;
 }
 ```
 

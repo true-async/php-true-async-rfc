@@ -1,0 +1,1520 @@
+====== PHP True Async ======
+
+  * Version: 0.9
+  * Date: 2025-03-16
+  * Author: Edmond [HT], edmondifthen@proton.me
+  * Status: Under discussion
+  * First Published at: http://wiki.php.net/rfc/true_async
+
+===== Introduction =====
+For several years, **PHP** has been attempting to carve out a niche in the development of long-running applications, where concurrent code execution becomes particularly useful. Production-ready solutions such as **Swoole**, **AMPHP**, **ReactPHP**, and others have emerged.
+
+However, **PHP** still does not provide a comprehensive implementation for writing concurrent code. PHP extensions have no way to support //non-blocking execution//, even if they are capable of doing so. **Swoole** is forced to copy thousands of lines of code just for a few modifications, while **AMPHP** developers have to build drivers for ''MySQL'', ''PostgreSQL'', ''Redis'', and other systems from scratch in user-land.
+
+The goal of this **RFC** is to establish a standard for writing concurrent code in PHP, as well as a C-API interface that would allow PHP to be extended at a low level using C, Rust, C++, and other languages. This would enable extensions to support **non-blocking I/O** without the need to override PHP functions or duplicate code.
+
+===== Goals =====
+
+The **True Async** project pursues the following goals and values:
+
+  * From a PHP developer's perspective, the **main value** of this implementation is that they DO NOT NEED to change existing code (or if changes are required, they should be minimal) to enable concurrency. Unlike explicit async models, this approach lets developers reuse existing synchronous code inside fibers without modification.
+
+  * Code that was originally written and intended to run outside of a Coroutine must work **EXACTLY THE SAME** inside a Coroutine without modifications.
+
+  * A PHP developer should not have to think about how Coroutine switch and should not need to manage their switching—except in special cases where they consciously choose to intervene in this logic.
+
+  * If there is existing code or a familiar style, such as AMPHP interfaces, Go coroutines, Swoole API, and others, it is best to use what is most recognizable to a broad range of developers.
+
+  * The goal is to find a balance between flexibility and simplicity. On one hand, the implementation should allow leveraging existing solutions without requiring external libraries. On the other hand, it should avoid unnecessary complexity. Many design choices in this implementation are driven by the desire to free developers from concerns about compatibility with "external libraries" in favor of a standardized approach.
+
+===== Proposal =====
+
+==== Scheduler and Reactor ====
+
+The **Scheduler** and **Reactor** components should be described in a separate **RFC**,
+which should focus on the low-level implementation in **C** and define **API** contracts for PHP extensions.
+These components should be developed as extensions that may be included
+in the PHP standard library but can also be replaced with custom implementations.
+
+<blockquote>
+⚠️ **Warning:** Users should not make assumptions about the execution order of coroutines unless
+this is a specific goal of a particular **Scheduler** implementation.
+</blockquote>
+
+The **Reactor** is a component that implements the **Event Loop**.
+It may be exposed as a separate API in **PHP-land**,
+but its behavior is not defined within this **RFC**.
+
+<blockquote>
+⚠️ **Notice:** The logic of **Scheduler** and **Reactor** **MUST NOT** contradict the logic of this RFC!
+These components **MUST** implement the contracts defined in this document.
+The **Scheduler** and **Reactor** **MAY** extend the behavior of this **RFC** by providing additional functionalities.
+</blockquote>
+
+==== Possible Syntax ====
+
+In this **RFC**, you can see a potential new syntax for describing concurrency.
+This syntax is **NOT a mandatory** part of this **RFC** and may be adopted separately.
+
+==== Limitations ====
+
+This **RFC** does not implement "colored functions"
+(see: http://journal.stuffwithstuff.com/2015/02/01/what-color-is-your-function/).
+Instead, it provides **transparent concurrency**, allowing **any function** to be asynchronous.
+
+This **RFC** does not contradict a potential multitasking implementation
+where possible but does not assume its existence.
+
+This **RFC** assumes the ability to create coroutines in other **Threads** using the **Scheduler API**
+or separate extensions but does not describe this capability.
+
+This **RFC** also assumes functionality expansion using **SharedMemory**,
+specifically designed shared memory objects, through a separate API that is not part of this **RFC**.
+
+This *RFC* is a core part of the **PHP TRUE ASYNC** contracts
+but assumes the development and approval of the following RFCs:
+
+  - **True Async API** – a low-level API for PHP extensions
+  - **Scheduler/Reactor API** – additional API for managing coroutines and the event loop
+  - **Primitives:** ''Channel'', ''Future'', ''Iterator'', ''Interval''
+  - **Inter-thread communication / Shared Memory objects**
+
+==== Namespace ====
+
+All functions, classes, and constants defined in this **RFC** are located in the ''Async'' namespace.
+Extensions for **Scheduler/Reactor** are allowed to extend this namespace with functions and classes,
+provided that they are directly related to concurrency functionality.
+
+==== Coroutine ====
+
+<blockquote>
+A ''Coroutine'' is an ''execution container'', transparent to the code,
+that can be suspended on demand and resumed at any time.
+</blockquote>
+
+Any function can be executed as a coroutine without any changes to the code.
+
+<code php>
+function example(string $name): void {
+    echo "Hello, $name!";
+}
+
+spawn(example(...), 'World');
+
+// With special syntax
+
+spawn example('World');
+
+// Or the same with a closure
+
+$name = 'World';
+
+spawn function use($name): void {
+    echo "Hello, $name!";
+};
+
+// We can run as coroutine any valid function.
+spawn file_get_contents('file1.txt');
+spawn sleep(1);
+spawn strlen('Hello, World!');
+</code>
+
+The ''spawn'' function execute the ''example'' function in an asynchronous context.
+
+<code php>
+$coroutine = spawn(function(string $name): void {
+    echo "Hello, $name!";
+}, 'World');
+</code>
+
+The ''spawn'' function returns a ''Coroutine'' object
+that can be used to control the execution of the coroutine:
+
+<code php>
+$coroutine = spawn(function(string $name): void {
+    echo "Hello, $name!";
+}, 'World');
+
+$coroutine->cancel();
+</code>
+
+=== Possible Syntax ===
+
+The ''spawn'' function can be replaced using the ''spawn'' operator, which has two forms:
+
+  * Executing a known function
+
+<code php>
+function example(string $name): void {
+    echo "Hello, $name!";
+}
+
+spawn example('World');
+
+// Equivalent to
+\Async\spawn('example', 'World');
+</code>
+
+  * Executing a closure
+
+<code php>
+$name = 'World';
+
+spawn function use($name): void {
+    echo "Hello, $name!";
+};
+
+// Equivalent to
+\Async\spawn(function () use ($name): void {
+    echo "Hello, $name!";
+});
+</code>
+
+<blockquote>
+**Warning:** The ''spawn'' function does not allow passing reference data as parameters.
+This limitation can be overcome using the ''spawn'' operator.
+</blockquote>
+
+==== Suspension ====
+
+A coroutine can suspend itself at any time using the ''suspend'' function:
+
+<code php>
+function example(string $name): void {
+    echo "Hello, $name!";
+    suspend();
+    echo "Goodbye, $name!";
+}
+
+spawn example('World');
+spawn example('Universe');
+</code>
+
+Expected output:
+
+<code>
+Hello, World!
+Hello, Universe!
+Goodbye, World!
+Goodbye, Universe!
+</code>
+
+The ''suspend'' function can be used only for the current coroutine.
+
+The ''suspend'' function has no parameters and does not return any values,
+unlike the yield operator.
+
+The ''suspend'' function can be used in any function and in any place
+including from the main execution flow:
+
+<code php>
+function example(string $name): void {
+    echo "Hello, $name!";
+    suspend();
+    echo "Goodbye, $name!";
+}
+
+$coroutine = spawn example('World');
+
+// suspend the main flow
+suspend();
+
+echo "Back to the main flow";
+</code>
+
+Expected output:
+
+<code>
+Hello, World!
+Back to the main flow
+Goodbye, World!
+</code>
+
+The suspend operator can be a throw point
+if someone resumes the coroutine externally with an exception.
+
+<code php>
+function example(string $name): void {
+    echo "Hello, $name!";
+
+    try {
+        suspend();
+    } catch (Exception $e) {
+        echo "Caught exception: ", $e->getMessage();
+    }
+
+    echo "Goodbye, $name!";
+}
+
+$coroutine = spawn example('World');
+
+// pass control to the coroutine
+suspend();
+
+$couroutine->cancel();
+</code>
+
+Expected output:
+
+<code>
+Hello, World!
+Caught exception: cancelled at ...
+Goodbye, World!
+</code>
+
+==== Input/Output Operations And Implicit Suspension ====
+
+I/O operations invoked within the coroutine's context transfer control implicitly:
+
+<code php>
+spawn function:void {
+    echo "Start reading file1.txt\n";
+    file_get_contents('file1.txt');
+    echo "End reading file1.txt\n";
+}
+spawn function:void {
+    echo "Start reading file2.txt\n";
+    file_get_contents('file2.txt');
+    echo "End readingfile2.txt\n";
+}
+
+echo "Main flow";
+</code>
+
+Expected output:
+
+<code>
+Start reading file1.txt
+Start reading file2.txt
+Main flow
+End reading file1.txt
+End reading file2.txt
+</code>
+
+Inside each coroutine, there is an illusion that all actions are executed sequentially,
+while in reality, operations occur asynchronously.
+
+==== Await ====
+
+The ''await'' function/operator is used to wait for the completion of another coroutine:
+
+<code php>
+// Prototype:
+namespace Async;
+function await(Awaitable $awaitable): mixed {}
+</code>
+
+<code php>
+spawn function {
+    echo "Start reading file1.txt\n";
+
+    $result = await spawn function:string {
+        return file_get_contents('file1.txt');
+    };
+
+    echo "End reading file1.txt\n";
+};
+
+spawn function {
+    echo "Sleep\n";
+    sleep(1);
+};
+</code>
+
+''await'' suspends the execution of the current coroutine until
+the awaited one returns a final result or completes with an exception.
+
+<blockquote>
+**Warning:** As a result of waiting for an object of the ''Scope'' class, ''NULL'' is returned.
+</blockquote>
+
+==== Edge Behavior ====
+
+The use of ''spawn''/''await''/''suspend'' is allowed in almost any part of a PHP program.
+This is possible because the PHP script entry point forms the **main execution thread**,
+which is also considered a coroutine.
+
+As a result, functions like ''suspend()'' and ''currentCoroutine()'' will behave the same way as in other cases.
+
+If only **one coroutine** exists in the system, calling ''suspend()'' will immediately return control.
+
+The ''register_shutdown_function'' handler operates in synchronous mode,
+after asynchronous handlers have already been destroyed.
+Therefore, the ''register_shutdown_function'' code should not use the concurrency API.
+The ''suspend()'' function will have no effect, and the ''spawn'' operation will not be executed at all.
+
+==== Lifetime limitation ====
+
+The lifecycle of a coroutine is the time limit within which the coroutine is allowed to execute.
+
+When using coroutines, three models of responsibility distribution regarding lifecycle arise:
+
+  * **No limitation**. Coroutines are not limited in their lifetime and run as long as needed.
+  * **Top-down limitation**: Parent coroutines limit the lifetime of their children
+  * **Bottom-up limitation**: Child coroutines extend the execution time of their parents
+
+These models do not contradict each other and can be implemented in a language in combination.
+Typically, one of these models is used by default, while the other two require explicit specification.
+
+For example, in Go, the unrestricted model applies.
+Coroutines are independent of each other,
+and if such a dependency needs to be established, the programmer must specify it explicitly.
+
+In languages like ''Kotlin'' and ''Swift'', the Bottom-up constraint is used by default and serves as a way to implement structured concurrency.
+
+In other languages, the ''Actor'' model assumes that the parent's lifetime restricts the lifetime of child Actors.
+
+^ Aspect ^ No Limitation ^ Bottom-up ^ Top-down ^
+| Execution Limit | No lifetime restriction; coroutines run independently | Parent coroutine waits until all child coroutines complete | Child coroutines cannot outlive their parent. |
+| Resource Management | Manual; programmer explicitly manages resources | Automatic; resources held until child coroutines finish | Automatic; parent controls resources and cancellation |
+| Completion Guarantee | No guarantee; programmer manually ensures coroutine completion | Guarantees completion of all child coroutines | Ensures that no child coroutine runs longer than the parent |
+| Nested Coroutines | Independent; nested coroutines may run unnoticed | Structured; nested coroutines explicitly affect parent's lifetime | Hierarchical; children cannot outlive parents |
+| Simplicity | Simple but requires careful manual synchronization | Clear structure, prevents accidental misuse | Easier to enforce controlled execution |
+| **Risk of Resource Leaks** | Higher; leaks can include hanging coroutines and owned scopes; leaks may reach global scope | Lower*; structured concurrency reduces leaks, parent ensures proper cleanup | Low: parent always has control over lifetime |
+| **Exception Propagation** | Exceptions may escape to global scope and remain unhandled | Exceptions propagate strictly along coroutine hierarchy | Exceptions are caught and handled within the parent scope |
+| **Deadlocks** | Lower: since coroutines are independent | Higher: Accidental use of an incorrect external dependency | Lower: Parent dictates child lifecycle, reducing accidental locks |
+| Explicitness | Programmer explicitly defines synchronization | Behavior inherently defined by model rules | Cancellation is explicit; parent enforces lifecycle |
+| Semantic Complexity | Minimal; fewer semantic constructs needed | May require additional semantic constructs for convenience | Slightly higher; requires explicit management of cancellations |
+| Use cases |  | Useful for ensuring all subtasks finish before proceeding | Useful for managing complex task hierarchies |
+
+Let's take a closer look at the differences between the models, their advantages and disadvantages, and use cases.
+
+=== No Limitation ===
+
+The main drawback of the **No Limitation** model is the need for manual resource management.
+However, this can also be considered an advantage, as it provides maximum control.
+
+=== Bottom-up ===
+
+The **Bottom-up** model leads to more ambiguous consequences.
+Intuitively, it seems that this model should prevent resource leaks,
+as it keeps parent coroutines alive, thereby preserving the code that awaits them.
+As a result, the code executed after waiting is more likely to clean up resources correctly.
+
+One could say that the **Bottom-up model** makes concurrent programming less concurrent.
+However, this advantage easily turns into a disadvantage because **Bottom-up** potentially retains more
+resources in memory than any other model.
+If a programmer spawns five tasks within a hierarchy, all five tasks will be retained in memory
+until their shared execution flow completes. But what if that never happens?
+
+The situation becomes even worse if the **Bottom-up** strategy is always used by default.
+When different programmers write coroutine hierarchy code across various projects and libraries,
+it can lead to complex, hard-to-detect bugs.
+This happens because different teams may make different assumptions,
+unaware of how exactly their code might be used at higher or lower levels of the hierarchy.
+All of this makes the Bottom-up model more dangerous than useful in team-based development.
+
+However, the **Bottom-up** model has an advantage in another scenario —
+when a parent coroutine spawns child coroutines whose completion is critically important.
+
+Let's examine this case:
+
+<code php>
+function task(): void
+{
+    spawn importantTask();
+
+    spawn function {
+        sleep(1);
+        echo "Hello, PHP!";
+    };
+}
+
+spawn task();
+</code>
+
+In this example, the ''importantTask'' coroutine is critical for the parent coroutine. If the parent coroutine completes
+before the child coroutine, it may abandon the execution of importantTask, leading to data loss.
+
+This case is a positive aspect of the *Bottom-up* model and a negative aspect of the *Top-down* strategy.
+
+However, this seems to be the only significant drawback of the **Top-down** strategy.
+
+=== Top-down ===
+
+The **Top-down** model limits the lifetime of child coroutines to the lifetime of the parent.
+It implements structured concurrency but, unlike the **Bottom-up** model,
+aims to release resources as quickly as possible.
+
+<code php>
+function task(): void
+{
+    spawn(function() {
+        sleep(10);
+        echo "Hello, World!";
+    });
+
+    await spawn(function() {
+        sleep(1);
+        echo "Hello, PHP!";
+    });
+}
+
+spawn task();
+</code>
+
+In the example above, the lifetime of the parent coroutine explicitly matches
+the second child coroutine since the parent explicitly waits for its completion.
+The line of code echo ''"Hello, World!"'' will never execute because
+the parent will be terminated earlier.
+
+To wait for direct descendants, the ''await spawned'' operator can be used:
+
+<code php>
+function task(): void
+{
+    spawn(function() {
+        sleep(10);
+        echo "Hello, World!";
+    });
+
+    spawn(function() {
+        sleep(1);
+        echo "Hello, PHP!";
+    });
+
+    // parent lifetime is limited by direct descendants
+    await spawned;
+}
+
+spawn task();
+</code>
+
+In this case, the **parent coroutine** will wait for the completion
+of the first and second child coroutines but not their descendants.
+This differs from the logic of the **Bottom-up** model,
+where all nested descendants affected the parent's lifetime.
+
+Example:
+
+<code php>
+function task(): void
+{
+    spawn function {
+        spawn function {
+            sleep(10); // <-- not affected to task lifetime
+
+            echo "This code will not be executed";
+        };
+
+        sleep(2); // <-- affected to task lifetime
+        echo "Hello, World!";
+    };
+
+    spawn function {
+        sleep(1);
+        echo "Hello, PHP!";
+    };
+
+    // parent lifetime is limited by direct descendants
+    await spawned;
+}
+
+spawn task();
+</code>
+
+The ''Scope'' primitive allows implementing **Bottom-Up** behavior within the **Top-Down** model.
+In the following example, the parent coroutine will wait for the completion of all child coroutines at every depth level.
+
+<code php>
+function task(): void
+{
+    $coroutineScope = new Scope();
+
+    $coroutineScope->spawn(function() {
+        sleep(10);
+        echo "Hello, World!";
+    });
+
+    $coroutineScope->spawn(function() {
+        sleep(1);
+        echo "Hello, PHP!";
+    });
+
+    // parent lifetime is extended to all descendants
+    await $coroutineScope;
+}
+</code>
+
+A drawback of the **Top-down** model, as well as the **Bottom-up** model,
+is the need for a special syntax to create a coroutine that will execute independently of the parent.
+
+For example:
+
+<code php>
+function task(): void
+{
+    globalScope()->spawn(function { // <-- create a coroutine in the global scope
+        sleep(10);
+        echo "Hello, World!";
+    });
+
+    spawn function {
+        sleep(1);
+        echo "Hello, PHP!";
+    };
+
+    spawn function {
+        echo "Hello, PHP2!";
+    };
+
+    // await only "Hello, PHP!" and "Hello, PHP2!"
+    await spawned;
+}
+
+spawn task();
+</code>
+
+=== Use Cases ===
+
+Let's briefly review typical use cases for each model:
+
+^ Use Case ^ No Limitation ^ Bottom-up ^ Top-down ^
+| Asynchronous tasks in UI | ± Allows independent execution | - May delay UI responsiveness | - May prematurely interrupt child tasks |
+| Data processing where tasks spawn subtasks | - Requires manual synchronization | + Ensures subtasks finish before proceeding | - Risk of losing subtasks and data |
+| **Long-running background tasks** | + Suitable for independent execution | + Guarantees complete execution | - Risks premature cancellation |
+| **Server request handling** | - Risk of resource leaks | - Can lead to high memory consumption | + Ensures resource cleanup |
+| Parallel execution of independent tasks | + Best for unrelated concurrent tasks | - Additional structure required | - Poor; risks unwanted task cancellations |
+| **Hierarchical task management** | - No built-in hierarchy | + Ensures the execution of child coroutines. | + Strongly hierarchical, controlled |
+| Actor-based concurrency | - Requires manual management | - Actors may unintentionally block parent | + Ideal for actor-based concurrency |
+
+To make a choice in favor of a particular model, we should consider the nature of **PHP** as a language
+designed for business logic, tolerant to errors, easy to use, and focused on BackEnd applications.
+
+Note that the **Top-down** model is best suited for frameworks because it allows **restricting**
+user code that is invoked lower in the hierarchy.
+
+At the same time, **Top-down** will complicate the code of libraries or framework components
+that are invoked lower in the hierarchy if they need to modify coroutine behavior.
+
+Such overhead is acceptable since frameworks and libraries typically take on **more** responsibility,
+implementing specific patterns or algorithms while hiding complexity behind contracts for the user.
+
+The **primary argument** for choosing the **Top-down** model is that it forces the programmer to extend
+the lifetime of coroutines when necessary, rather than restricting them as in the Bottom-up model,
+which leads to resource minimization.
+
+==== Structured concurrency ====
+
+Structural concurrency helps a programmer bind execution using code blocks organized in a hierarchy.
+Programming languages use two approaches:
+  * Coroutine functions themselves are structural elements.
+  * Additional syntactic blocks can complement control.
+
+When making a choice within PHP, we will follow the rule of minimizing syntax.
+
+This is why coroutine functions will be the primary and only syntactic blocks for structural concurrency,
+but not the only semantic tools.
+The order of coroutine execution forms a hierarchy that follows the rules of the Top-down strategy:
+
+<code php>
+function subsubtask(): void
+{
+    sleep(1);
+    echo "Subsubtask\n";
+}
+
+function subtask(): void
+{
+    echo "Subtask\n";
+    await spawn subsubtask();
+}
+
+function task(): void
+{
+    await spawn subtask();
+}
+
+spawn task();
+</code>
+
+Hierarchy of calls:
+
+<code>
+GLOBAL
+└── task()
+    └── subtask()
+        └── subsubtask()
+</code>
+
+Execution flow:
+   - ''task()'' is spawned.
+   - ''subtask()'' is spawned and awaited.
+   - Prints: **"Subtask"**
+   - ''subsubtask()'' is spawned and awaited inside ''subtask()''.
+   - Sleeps for 1 second.
+   - Prints: **"Subsubtask"**
+
+The lifetime of child coroutines cannot exceed the lifetime of their parent.
+In the example above, parents explicitly await the execution of child coroutines,
+so the total lifetime of ''task'' equals the execution time of ''subsubtask''.
+
+<code php>
+function mainTask(): void
+{
+    // watcher pattern
+    spawn function {
+        while (true) {
+            sleep(2);
+            echo "Cleanup: removing dead connections...\n";
+        }
+    };
+
+   while(...) {
+       echo "Worker: processing connection $i...\n";
+       ...
+       suspend();
+   }
+}
+
+spawn mainTask();
+</code>
+
+==== Coroutine Scope ====
+
+In **structural concurrency**, a **Scope** is a mechanism that ensures coroutines are properly managed
+within a defined execution context.
+It provides control over **lifetime, cancellation, and completion** of coroutines.
+
+Child coroutines inherit the parent's Scope:
+
+<code php>
+use Async\Scope;
+
+function task(): void
+{
+    $scope = new Scope();
+    $scope->set('connections', 0);
+
+    $scope->spawn(function() {
+        sleep(1);
+        echo currentScope()->get('connections')."\n";
+    });
+
+    $scope->spawn(function() {
+        sleep(2);
+        echo currentScope()->get('connections')."\n";
+    });
+
+    await $scope;
+}
+
+spawn task();
+</code>
+
+The ''Scope'' primitive can be used in an ''await'' expression,
+in which case the code will pause until all child tasks are completed.
+
+=== Coroutine Scope waiting ===
+
+The ''await'' operator can be used with a ''Scope'' object:
+
+<code php>
+function task(): void
+{
+    $scope = new Scope();
+
+    $scope->spawn(function() {
+        spawn function {
+            sleep(1);
+            echo "Task 1-1\n";
+        };
+
+        sleep(1);
+        echo "Task 1\n";
+    });
+
+    $scope->spawn(function() {
+        sleep(2);
+        echo "Task 2\n";
+    });
+
+    // wait for all child coroutines
+    await $scope;
+}
+
+spawn task();
+</code>
+
+If you need to wait only for direct descendants, use the method ''awaitDirectChildren'':
+
+<code php>
+$scope = new Scope();
+// create child coroutines
+$scope->awaitDirectChildren();
+</code>
+
+=== Scope cancellation ===
+
+The ''cancel'' method cancels all child coroutines:
+
+<code php>
+$scope = new Scope();
+$scope->spawn(function() {
+    sleep(1);
+    echo "Task 1\n";
+});
+
+$scope->spawn(function() {
+    sleep(2);
+    echo "Task 2\n";
+});
+
+$scope->cancel();
+</code>
+
+=== BoundedScope ===
+
+The ''BoundedScope'' class is designed to create explicit constraints
+that will be applied to all coroutines spawned within the specified Scope.
+
+^ Method ^ Description ^
+| withTimeout(int $milliseconds) | Creates a new scope with a specified timeout, automatically canceling coroutines when the time expires. |
+| spawnAndBound(callable $coroutine) | Spawns a coroutine and restricts the lifetime of the entire Scope to match the coroutine’s lifetime. |
+| boundedBy(mixed $constraint) | Limits the scope’s lifetime based on a **Cancellation token, Future, or another coroutine's lifetime**. |
+
+<code php>
+$scope = new BoundedScope();
+$scope->withTimeout(1000);
+
+$scope->spawnAndBound(function() {
+    sleep(2);
+    echo "Task 1\n";
+});
+
+await $scope;
+</code>
+
+=== Coroutine Scope Slots ===
+
+^ Method ^ Description ^
+| find(string|object $key): mixed | Find a value by key in the current or parent Scope. |
+| get(string|object $key): mixed | Get a value by key in the current Scope. |
+| has(string|object $key): bool | Check if a key exists in the current Scope. |
+| findLocal(string|object $key): mixed | Find a value by key only in the local Scope. |
+| getLocal(string|object $key): mixed | Get a value by key only in the local Scope. |
+| hasLocal(string|object $key): bool | Check if a key exists in the local Scope. |
+| set(string|object $key, mixed $value, bool $replace = false): self | Set a value by key in the Scope. |
+| unset(string|object $key): self | Delete a value by key from the Scope. |
+
+The ''Scope'' class provides a mechanism
+for storing data that is accessible to all child coroutines.
+
+Once all coroutines owning the Scope complete,
+or the Scope itself is terminated, all data in the slots will be released.
+
+This helps the programmer associate data with coroutines without writing explicit cleanup code.
+
+To ensure data encapsulation between different components,
+**Coroutine Scope Slots** provide the ability to associate data using **key objects**.
+An object instance is unique across the entire application,
+so code that does not have access to the object cannot read the data associated with it.
+
+This pattern is used in many programming languages and is represented in JavaScript by a special class, **Symbol**.
+
+<code php>
+$key = new Async\Key('pdo connection');
+
+if(currentScope()->has($key)) {
+    $pdo = currentScope()->get($key);
+} else {
+    $pdo = new PDO('sqlite::memory:');
+    currentScope()->set($key, new PDO('sqlite::memory:'));
+}
+</code>
+
+**Coroutine Scope Slots** can automatically dereference **WeakReference**.
+If you assign a **WeakReference** to a slot and then call ''find()'',
+you will receive the original object or ''NULL''.
+
+<code php>
+function task(): void
+{
+    // Should return the original object
+    $pdo = currentScope()->find('pdo');
+}
+
+$pdo = new PDO('sqlite::memory:');
+currentScope()->set('pdo', new WeakReference($pdo));
+
+spawn task();
+</code>
+
+=== Coroutine Scope Inheritance ===
+
+Scope primitives, like coroutines, can be structured into a hierarchy.
+To create a Scope object that inherits from another, use the static method ''inherit()''.
+
+<code php>
+$parentScope = new Scope();
+$parentScope->set('connections', 0);
+$parentScope->set('pdo', new PDO('sqlite::memory:'));
+$childScope = Scope::inherit($parentScope);
+$childScope->set('connections', 1);
+
+$childScope->spawn(function() {
+    echo "Child\n";
+    echo currentScope()->get('connections')."\n";
+});
+
+$parentScope->spawn(function() {
+    echo "Parent\n";
+    echo currentScope()->get('connections')."\n";
+});
+
+await $parentScope;
+</code>
+
+A child ''Scope'' overrides the parent's memory slots.
+If a slot with the same key is defined in the child ''Scope'',
+the ''get'' method will return the value from the child slot;
+otherwise, it will return the value from the parent.
+
+Waiting for a parent Scope extends to waiting for all child Scopes in the hierarchy.
+
+The restrictions of a parent ''Scope'' do not directly apply to child ''Scope'' instances.
+However, the lifetime of child ''Scope'' instances cannot exceed that of the parent.
+Therefore, if the parent is completed or canceled, the same will happen to all child ''Scope'' instances.
+
+<code php>
+$parentScope = new BoundScope();
+$parentScope->withTimeout(1000);
+$childScope = Scope::inherit($parentScope);
+
+$childScope->spawn(function() {
+    sleep(2);
+    echo "This code will not be executed";
+});
+
+await $parentScope;
+</code>
+
+=== Coroutine Scope Lifetime ===
+
+The lifetime of a ''Scope'' is determined by the lifetime of the PHP object ''$scope''.
+The lifetime of coroutines belonging to a ''Scope'' is restricted by the lifetime of that ''Scope''.
+This rule allows the creation of coroutine groups that can be tied to the lifetime of a service.
+
+Let's consider an example:
+
+<code php>
+final class SocketPoll
+{
+    private $serverSocket;
+    private Scope $scope;
+
+    public function __construct(string $host, int $port)
+    {
+        $this->serverSocket = stream_socket_server("tcp://$host:$port", $errno, $errstr);
+
+        if (!$this->serverSocket) {
+            throw new RuntimeException("Failed to create server socket: $errstr ($errno)");
+        }
+
+        $this->scope = new Scope();
+    }
+
+    public function __destruct()
+    {
+        $this->stop();
+    }
+
+    public function start(): void
+    {
+        $this->scope->spawn(function () {
+           try {
+              while (($clientSocket = stream_socket_accept($this->serverSocket, 0)) !== null) {
+                  $this->scope->spawn($this->handleConnection(...), $clientSocket);
+              }
+           } finally {
+               fclose($this->serverSocket);
+           }
+        });
+    }
+
+    private function handleConnection($clientSocket): void
+    {
+         try {
+             fwrite($clientSocket, "Hello! You're connected.\n");
+
+             while (!feof($clientSocket)) {
+                 $data = fread($clientSocket, 1024);
+                 if ($data === false || $data === '') {
+                     break;
+                 }
+
+                 fwrite($clientSocket, "Received: $data");
+             }
+         } finally {
+             fclose($clientSocket);
+         }
+    }
+
+    public function stop(): void
+    {
+        fclose($this->serverSocket);
+        $this->scope->cancel();
+    }
+}
+</code>
+
+The ''SocketPoll'' service creates a separate private ''Scope'' for all the coroutines it starts.
+This allows it to easily cancel the connection handling process,
+which will terminate both the coroutine waiting for new connections and all coroutines processing them.
+
+**Note:**
+This example contains a circular dependency between objects, which should be avoided in real-world development.
+
+Coroutines belonging to a ''Scope'' do not increase its reference count.
+This rule has several important consequences:
+
+<code php>
+function test(): void
+{
+    $scope = new Scope();
+
+    $scope->spawn(function() {
+        sleep(1);
+    });
+
+    $scope->spawn(function() {
+        sleep(2);
+    });
+
+    // No coroutine will ever be started.
+    unset($scope);
+}
+
+spawn test();
+</code>
+
+=== Coroutine local context ===
+
+While a ''Scope'' can serve as a shared context in the coroutine hierarchy,
+a coroutine's **local context** is a personal data store strictly tied to the coroutine's lifetime.
+The local context allows associating data slots that are automatically freed once the coroutine completes.
+
+The local coroutine context is accessible via the ''Async\localContext()'' function,
+which returns an ''Async\Context'' object.
+The ''Async\Context'' class provides the same methods for working with slots as the ''Scope'' class:
+
+<code php>
+function task(): void
+{
+    localContext()->set('data', 'This local data');
+
+    spawn function {
+         // No data will be found
+         echo localContext()->find('data')."\n";
+    };
+}
+</code>
+
+Using a coroutine's local context can be useful for associating objects with a coroutine that **MUST** be unique to each coroutine.
+For example, a database connection.
+
+<code php>
+<?php
+
+namespace Async;
+
+use PDO;
+use RuntimeException;
+
+class ConnectionProxy
+{
+    private PDO $connection;
+
+    public function __construct(PDO $connection)
+    {
+        $this->connection = $connection;
+    }
+
+    public function __destruct()
+    {
+        getGlobalConnectionPool()->releaseConnection($this->connection);
+    }
+}
+
+class ConnectionPool
+{
+    private array $pool = [];
+    private int $maxConnections = 10;
+
+    public function getConnection(): ConnectionProxy
+    {
+        if (!empty($this->pool)) {
+            return new ConnectionProxy(array_pop($this->pool));
+        }
+
+        if (count($this->pool) < $this->maxConnections) {
+            return new ConnectionProxy(PDO("mysql:host=localhost;dbname=test", "user", "password"));
+        }
+
+        throw new RuntimeException("No available database connections.");
+    }
+
+    public function releaseConnection(PDO $connection): void
+    {
+        $this->pool[] = $connection;
+    }
+}
+
+function getDb(): ConnectionProxy
+{
+    static $key = new Async\Key('db_connection');
+
+    $context = Async\localContext();
+
+    if ($context->has($key)) {
+        return $context->get($key);
+    }
+
+    $pool = getGlobalConnectionPool();
+    $connection = $pool->getConnection();
+
+    $context->set($key, $connection);
+
+    return $connection;
+}
+
+function getGlobalConnectionPool(): ConnectionPool
+{
+    static $pool = null;
+    if ($pool === null) {
+        $pool = new ConnectionPool();
+    }
+    return $pool;
+}
+
+function printUser(int $id): void
+{
+    $db = getDb();
+    $stmt = $db->query("SELECT * FROM users WHERE id = $id");
+    $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    print_r($users);
+}
+
+spawn printUser(1);
+spawn printUser(2);
+</code>
+
+==== Error Handling ====
+
+An uncaught exception in a coroutine follows this flow:
+
+   - If the coroutine is awaited using the ''await'' operator, the exception is propagated to the awaiting points. If multiple points are awaiting, each will receive the exception.
+   - The exception is passed to the ''Scope''.
+   - If the ''Scope'' has an exception handler defined, it will be invoked.
+   - If the ''Scope'' does not have an exception handler, the ''cancel()'' method is called, canceling all coroutines in this scope from top to bottom in the hierarchy, including all child scopes.
+   - If the ''Scope'' has responsibility points, i.e., the construction ''await $scope'', all responsibility points receive the exception.
+   - Otherwise, the exception is passed to the parent scope if it is defined.
+   - If there is no parent scope, the exception falls into ''globalScope'', where the same rules apply as for a regular scope.
+
+{{ :rfc:true_async:exception_flow.svg |}}
+
+If an exception reaches ''globalScope'' and is not handled in any way,
+it triggers **Graceful Shutdown Mode**, which will terminate the entire application.
+
+The ''BoundedScope'' class allows defining an exception handler that can prevent exception propagation.
+
+For this purpose, two methods are used:
+  - **''setExceptionHandler''** – triggers for any exceptions thrown within this **Scope**.
+  - **''setChildScopeExceptionHandler''** – triggers for exceptions from **child Scopes**.
+
+<code php>
+$scope = new BoundedScope();
+$scope->spawn(function() {
+  throw new Exception("Task 1");
+});
+
+$scope->setExceptionHandler(function (Async\Scope $scope, Async\Coroutine $coroutine, Throwable $e) {
+    echo "Caught exception: {$e->getMessage()}\n in coroutine: {$coroutine->getSpawnLocation()}\n";
+});
+
+Async\await($scope);
+</code>
+
+Using these handlers, you can implement the **Supervisor** pattern, i.e.,
+a **Scope** that will not be canceled when an exception occurs in coroutines.
+
+The **''setChildScopeExceptionHandler''** method allows handling exceptions only from **child Scopes**,
+which can be useful for implementing an algorithm where the **main Scope** runs core tasks,
+while **child Scopes** handle additional ones.
+
+<code php>
+final class Service
+{
+    private Scope $scope;
+
+    public function __construct()
+    {
+        $this->scope = new Scope();
+
+        $this->scope->setChildScopeExceptionHandler(
+        static function (Scope $scope, Coroutine $coroutine, \Throwable $exception): void {
+            echo "Occurred an exception: {$exception->getMessage()} in Coroutine {$coroutine->getSpawnLocation()}\n";
+        });
+    }
+
+    public function start(): void
+    {
+        $this->scope->spawn($this->run(...));
+    }
+
+    public function stop(): void
+    {
+        $this->scope->cancel();
+    }
+
+    private function run(): void
+    {
+        while (($socket = $this->service->receive()) !== null) {
+            Scope::inherit($this->scope)->spawn($this->handleRequest(...), $socket);
+        }
+    }
+}
+</code>
+
+{{ :rfc:true_async:supervisor.svg |}}
+
+=== Responsibility points ===
+
+A **responsibility point** is code that explicitly waits for the completion of a coroutine or a ''Scope'':
+
+<code php>
+$scope = new Scope();
+
+$scope->spawn(function() {
+  throw new Exception("Task 1");
+});
+
+try {
+    await $scope;
+} catch (\Throwable $e) {
+     echo "Caught exception: {$e->getMessage()}\n";
+}
+</code>
+
+A **responsibility point** has a chance to receive
+not only the result of the coroutine execution but also an unhandled exception.
+
+=== Exception Handling ===
+
+The ''BoundedScope'' class provides a method for handling exceptions:
+
+<code php>
+$scope = new BoundedScope();
+
+$scope->spawn(function() {
+  throw new Exception("Task 1");
+});
+
+$scope->setExceptionHandler(function (Exception $e) {
+    echo "Caught exception: {$e->getMessage()}\n";
+});
+
+await $scope;
+</code>
+
+An exception handler has the right to suppress the exception.
+However, if the exception handler throws another exception,
+the exception propagation algorithm will continue.
+
+=== onExit ===
+
+The ''onExit'' method allows defining a callback function that will be invoked when a coroutine or scope completes.
+This method can be considered a direct analog of ''defer'' in Go.
+
+<code php>
+$scope = new Scope();
+
+$scope->spawn(function() {
+  throw new Exception("Task 1");
+});
+
+$scope->onExit(function () {
+    echo "Task 1 completed\n";
+});
+
+await $scope;
+</code>
+
+Or for coroutines:
+
+<code php>
+function task(): void
+{
+    onExit(function () {
+        echo "Task completed\n";
+    });
+
+    throw new Exception("Task 1");
+}
+
+spawn task();
+</code>
+
+The ''onExit'' semantics are most commonly used to release resources,
+serving as a shorter alternative to ''try-finally'' blocks:
+
+<code php>
+function task(): void
+{
+    $file = fopen('file.txt', 'r');
+    onExit(fn() => fclose($file));
+
+    throw new Exception("Task 1");
+}
+
+spawn task();
+</code>
+
+==== Cancellation ====
+
+The cancellation operation is available for coroutines and scopes
+using the ''cancel()'' method:
+
+<code php>
+function task(): void {}
+
+$coroutine = spawn task();
+
+// cancel the coroutine
+$coroutine->cancel(new Async\CancellationException('Task was cancelled'));
+</code>
+
+The cancellation operation is implemented as follows:
+
+   - If a coroutine has not started, it will never start.
+   - If a coroutine is suspended, its execution will resume with an exception.
+   - If a coroutine has already completed, nothing happens.
+
+The ''CancellationException'', if unhandled within a coroutine, is automatically suppressed after the coroutine completes.
+
+<blockquote>
+⚠️ **Warning:** You should not attempt to suppress ''CancellationException'' exception,
+as it may cause application malfunctions.
+</blockquote>
+
+<code php>
+$scope = new Scope();
+
+$scope->spawn(function() {
+    sleep(1);
+    echo "Task 1\n";
+});
+
+$scope->spawn(function() {
+    sleep(2);
+    echo "Task 2\n";
+});
+
+$scope->cancel(new Async\CancellationException('Task was cancelled'));
+</code>
+
+Canceling a ''Scope'' triggers the cancellation of all coroutines
+within that ''Scope'' and all child ''Scopes'' in hierarchical order.
+
+=== CancellationException propagation ===
+
+The ''CancellationException'' affects PHP standard library functions differently.
+If it is thrown inside one of these functions that previously did not throw exceptions,
+the PHP function will terminate with an error.
+
+In other words, the ''cancel()'' mechanism does not alter the existing function contract.
+PHP standard library functions behave as if the operation had failed.
+
+Additionally, the ''CancellationException'' will not appear in ''get_last_error()'',
+but it may trigger an ''E_WARNING'' to maintain compatibility with expected behavior
+for functions like ''fwrite'' (if such behavior is specified in the documentation).
+
+=== exit and die operators ===
+
+The ''exit''/''die'' operators called within a coroutine result in the immediate termination of the application.
+Unlike the ''cancel()'' operation, they do not allow for proper resource cleanup.
+
+==== Graceful Shutdown ====
+
+When an **unhandled exception** occurs in a **Coroutine**
+the **Graceful Shutdown** mode is initiated.
+Its goal is to safely terminate the application.
+
+**Graceful Shutdown** cancels all coroutines in ''globalScope'',
+then continues execution without restrictions, allowing the application to shut down naturally.
+**Graceful Shutdown** does not prevent the creation of new coroutines or close connection descriptors.
+However, if another unhandled exception is thrown during the **Graceful Shutdown** process,
+the second phase is triggered.
+
+**Second Phase of Graceful Shutdown**
+  - All **Event Loop descriptors** are closed.
+  - All **timers** are destroyed.
+  - Any remaining coroutines that were not yet canceled will be **forcibly canceled**.
+
+The further shutdown logic may depend on the specific implementation of the **Scheduler** component,
+which can be an external system and is beyond the scope of this **RFC**.
+
+The **Graceful Shutdown** mode can also be triggered using the function:
+
+<code php>
+Async\gracefulShutdown(\Throwable|null $throwable = null): void {}
+</code>
+
+from anywhere in the application.
+
+==== Deadlocks ====
+
+A situation may arise where there are no active **Coroutines** in the execution queue
+and no active handlers in the event loop.
+This condition is called a **Deadlock**, and it represents a serious logical error.
+
+When a **Deadlock** is detected, the application enters **Graceful Shutdown** mode
+and generates warnings containing information about which **Coroutines** are in a waiting state
+and the exact lines of code where they were suspended.
+
+==== Tools ====
+
+The ''Coroutine'' class implements methods for inspecting the state of a coroutine.
+
+^ Method ^ Description ^
+| **getSpawnFileAndLine():array** | Returns an array of two elements: the file name and the line number where the coroutine was spawned. |
+| **getSpawnLocation():string** | Returns a string representation of the location where the coroutine was spawned, typically in the format "file:line". |
+| **getSuspendFileAndLine():array** | Returns an array of two elements: the file name and the line number where the coroutine was last suspended. If the coroutine has not been suspended, it may return array |
+| **getSuspendLocation():string** | Returns a string representation of the location where the coroutine was last suspended, typically in the format "file:line". If the coroutine has not been suspended, it may return an empty string. |
+| **isSuspended():bool** | Returns true if the coroutine has been suspended. |
+| **isCancelled():bool** | Returns true if the coroutine has been cancelled, otherwise false. |
+| **getTrace():array** | Returns the stack trace of the coroutine. |
+
+The ''Coroutine::getAwaitingInfo()'' method returns an array with debugging information
+about what the coroutine is waiting for, if it is in a waiting state.
+
+The ''Async\getCoroutines()'' method returns an array of all coroutines in the application.
+
+==== Prototypes ====
+
+  * [Async functions](https://github.com/EdmondDantes/php-true-async-rfc/tree/main/examples/Async/Async.php)
+  * [Coroutine](https://github.com/EdmondDantes/php-true-async-rfc/tree/main/examples/Async/Coroutine.php)
+  * [Coroutine Context](https://github.com/EdmondDantes/php-true-async-rfc/tree/main/examples/Async/Context.php)
+  * [Coroutine Scope](https://github.com/EdmondDantes/php-true-async-rfc/tree/main/examples/Async/Scope.php)
+  * [Coroutine BoundedScope](https://github.com/EdmondDantes/php-true-async-rfc/tree/main/examples/Async/BoundedScope.php)
+  * [Coroutine Key](https://github.com/EdmondDantes/php-true-async-rfc/tree/main/examples/Async/Key.php)
+
+===== Backward Incompatible Changes =====
+
+Simultaneous use of the **True Async API** and the **Fiber API** is not possible.
+
+  - If ''new Fiber()'' is called first, the ''Async\spawn'' function will fail with an error.
+  - If ''Async\spawn'' is called first, any attempt to create a **Fiber** will result in an error.
+
+===== Proposed PHP Version(s) =====
+
+PHP 8.5 or later.
+
+===== RFC Impact =====
+
+==== To SAPIs ====
+
+The **True Async** module activates the reactor within the context of ''php_request_startup\php_request_shutdown()''
+request processing. Therefore, using concurrency is reasonable only for long-life scenarios implemented via CLI.
+
+It is expected that **True Async** will enable the integration of built-in **web servers** into PHP,
+which will be embedded into the reactor’s event loop.
+
+==== To Existing Extensions ====
+
+  * PHP Socket Extension.
+  * Curl Extension.
+  * MySQL PDO Extension.
+  * Redis Extension.
+
+==== To Opcache ====
+
+Does not affect.
+
+==== New Constants ====
+
+No new constants are introduced.
+
+==== php.ini Defaults ====
+
+No changes are made to the default settings.
+
+===== Open Issues =====
+None.
+
+===== Unaffected PHP Functionality =====
+
+  * Fiber API.
+  * PHP Sockets.
+  * Proc Functions.
+  * Shell/Exec Functions.
+  * gethostbyname/gethostbyaddr/gethostname/gethostbynamel
+
+===== Future Scope =====
+
+This **RFC** assumes the subsequent development of additional RFCs:
+
+* An RFC for a low-level API for C interfaces, which will describe how
+PHP will allow extensions and standard library code to interact with the concurrent environment.
+* An RFC for a set of standard primitives, such as `Future`, `Channel`, etc.
+* And possibly others...
+
+This RFC provides for the subsequent expansion of functionality to achieve
+a complete toolkit for working with concurrent logic.
+It proposes development in areas:
+  * **Support for Pipe**
+  * **Development of new and revision of existing extensions**
+  * **Refactoring of input-output code** to improve performance and better integration with the Event Loop
+  * Functions for **collecting metrics**
+
+=== Integration with Pipe ===
+
+The Future->map()->catch()->finally() call chain is rightly criticized for excessive complexity and difficulty of comprehension.
+**Pipe** (not UNIX-like-pipe) can solve this problem and create a more intuitive
+and understandable interface for describing sequences of asynchronous function calls.
+
+=== Refactoring of the Input-Output Module ===
+
+Input-output modules such as **PHP Streams** can be redesigned with **asynchronous capabilities**
+in mind and better optimized for operation in this environment.
+
+It would also be appropriate to add support for ''pipe'' in such a way
+that it can be used regardless of the operating system using ''fopen()'' functions.
+This would make the API more consistent.
+
+===== Proposed Voting Choices =====
+Yes or no vote.  2/3 required to pass.
+
+<doodle title="Accept PHP syntax changes?" auth="crell" voteType="single" closed="true">
+   * Yes
+   * No
+</doodle>
+
+<doodle title="Accept True Async RFC?" auth="crell" voteType="single" closed="true">
+   * Yes
+   * No
+</doodle>
+
+===== Patches and Tests =====
+
+* Proof of concept: https://github.com/EdmondDantes/php-src/tree/async/async
+
+This code is an attempt to implement logic using Fiber. Most of it can be used to create the next version.
+I would be happy if someone would like to join me in this project!
+
+===== References =====
+Links to external references, discussions or RFCs
+
+    * **First Discussion** - https://externals.io/message/126402
+    * **Second Discussion** - https://externals.io/message/126537
+
+The following can be considered as competing solutions to the current implementation:
+
+   * **Swoole** (https://github.com/swoole/swoole-src) – a C++ library that implements a full feature set for concurrent programming. The advantage and disadvantage of **Swoole** is that it is a standalone solution that does not directly affect the language itself.
+
+   * The **Swow** (https://github.com/swow/) project is a C library that provides a good lightweight API while not affecting the language itself and not requiring changes to PHP.
+
+   * Examples of code: https://github.com/EdmondDantes/php-true-async-rfc/tree/main/examples
+
+===== Rejected Features =====
+Keep this updated with features that were discussed on the mail lists.
