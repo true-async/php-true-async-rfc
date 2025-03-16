@@ -64,8 +64,8 @@ provided that they are directly related to concurrency functionality.
 
 ### Coroutine
 
-A `Coroutine` is an `execution container`, transparent to the code, 
-that can be suspended on demand and resumed at any time.
+> A `Coroutine` is an `execution container`, transparent to the code, 
+> that can be suspended on demand and resumed at any time.
 
 Any function can be executed as a coroutine without any changes to the code.
 
@@ -116,6 +116,42 @@ $coroutine = spawn(function(string $name): void {
 
 $coroutine->cancel();
 ```
+
+#### Possible Syntax
+
+The `spawn` function can be replaced using the `spawn` operator, which has two forms:
+
+* Executing a known function
+
+```php
+function example(string $name): void {
+    echo "Hello, $name!";
+}
+
+spawn example('World');
+
+// Equivalent to
+\Async\spawn('example', 'World');
+```
+ 
+* Executing a closure
+
+```php
+
+$name = 'World';
+
+spawn function use($name): void {
+    echo "Hello, $name!";
+};
+
+// Equivalent to
+\Async\spawn(function () use ($name): void {
+    echo "Hello, $name!";
+});
+```
+
+> **Warning:** The `spawn` function does not allow passing reference data as parameters. 
+> This limitation can be overcome using the `spawn` operator.
 
 ### Suspension
 
@@ -244,6 +280,12 @@ while in reality, operations occur asynchronously.
 The `await` function/operator is used to wait for the completion of another coroutine:
 
 ```php
+// Prototype:
+namespace Async;
+function await(Awaitable $awaitable): mixed {}
+```
+
+```php
 
 spawn function {
     echo "Start reading file1.txt\n";
@@ -264,6 +306,8 @@ spawn function {
 `await` suspends the execution of the current coroutine until 
 the awaited one returns a final result or completes with an exception.
 
+> **Warning:** As a result of waiting for an object of the `Scope` class, `NULL` is returned.
+
 ### Edge Behavior
 
 The use of `spawn`/`await`/`suspend` is allowed in almost any part of a PHP program.
@@ -274,7 +318,10 @@ As a result, functions like `suspend()` and `currentCoroutine()` will behave the
 
 If only **one coroutine** exists in the system, calling `suspend()` will immediately return control.
 
-Creating coroutines is **forbidden** inside the `register_shutdown_function()` handler.
+The `register_shutdown_function` handler operates in synchronous mode, 
+after asynchronous handlers have already been destroyed. 
+Therefore, the `register_shutdown_function` code should not use the concurrency API.
+The `suspend()` function will have no effect, and the `spawn` operation will not be executed at all.
 
 ### Lifetime limitation
 
