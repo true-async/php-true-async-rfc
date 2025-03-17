@@ -890,13 +890,11 @@ Here, `$constraints` is an object implementing the `Awaitable` interface.
 Once it completes, the `Scope` will be terminated, and all associated resources will be released.
 
 
-| Method                                 | Description                                                                                                 |
-|----------------------------------------|-------------------------------------------------------------------------------------------------------------|
-| `defineTimeout(int $milliseconds)`     | Define a specified timeout, automatically canceling coroutines when the time expires.                       |
-| `spawnAndBound(callable $coroutine)`   | Spawns a coroutine and restricts the lifetime of the entire Scope to match the coroutine’s lifetime.        |
-| `spawnAndProlong(callable $coroutine)` | Spawns a coroutine and extends the lifetime of the entire Scope to match the coroutine’s lifetime.          |
-| `boundedBy(Awaitable $constraint)`     | Limits the scope’s lifetime based on a **Cancellation token, Future, or another coroutine's lifetime**.     |
-| `prolongedBy(Awaitable $constraint)`   | Extends the scope’s lifetime based on a **Cancellation token, Future, or another coroutine's lifetime**.    |
+| Method                                         | Description                                                                                                 |
+|------------------------------------------------|-------------------------------------------------------------------------------------------------------------|
+| `defineTimeout(int $milliseconds)`             | Define a specified timeout, automatically canceling coroutines when the time expires.                       |
+| `spawnAndBound(callable $coroutine, ...$args)` | Spawns a coroutine and restricts the lifetime of the entire Scope to match the coroutine’s lifetime.        |
+| `boundScope(Awaitable $constraint)`            | Limits the scope’s lifetime based on a **Cancellation token, Future, or another coroutine's lifetime**.     |
 
 ```php
 $scope = new BoundedScope();
@@ -910,18 +908,6 @@ $scope->spawnAndBound(function() {
 await $scope;
 ```
 
-##### Prolong and Bound triggers
-
-The `BoundedScope` class operates with two types of triggers:
-
-- **Bound trigger** – limits execution time by the minimum boundary.
-- **Prolong trigger** – limits execution time by the maximum boundary.
-
-For the **Prolong** trigger to execute, all **Prolong** objects must be completed.  
-For the **Bound** trigger to execute, at least one **Bound** object must be completed.
-
-The `Scope` will terminate as soon as either the **Prolong** or **Bound** trigger is executed.
-
 ##### defineTimeout
 
 The `defineTimeout` method sets a global timeout for all coroutines belonging to a `Scope`. 
@@ -930,23 +916,20 @@ When the timer expires, the `Scope::cancel()` method is invoked.
 
 The `defineTimeout` method can only be called once; a repeated call will throw an exception.
 
-##### spawnAndBound / spawnAndProlong
+##### spawnAndBound/boundScope
 
-`spawnAndBound` creates a coroutine and limits its execution time to the current `Scope`.
-The method can be called multiple times. In this case, the `Scope` will not exist longer than 
-the lifetime of the shortest coroutine.
+The `BoundedScope` class allows defining a single lifetime constraint that influences the duration of the `Scope`.
 
-`spawnAndProlong` creates a coroutine and extends the lifetime of the current `Scope` 
-to match the coroutine's lifetime.
+Two methods are available for this purpose:
+- `boundScope`
+- `spawnAndBound`
 
-##### boundedBy / prolongedBy
+The `boundScope` method limits the `Scope`'s lifetime based on the state 
+of an object implementing the `Awaitable` interface 
+(e.g., a coroutine, another `Scope`, `Future`, or `Cancellation`).
 
-The `boundedBy` method allows limiting the lifetime of a `Scope` by explicitly 
-specifying an object that implements the `Awaitable` interface.
-
-The `Awaitable` interface is inherited by classes such as `Coroutine` and `Scope`. 
-Additionally, classes like `Future` and `Cancellation`, 
-which are not part of this RFC, can also implement the `Awaitable` interface.
+The `boundScope` method can be called multiple times, as well as `spawnAndBound`, 
+but only the last constraint will take effect.
 
 ### Context
 
