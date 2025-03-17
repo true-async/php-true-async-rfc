@@ -121,7 +121,7 @@ $coroutine->cancel();
 
 The `spawn` function can be replaced using the `spawn` operator, which has two forms:
 
-* Executing a known function
+##### Executing a known function:
 
 ```php
 function example(string $name): void {
@@ -129,12 +129,42 @@ function example(string $name): void {
 }
 
 spawn example('World');
-
-// Equivalent to
-\Async\spawn('example', 'World');
 ```
- 
-* Executing a closure
+
+**General syntax:**
+
+```php
+spawn [in <scope>] <callable>(<parameters>);
+```
+
+where:
+
+- `callable` can be a function name:
+
+  ```php
+  function test() {}
+  spawn test();
+  ```
+
+- It can also be a variable:
+
+  ```php
+  $x = function() {};
+  spawn $x();
+  ```
+
+- `parameters` - a list of parameters passed to the function.
+
+**Syntactically incorrect cases:**
+
+```php
+// use expression instead of a function name or variable
+spawn ($this->method(...))();
+// try to call a function without brackets
+spawn test;
+```
+
+##### Executing a closure
 
 ```php
 
@@ -150,6 +180,70 @@ spawn function use($name): void {
 });
 ```
 
+**General syntax:**
+
+```php
+spawn [in <scope>] function [use(<parameters>)][: <returnType>] {
+    <codeBlock>
+};
+```
+
+where:
+
+- `parameters` - a list of parameters passed to the closure.
+- `returnType` - the return type of the closure.
+- `codeBlock` - the body of the closure.
+
+Examples:
+
+```php
+spawn function {
+    echo "Hello";
+};
+
+spawn function:string|bool {
+    return file_get_contents('file.txt');
+};
+
+// Incorrect syntax
+spawn {
+    echo "Test\n";
+};
+```
+
+##### In scope expression
+
+The `in` keyword allows specifying the scope in which the coroutine.
+
+```php
+$scope = new Async\Scope();
+
+$coroutine = spawn in $scope function:string {
+    return "Hello, World!";
+};
+
+function test(): string {
+    return "Hello, World!";
+}
+
+spawn in $scope test();
+```
+
+The `scope` expression can be:
+- A variable
+
+```php
+spawn in $scope function:void {
+    echo "Hello, World!";
+};
+```
+
+- The result of a method or function call
+
+```php
+spawn in $this->scope $this->method();
+spawn in $this->getScope() $this->method();
+```
 > **Warning:** The `spawn` function does not allow passing reference data as parameters. 
 > This limitation can be overcome using the `spawn` operator.
 
@@ -323,6 +417,21 @@ after asynchronous handlers have already been destroyed.
 Therefore, the `register_shutdown_function` code should not use the concurrency API.
 The `suspend()` function will have no effect, and the `spawn` operation will not be executed at all.
 
+### Awaitable interface
+
+The `Awaitable` interface is a contract that allows objects to be used in the `await` expression.
+
+The interface does not have any methods on the user-land side 
+and is intended for objects implemented as PHP extensions, such as:
+
+- `Future`
+- `Cancellation`
+
+The following classes from this **RFC** also implement this interface:
+
+- `Coroutine`
+- `Scope`
+
 ### Lifetime limitation
 
     The lifecycle of a coroutine is the time limit within which the coroutine is allowed to execute.
@@ -343,7 +452,12 @@ and if such a dependency needs to be established, the programmer must specify it
 In languages like `Kotlin` and `Swift`, 
 the Bottom-up constraint is used by default and serves as a way to implement structured concurrency.
 
-In other languages, the `Actor` model assumes that the parent's lifetime restricts the lifetime of child Actors.
+In other languages (like `Erlang`/`Elixir`), the `Actor` model assumes 
+that the parent's lifetime restricts the lifetime of child Actors.
+
+> **Actors** are a model of code interaction, whereas **coroutines** are an execution mechanism, 
+> and both approaches can be used together. Here, we are only interested in the approach 
+> to resource management, which can be implemented within coroutines.
 
 | Aspect                     | No Limitation                                                                               | Bottom-up                                                                   | Top-down                                                          |
 |----------------------------|---------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------|-------------------------------------------------------------------|
@@ -755,15 +869,38 @@ $scope->cancel();
 The `BoundedScope` class is designed to create explicit constraints 
 that will be applied to all coroutines spawned within the specified Scope.
 
-| Method                                 | Description                                                                                             |
-|----------------------------------------|---------------------------------------------------------------------------------------------------------|
-| `withTimeout(int $milliseconds)`       | Creates a new scope with a specified timeout, automatically canceling coroutines when the time expires. |
-| `spawnAndBound(callable $coroutine)`   | Spawns a coroutine and restricts the lifetime of the entire Scope to match the coroutine’s lifetime.    |
-| `boundedBy(mixed $constraint)`         | Limits the scope’s lifetime based on a **Cancellation token, Future, or another coroutine's lifetime**. |
+The `BoundedScope` class implements the following pattern:
+
+```php
+$scope = new Scope();
+
+$constraints = new Future();
+
+$scope->spawn(function () use($constraints) {
+    
+    try {
+        await $constraints;
+    } finally {
+        \Async\currentScope()->cancel();
+    }    
+});
+```
+
+Here, `$constraints` is an object implementing the `Awaitable` interface. 
+Once it completes, the `Scope` will be terminated, and all associated resources will be released.
+
+
+| Method                                 | Description                                                                                                 |
+|----------------------------------------|-------------------------------------------------------------------------------------------------------------|
+| `defineTimeout(int $milliseconds)`     | Define a specified timeout, automatically canceling coroutines when the time expires.                       |
+| `spawnAndBound(callable $coroutine)`   | Spawns a coroutine and restricts the lifetime of the entire Scope to match the coroutine’s lifetime.        |
+| `spawnAndProlong(callable $coroutine)` | Spawns a coroutine and extends the lifetime of the entire Scope to match the coroutine’s lifetime.          |
+| `boundedBy(Awaitable $constraint)`     | Limits the scope’s lifetime based on a **Cancellation token, Future, or another coroutine's lifetime**.     |
+| `prolongedBy(Awaitable $constraint)`   | Extends the scope’s lifetime based on a **Cancellation token, Future, or another coroutine's lifetime**.    |
 
 ```php
 $scope = new BoundedScope();
-$scope->withTimeout(1000);
+$scope->defineTimeout(1000);
 
 $scope->spawnAndBound(function() {
     sleep(2);
@@ -772,6 +909,44 @@ $scope->spawnAndBound(function() {
 
 await $scope;
 ```
+
+##### Prolong and Bound triggers
+
+The `BoundedScope` class operates with two types of triggers:
+
+- **Bound trigger** – limits execution time by the minimum boundary.
+- **Prolong trigger** – limits execution time by the maximum boundary.
+
+For the **Prolong** trigger to execute, all **Prolong** objects must be completed.  
+For the **Bound** trigger to execute, at least one **Bound** object must be completed.
+
+The `Scope` will terminate as soon as either the **Prolong** or **Bound** trigger is executed.
+
+##### defineTimeout
+
+The `defineTimeout` method sets a global timeout for all coroutines belonging to a `Scope`. 
+The method initializes a single internal timer, which starts when `defineTimeout` is called. 
+When the timer expires, the `Scope::cancel()` method is invoked.
+
+The `defineTimeout` method can only be called once; a repeated call will throw an exception.
+
+##### spawnAndBound / spawnAndProlong
+
+`spawnAndBound` creates a coroutine and limits its execution time to the current `Scope`.
+The method can be called multiple times. In this case, the `Scope` will not exist longer than 
+the lifetime of the shortest coroutine.
+
+`spawnAndProlong` creates a coroutine and extends the lifetime of the current `Scope` 
+to match the coroutine's lifetime.
+
+##### boundedBy / prolongedBy
+
+The `boundedBy` method allows limiting the lifetime of a `Scope` by explicitly 
+specifying an object that implements the `Awaitable` interface.
+
+The `Awaitable` interface is inherited by classes such as `Coroutine` and `Scope`. 
+Additionally, classes like `Future` and `Cancellation`, 
+which are not part of this RFC, can also implement the `Awaitable` interface.
 
 #### Coroutine Scope Slots
 

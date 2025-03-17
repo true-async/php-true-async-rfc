@@ -343,6 +343,22 @@ after asynchronous handlers have already been destroyed.
 Therefore, the ''register_shutdown_function'' code should not use the concurrency API.
 The ''suspend()'' function will have no effect, and the ''spawn'' operation will not be executed at all.
 
+==== Awaitable interface ====
+
+The `Awaitable` interface is a contract that allows objects to be used in the `await` expression.
+
+The interface does not have any methods on the user-land side
+and is intended for objects implemented as PHP extensions, such as:
+
+	- ''Future''
+	- ''Cancellation''
+
+The following classes from this **RFC** also implement this interface:
+
+	- ''Coroutine''
+	- ''Scope''
+
+
 ==== Lifetime limitation ====
 
 The lifecycle of a coroutine is the time limit within which the coroutine is allowed to execute.
@@ -362,7 +378,14 @@ and if such a dependency needs to be established, the programmer must specify it
 
 In languages like ''Kotlin'' and ''Swift'', the Bottom-up constraint is used by default and serves as a way to implement structured concurrency.
 
-In other languages, the ''Actor'' model assumes that the parent's lifetime restricts the lifetime of child Actors.
+In other languages (like `Erlang`/`Elixir`),
+the ''Actor'' model assumes that the parent's lifetime restricts the lifetime of child Actors.
+
+<blockquote>
+**Actors** are a model of code interaction, whereas **coroutines** are an execution mechanism,
+and both approaches can be used together. Here, we are only interested in the approach
+to resource management, which can be implemented within coroutines.
+</blockquote>
 
 ^ Aspect ^ No Limitation ^ Bottom-up ^ Top-down ^
 | Execution Limit | No lifetime restriction; coroutines run independently | Parent coroutine waits until all child coroutines complete | Child coroutines cannot outlive their parent. |
