@@ -1350,7 +1350,8 @@ An uncaught exception in a coroutine follows this flow:
 
 1. If the coroutine is awaited using the `await` operator, 
 the exception is propagated to the awaiting points. 
-If multiple points are awaiting, each will receive the exception.
+If multiple points are awaiting, each will receive the same exception
+(**Each await point will receive the exact same exception object, not cloned**).
 2. The exception is passed to the `Scope`.
 3. If the `Scope` has an exception handler defined, it will be invoked.
 4. If the `Scope` does not have an exception handler, the `cancel()` method is called, 
@@ -1391,6 +1392,45 @@ endif
 stop
 @enduml
 ```
+
+**Example:**
+
+```php
+use Async\Scope;
+
+$scope = new Scope();
+$scope->spawn(function() {
+    throw new Exception("Task 1");
+});
+
+$exception1 = null;
+$exception2 = null;
+
+$scope2 = new Scope();
+
+$scope2->spawn(function() use($scope, &$exception1) {
+    try {
+        await $scope;
+    } catch (Exception $e) {
+        $exception1 = $e;
+        echo "Caught exception1: {$e->getMessage()}\n";
+    }
+});
+
+$scope2->spawn(function use($scope, &$exception2) {
+    try {
+        await $scope;
+    } catch (Exception $e) {
+        $exception2 = $e;
+        echo "Caught exception1: {$e->getMessage()}\n";
+    }
+});
+
+await $scope2;
+
+echo $exception1 === $exception2 ? "The same exception\n" : "Different exceptions\n";
+```
+
 
 If an exception reaches `globalScope` and is not handled in any way, 
 it triggers **Graceful Shutdown Mode**, which will terminate the entire application.
@@ -1625,6 +1665,11 @@ $scope->cancel(new Async\CancellationException('Task was cancelled'));
 
 Canceling a `Scope` triggers the cancellation of all coroutines 
 within that `Scope` and all child `Scopes` in hierarchical order.
+
+>
+> **Note:** `CancellationException` can be extended by the user 
+> to add metadata that can be used for debugging purposes.
+> 
 
 #### CancellationException propagation
 

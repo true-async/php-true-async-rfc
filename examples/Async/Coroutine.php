@@ -84,7 +84,7 @@ final class Coroutine implements Awaitable
     /**
      * Cancel the coroutine.
      */
-    public function cancel(\Throwable $throwable): void {}
+    public function cancel(CancellationException $cancellationException): void {}
     
     /**
      * Define a callback to be executed when the coroutine is finished.

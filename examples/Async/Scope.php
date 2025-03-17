@@ -22,7 +22,7 @@ class Scope implements Awaitable
     
     public function spawn(\Closure $callable, ...$params): Coroutine {}
     
-    public function cancel(): void {}
+    public function cancel(CancellationException $cancellationException): void {}
     
     public function onExit(\Closure $callback): void {}
 }
