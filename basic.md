@@ -867,7 +867,10 @@ $scope->cancel();
 #### BoundedScope
 
 The `BoundedScope` class is designed to create explicit constraints 
-that will be applied to all coroutines spawned within the specified Scope.
+that will be applied to all coroutines spawned within the specified `Scope`.
+It allows controlling both the lifetime of the `Scope` 
+and the handling of exceptions that may be delivered to the `Scope` 
+(see [Exception Handling](#exception-handling)).
 
 The `BoundedScope` class implements the following pattern:
 
@@ -890,11 +893,13 @@ Here, `$constraints` is an object implementing the `Awaitable` interface.
 Once it completes, the `Scope` will be terminated, and all associated resources will be released.
 
 
-| Method                                         | Description                                                                                                 |
-|------------------------------------------------|-------------------------------------------------------------------------------------------------------------|
-| `defineTimeout(int $milliseconds)`             | Define a specified timeout, automatically canceling coroutines when the time expires.                       |
-| `spawnAndBound(callable $coroutine, ...$args)` | Spawns a coroutine and restricts the lifetime of the entire Scope to match the coroutine’s lifetime.        |
-| `boundScope(Awaitable $constraint)`            | Limits the scope’s lifetime based on a **Cancellation token, Future, or another coroutine's lifetime**.     |
+| Method                                                      | Description                                                                                             |
+|-------------------------------------------------------------|---------------------------------------------------------------------------------------------------------|
+| `defineTimeout(int $milliseconds)`                          | Define a specified timeout, automatically canceling coroutines when the time expires.                   |
+| `spawnAndBound(callable $coroutine, ...$args)`              | Spawns a coroutine and restricts the lifetime of the entire Scope to match the coroutine’s lifetime.    |
+| `boundScope(Awaitable $constraint)`                         | Limits the scope’s lifetime based on a **Cancellation token, Future, or another coroutine's lifetime**. |
+| `setExceptionHandler(callable $exceptionHandler)`           | Sets an exception handler for the Scope.                                                                |
+| `setChildScopeExceptionHandler(callable $exceptionHandler)` | Sets an exception handler for child scopes.                                                             |
 
 ```php
 $scope = new BoundedScope();
@@ -918,7 +923,8 @@ The `defineTimeout` method can only be called once; a repeated call will throw a
 
 ##### spawnAndBound/boundScope
 
-The `BoundedScope` class allows defining a single lifetime constraint that influences the duration of the `Scope`.
+The `BoundedScope` class allows defining a single lifetime constraint that influences 
+the duration of the `Scope`.
 
 Two methods are available for this purpose:
 - `boundScope`
@@ -930,6 +936,11 @@ of an object implementing the `Awaitable` interface
 
 The `boundScope` method can be called multiple times, as well as `spawnAndBound`, 
 but only the last constraint will take effect.
+
+`spawnAndBound` is shorthand for the expression: 
+`$scope->boundScope($scope->spawn(...))`.
+
+
 
 ### Context
 
@@ -1106,9 +1117,8 @@ The restrictions of a parent `Scope` do not directly apply to child `Scope` inst
 However, the lifetime of child `Scope` instances cannot exceed that of the parent. 
 Therefore, if the parent is completed or canceled, the same will happen to all child `Scope` instances.
 
-
 ```php
-$parentScope = new BoundScope();
+$parentScope = new BoundedScope();
 $parentScope->withTimeout(1000);
 $childScope = Scope::inherit($parentScope);
 
