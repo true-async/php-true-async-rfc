@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Async;
 
-class Scope extends Context implements Awaitable
+class Scope implements Awaitable
 {
+    public readonly Context $context;
+    
     /**
      * Creates a new Scope that inherits from the specified one. If the parameter is not provided,
      * the Scope inherits from the current one.

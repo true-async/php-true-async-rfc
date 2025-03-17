@@ -37,6 +37,8 @@ function await(Awaitable $awaitable): mixed {}
  */
 function currentScope(): Scope {}
 
+function currentContext(): Context {}
+
 /**
  * Returns the current coroutine.
  */

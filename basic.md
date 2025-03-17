@@ -948,18 +948,80 @@ The `Awaitable` interface is inherited by classes such as `Coroutine` and `Scope
 Additionally, classes like `Future` and `Cancellation`, 
 which are not part of this RFC, can also implement the `Awaitable` interface.
 
-#### Coroutine Scope Slots
+### Context
 
-| Method                                                                | Description                                         |
-|-----------------------------------------------------------------------|-----------------------------------------------------|
-| `find(string\|object $key): mixed`                                    | Find a value by key in the current or parent Scope. |
-| `get(string\|object $key): mixed`                                     | Get a value by key in the current Scope.            |
-| `has(string\|object $key): bool`                                      | Check if a key exists in the current Scope.         |
-| `findLocal(string\|object $key): mixed`                               | Find a value by key only in the local Scope.        |
-| `getLocal(string\|object $key): mixed`                                | Get a value by key only in the local Scope.         |
-| `hasLocal(string\|object $key): bool`                                 | Check if a key exists in the local Scope.           |
-| `set(string\|object $key, mixed $value, bool $replace = false): self` | Set a value by key in the Scope.                    |
-| `unset(string\|object $key): self`                                    | Delete a value by key from the Scope.               |
+#### Motivation
+
+Libraries and frameworks often use variables that are shared within a request to store common data. 
+These variables are not **Global** in the general sense, 
+but they essentially reflect a shared state related to the request or execution scope.
+
+For example, the `TokenStorage` class 
+(https://github.com/symfony/symfony/blob/7.3/src/Symfony/Component/Security/Core/Authentication/Token/Storage/TokenStorage.php) 
+from `Symfony` allows retrieving the user token multiple times, as it is stored in a variable.
+
+Or `/src/Illuminate/Auth/TokenGuard.php` from `Laravel`:
+
+```php
+    /**
+     * Get the currently authenticated user.
+     */
+    public function user()
+    {
+        // If we've already retrieved the user for the current request we can just
+        // return it back immediately. We do not want to fetch the user data on
+        // every call to this method because that would be tremendously slow.
+        if (! is_null($this->user)) {
+            return $this->user; // <-- Shared state
+        }
+
+        $user = null;
+
+        $token = $this->getTokenForRequest();
+        
+        // some code skipped
+
+        return $this->user = $user;
+    }
+```
+
+This code assumes that a single `process`/`thread` always handles only one request at a time. 
+However, in a concurrent web server environment, 
+shared states can no longer be used because the execution context may switch unexpectedly.
+
+You can use `Coroutine ID` and `Map` to associate a unique coroutine ID with specific data. 
+However, in this case, you must ensure that the data is properly released 
+when the coroutine ceases to exist.
+
+In addition to storing request-specific data, 
+concurrent code must also ensure the proper handling of input/output descriptors. 
+For example, when implementing a protocol, data must be sent in a specific sequence. 
+If a socket is used by two coroutines simultaneously for reading/writing, 
+the order of operations may be disrupted.
+
+Another example is database transactions. 
+Code that starts a transaction cannot release the database connection socket until 
+the transaction is completed.
+
+The `Async\Context` class is designed to help solve these issues.
+
+#### Context API
+
+The `Async\Context` class defines three groups of methods:
+* Methods for retrieving values from the Map, considering parent contexts
+* Methods for retrieving values only from the current context
+* Methods for modifying or removing keys in the current context
+
+| Method                                                                | Description                                             |
+|-----------------------------------------------------------------------|---------------------------------------------------------|
+| `find(string\|object $key): mixed`                                    | Find a value by key in the current or parent Context.   |
+| `get(string\|object $key): mixed`                                     | Get a value by key in the current Context.              |
+| `has(string\|object $key): bool`                                      | Check if a key exists in the current Context.           |
+| `findLocal(string\|object $key): mixed`                               | Find a value by key only in the local Context.          |
+| `getLocal(string\|object $key): mixed`                                | Get a value by key only in the local Context.           |
+| `hasLocal(string\|object $key): bool`                                 | Check if a key exists in the local Context.             |
+| `set(string\|object $key, mixed $value, bool $replace = false): self` | Set a value by key in the Context.                      |
+| `unset(string\|object $key): self`                                    | Delete a value by key from the Context.                 |
 
 
 The `Scope` class provides a mechanism 
@@ -967,22 +1029,23 @@ for storing data that is accessible to all child coroutines.
 
 ```php
 $scope = new Scope();
-$scope->set('connections', 0);
+
+$scope->context->set('connections', 0);
 
 $scope->spawn(function() {
     sleep(1);
-    echo currentScope()->get('connections')."\n";
+    echo currentContext()->get('connections')."\n";
 });
 
 $scope->spawn(function() {
     sleep(2);
-    echo currentScope()->get('connections')."\n";
+    echo currentContext()->get('connections')."\n";
 });
 
 await $scope;
 ```
 
-**Coroutine Scope Slots** are an efficient mechanism for managing memory 
+**Context Slots** are an efficient mechanism for managing memory 
 associated with coroutine lifetimes.  
 Once all coroutines owning the Scope complete, 
 or the Scope itself is terminated, all data in the slots will be released.
@@ -997,10 +1060,10 @@ so code that does not have access to the object cannot read the data associated 
 This pattern is used in many programming languages and is represented in JavaScript by a special class, **Symbol**.
 
 ```php
-$key = new Async\Key('pdo connection');
+$key = 'pdo connection';
 
 if(currentScope()->has($key)) {
-    $pdo = currentScope()->get($key);
+    $pdo = currentContext()->get($key);
 } else {
     $pdo = new PDO('sqlite::memory:');
     currentScope()->set($key, new PDO('sqlite::memory:'));
@@ -1015,11 +1078,11 @@ you will receive the original object or `NULL`.
 function task(): void 
 {
     // Should return the original object
-    $pdo = currentScope()->find('pdo');
+    $pdo = currentContext()->find('pdo');
 }
 
 $pdo = new PDO('sqlite::memory:');
-currentScope()->set('pdo', new WeakReference($pdo));
+currentContext()->set('pdo', new WeakReference($pdo));
 
 spawn task();
 ```
