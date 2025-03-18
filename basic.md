@@ -84,7 +84,7 @@ spawn example('World');
 
 $name = 'World';
 
-spawn function use($name): void {
+spawn function() use($name): void {
     echo "Hello, $name!";
 };
 
@@ -170,7 +170,7 @@ spawn test;
 
 $name = 'World';
 
-spawn function use($name): void {
+spawn function() use($name): void {
     echo "Hello, $name!";
 };
 
@@ -271,25 +271,25 @@ Goodbye, World!
 Goodbye, Universe!
 ```
 
-The `suspend` function can be used only for the current coroutine.
+The `suspend` operator can be used only for the current coroutine.
 
-The `suspend` function has no parameters and does not return any values, 
+The `suspend` operator has no parameters and does not return any values, 
 unlike the yield operator.
 
-The `suspend` function can be used in any function and in any place
+The `suspend` operator can be used in any function and in any place
 including from the main execution flow:
 
 ```php
 function example(string $name): void {
     echo "Hello, $name!";
-    suspend();
+    suspend;
     echo "Goodbye, $name!";
 }
 
 $coroutine = spawn example('World');
 
 // suspend the main flow
-suspend();
+suspend;
 
 echo "Back to the main flow";
 
@@ -307,12 +307,11 @@ The suspend operator can be a throw point
 if someone resumes the coroutine externally with an exception.
 
 ```php
-
 function example(string $name): void {
     echo "Hello, $name!";
     
     try {
-        suspend();
+        suspend;
     } catch (Exception $e) {
         echo "Caught exception: ", $e->getMessage();
     }
@@ -371,20 +370,14 @@ while in reality, operations occur asynchronously.
 
 ### Await
 
-The `await` function/operator is used to wait for the completion of another coroutine:
-
-```php
-// Prototype:
-namespace Async;
-function await(Awaitable $awaitable): mixed {}
-```
+The `await` operator is used to wait for the completion of another coroutine:
 
 ```php
 
 spawn function {
     echo "Start reading file1.txt\n";
     
-    $result = await spawn function:string {
+    $result = await spawn function():string {
         return file_get_contents('file1.txt');    
     };
             
@@ -408,14 +401,14 @@ The use of `spawn`/`await`/`suspend` is allowed in almost any part of a PHP prog
 This is possible because the PHP script entry point forms the **main execution thread**, 
 which is also considered a coroutine.  
 
-As a result, functions like `suspend()` and `currentCoroutine()` will behave the same way as in other cases.
+As a result, operator like `suspend` and `currentCoroutine()` will behave the same way as in other cases.
 
-If only **one coroutine** exists in the system, calling `suspend()` will immediately return control.
+If only **one coroutine** exists in the system, calling `suspend` will immediately return control.
 
 The `register_shutdown_function` handler operates in synchronous mode, 
 after asynchronous handlers have already been destroyed. 
 Therefore, the `register_shutdown_function` code should not use the concurrency API.
-The `suspend()` function will have no effect, and the `spawn` operation will not be executed at all.
+The `suspend` operator will have no effect, and the `spawn` operation will not be executed at all.
 
 ### Awaitable interface
 
@@ -432,118 +425,49 @@ The following classes from this **RFC** also implement this interface:
 - `Coroutine`
 - `Scope`
 
-### Structured concurrency
+### Scope and structured concurrency
 
-Structural concurrency helps a programmer bind execution using code blocks organized in a hierarchy.  
-Programming languages use two approaches:
-* Coroutine functions themselves are structural elements.
-* Additional syntactic blocks can complement control.
+**Structured concurrency** allows organizing coroutines into 
+a group or hierarchy to manage their lifetime or exception handling.
 
-When making a choice within PHP, we will follow the rule of minimizing syntax.
-
-This is why coroutine functions will be the primary and only syntactic blocks for structural concurrency, 
-but not the only semantic tools.  
-The order of coroutine execution forms a hierarchy that follows the rules of the Top-down strategy:
+The `Async\Scope` class enables grouping coroutines together, 
+allowing the creation of a hierarchy of groups (i.e., a hierarchy of `Async\Scope`).
 
 ```php
-function subsubtask(): void 
-{
-    sleep(1);
-    echo "Subsubtask\n";
-}
+$scope = new Async\Scope();
 
-function subtask(): void 
-{
-    echo "Subtask\n";
-    await spawn subsubtask();
-}
+spawn in $scope function {
 
-function task(): void 
-{
-    await spawn subtask();    
-}
-
-spawn task();
-```
-
-Hierarchy of calls:
-
-```plaintext
-GLOBAL
-└── task()
-    └── subtask()
-        └── subsubtask()
-```
-
-Execution flow:
-1. `task()` is spawned.
-2. `subtask()` is spawned and awaited.
-    - Prints: **"Subtask"**
-3. `subsubtask()` is spawned and awaited inside `subtask()`.
-    - Sleeps for 1 second.
-    - Prints: **"Subsubtask"**
-
-The lifetime of child coroutines cannot exceed the lifetime of their parent.  
-In the example above, parents explicitly await the execution of child coroutines,  
-so the total lifetime of `task` equals the execution time of `subsubtask`.
-
-```php
-function mainTask(): void 
-{
-    // watcher pattern
     spawn function {
-        while (true) {
-            sleep(2);
-            echo "Cleanup: removing dead connections...\n";
-        }
+        echo "Task 1-1\n";
     };
 
-   while(...) {       
-       echo "Worker: processing connection $i...\n";
-       ...
-       suspend();
-   }
-}
+    echo "Task 1\n";
+};
 
-spawn mainTask();
+spawn in $scope function {
+    echo "Task 2\n";
+};
+
+await $scope;
 ```
 
-The example above demonstrates the **Watcher** pattern.  
-The `mainTask` function creates a child coroutine **Watcher**, 
-which periodically cleans up resources in an infinite loop, while `mainTask` performs useful work.  
-The **Watcher** will be terminated as soon as the task completes its work.
+**Expected output:**
 
-### Coroutine Scope
-
-In **structural concurrency**, a **Scope** is a mechanism that ensures coroutines are properly managed 
-within a defined execution context. 
-It provides control over **lifetime, cancellation, and completion** of coroutines.
-
-Child coroutines inherit the parent's Scope:
-
-```php
-use Async\Scope;
-
-function task(): void 
-{
-    $scope = new Scope();
-    $scope->set('connections', 0);
-    
-    $scope->spawn(function() {
-        sleep(1);
-        echo currentScope()->get('connections')."\n";
-    });
-    
-    $scope->spawn(function() {
-        sleep(2);
-        echo currentScope()->get('connections')."\n";
-    });
-    
-    await $scope;
-}
-
-spawn task();
 ```
+Task 1
+Task 2
+Task 1-1
+```
+
+In this example, **all three child coroutines** belong to the same `$scope` 
+and can be awaited using the `await` operator or canceled using the `cancel()` method.
+
+Note that the coroutine that prints the text `"Task 1-1"` also belongs to `$scope`, 
+meaning it is at the same level as the `"Task 1"` coroutine.
+
+> By default, coroutines that are called from other coroutines 
+> inherit the same `Scope` and are at the same level in the hierarchy.
 
 The `Scope` primitive can be used in an `await` expression, 
 in which case the code will pause until all child tasks are completed.
@@ -557,15 +481,15 @@ function task(): void
 {
     $scope = new Scope();
     
-    $scope->spawn(function() {
+    spawn in $scope function {
         spawn function {
             sleep(1);
             echo "Task 1-1\n";
         };
-        
+    
         sleep(1);
-        echo "Task 1\n";
-    });
+        echo "Task 1-1\n";
+    };
     
     $scope->spawn(function() {
         sleep(2);
@@ -579,13 +503,8 @@ function task(): void
 spawn task();
 ```
 
-If you need to wait only for direct descendants, use the method `awaitDirectChildren`: 
-
-```php
-$scope = new Scope();
-// create child coroutines        
-$scope->awaitDirectChildren();
-```
+The expression `$await $scope` suspends the current coroutine 
+until all coroutines in the `$scope` group have completed or an exception occurs.
 
 #### Scope cancellation
 
@@ -613,6 +532,63 @@ that will be applied to all coroutines spawned within the specified `Scope`.
 It allows controlling both the lifetime of the `Scope` 
 and the handling of exceptions that may be delivered to the `Scope` 
 (see [Exception Handling](#exception-handling)).
+
+The `BoundedScope` API is extracted into a separate class to clearly define 
+its responsibility, distinguishing it from other places where `Scope` might be used.
+
+For example:
+```php
+
+use Async\BoundedScope;
+use Async\Scope;
+
+function socketListen(): void
+{
+    $scope = new Scope();    
+
+    $scope->spawn(function() {
+        while ($socket = stream_socket_accept($serverSocket, 0)) {
+            $scope->spawn(handleConnection(...), $socket);
+        }
+    });
+
+    await $scope;
+}
+```
+
+This code creates a separate `Scope` to group all coroutines related to request handling. 
+However, it has a few issues:
+
+* If an exception occurs in `handleConnection`, the entire server will stop running.
+* If `handleConnection` mistakenly creates child coroutines and forgets to close them, it will lead to a resource leak.
+
+`BoundedScope` helps solve both problems:
+
+* Instead of handling every request within the same `Scope`, 
+we will create a separate `BoundedScope` for each request.
+* `BoundedScope` will have a lifetime limited to the coroutine handling the request. 
+This way, if the coroutine unexpectedly terminates, all its child coroutines will be canceled along with it.
+* `BoundedScope` allows defining an exception handler that isolates the server 
+and other coroutines from errors occurring within a specific request.
+
+```php
+use Async\BoundedScope;
+use Async\Scope;
+
+function socketListen(): void
+{
+    $scope = new Scope();    
+
+    $scope->spawn(function() {
+        while ($socket = stream_socket_accept($serverSocket, 0)) {
+            BoundedScope::inherit($scope)->spawnAndBound(handleConnection(...), $socket);
+        }
+    });
+
+    await $scope;
+}
+```
+
 
 The `BoundedScope` class implements the following pattern:
 

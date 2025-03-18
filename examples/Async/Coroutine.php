@@ -76,6 +76,8 @@ final class Coroutine implements Awaitable
      */
     public function isFinished(): bool {}
     
+    public function getResult(): mixed {}
+    
     /**
      * Return awaiting debug information.
      */
