@@ -1,4 +1,7 @@
-### Structured concurrency
+# Structured concurrency
+
+This section will explore various models and implementations that can help
+realize structural competition for `PHP`.
 
 Let's analyze the following code:
 
@@ -6,29 +9,32 @@ Let's analyze the following code:
 function task()
 {
     spawn function {
-        //
+        // ...
     };
 
     spawn function {
-        //
+        // ...
     };
 }
+
 spawn task();
 ```
 
-What exactly did the programmer intend to achieve? 
-Why did they define two coroutines inside another one? 
-What is the purpose?
+* What exactly did the programmer intend to achieve? 
+* Why did they define two coroutines inside another one? 
+* What is the purpose?
 
-If the two coroutines inside `task()` are completely independent of it, why do they exist within it?
-If the two coroutines depend on `task()`, in what way do they rely on it?
-If a language allows a programmer to write code that has no meaningful purpose, 
+And:
+
+* If the two coroutines inside `task()` are completely independent of it, why do they exist within it?
+* If the two coroutines depend on `task()`, in what way do they rely on it?
+* If a language allows a programmer to write code that has no meaningful purpose, 
 are we really doing everything correctly?
 
 Structured concurrency helps answer the questions above 
-by defining a model for interaction between coroutines.
+by defining a model for *interaction between coroutines*.
 
-It helps answer three key questions:
+**It helps answer three key questions:**
 
 * Should the coroutine's execution be awaited?
 * When a coroutine completes, which other coroutines should also be completed? 
@@ -52,7 +58,37 @@ In modern programming languages, three solution patterns can be identified:
 | **Run-and-wait**         | `asyncio.gather()`      | `coroutineScope {}`  | `sync.WaitGroup`   | `Task.await`      |
 | **Supervised execution** | `asyncio.TaskGroup`     | `supervisorScope {}` | `context.Context`  | `Task.Supervisor` |
 
-### Lifetime limitation
+As we can see, different languages use two approaches to implement structured concurrency:
+* Introducing special operators (as in Kotlin)
+* Using methods and objects (as in Go, Python)
+
+It is important to note that the structural unit is not a coroutine itself but another entity,
+which is called `CoroutineScope` in Kotlin, `TaskGroup` in Python, and `Context` in Go.
+
+It is worth noting that the classes and methods that provide structured concurrency 
+are not part of the language itself. 
+Therefore, they do not offer significant advantages in terms of expressiveness.
+
+Should we rely solely on classes and methods? 
+Or should we follow Kotlin’s approach and introduce 
+a separate syntax element for defining a `Scope` block?
+
+Adding a separate code block in `PHP` is not a simple task. 
+It requires a comprehensive approach and analysis, 
+including defining variable scope rules and possibly making deep changes at the virtual machine level.
+
+From this perspective, it may be more beneficial 
+to take a different approach and use functions themselves as natural structural elements. 
+In other words, a function call within another function can be considered as a concurrency hierarchy.
+
+Now that the structural elements have been defined, 
+it is necessary to determine how the relationships between coroutines will be described.
+
+To answer this question, 
+we need to examine how the lifetimes of coroutines within 
+a hierarchy can be related to each other.
+
+## Lifetime limitation
 
 Let's take a closer look at the aspect of coroutine lifetime management and how it can be implemented.
 
@@ -97,12 +133,12 @@ that the parent's lifetime restricts the lifetime of child Actors.
 
 Let's take a closer look at the differences between the models, their advantages and disadvantages, and use cases.
 
-#### No Limitation
+### No Limitation
 
 The main drawback of the **No Limitation** model is the need for manual resource management.
 However, this can also be considered an advantage, as it provides maximum control.
 
-#### Bottom-up
+### Bottom-up
 
 The **Bottom-up** model leads to more ambiguous consequences.
 Intuitively, it seems that this model should prevent resource leaks,
@@ -148,7 +184,7 @@ This case is a positive aspect of the *Bottom-up* model and a negative aspect of
 
 However, this seems to be the only significant drawback of the **Top-down** strategy.
 
-#### Top-down
+### Top-down
 
 The **Top-down** model limits the lifetime of child coroutines to the lifetime of the parent.  
 It implements structured concurrency but, unlike the **Bottom-up** model,  
@@ -281,7 +317,7 @@ function task(): void
 }
 ```
 
-#### Use Cases
+### Use Cases
 
 Let's briefly review typical use cases for each model:
 
