@@ -525,6 +525,81 @@ $scope->spawn(function() {
 $scope->cancel();
 ```
 
+#### Scope Hierarchy
+
+With `Scope`, you can build a hierarchy of coroutine groups to manage the lifetime of all child groups. 
+Each `Scope` in the hierarchy can be controlled separately, 
+participate independently in an `await` expression, 
+and be canceled individually. 
+
+However, canceling a parent `Scope` results in the cancellation of all child `Scopes` 
+and all coroutines within those Scopes.
+
+```php
+use Async\Scope;
+use Async\CancellationException;
+
+function connectionChecker($socket): void
+{
+    while (true) {
+        if(feof($socket)) {
+            currentScope()->cancel(new CancellationException("The connection was closed by user"));
+            return;
+        }                               
+        
+        sleep(1);
+    }
+}
+
+function handleConnection($socket): void
+{
+    // A separate coroutine checks that the socket is still active.
+    spawn connectionChecker($socket);
+
+    try {
+        sendResponse($socket, dispatchRequest(parseRequest($socket)));
+    } catch (Throwable $exception) {
+        fwrite($socket, "HTTP/1.1 500 Internal Server Error\r\n\r\n");
+    } finally {
+        fclose($socket);
+        currentScope()->dispose();
+    }
+}
+
+function socketListen(): void
+{
+    $scope = new Scope();    
+
+    $scope->spawn(function() {
+        while ($socket = stream_socket_accept($serverSocket, 0)) {
+            spawn in Scope::inherit() connectionHandler($socket);
+        }
+    });
+
+    await $scope;
+}
+```
+Let's examine how this example works.
+
+1. `socketListen` creates a new Scope for coroutines that will handle all connections.
+2. Each new connection is processed using `connectionHandler()` in a separate Scope, which is inherited from the main one.
+3. `connectionHandler` creates another coroutine, `connectionChecker()`, to monitor the connection's activity. As soon as the client disconnects, `connectionChecker` will cancel all coroutines related to the request.
+4. If the main Scope is closed, all coroutines handling requests will also be canceled.
+
+```
+GLOBAL <- globalScope
+│
+├── socketListen (Scope) <- rootScope
+│   │
+│   ├── connectionHandler (Scope) <- request scope1
+│   │   └── connectionChecker (Coroutine)
+│   │
+│   ├── connectionHandler (Scope) <- request scope2
+│   │   └── connectionChecker (Coroutine)
+│   │
+```
+
+
 #### BoundedScope
 
 The `BoundedScope` class is designed to create explicit constraints 
