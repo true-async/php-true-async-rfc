@@ -18,7 +18,7 @@ function fetchAllUrls(array $urls): array
         $futures[$url] = spawn fetchUrl($url);
     }
     
-    await currentScope();
+    await children;
     
     $results = [];
     
