@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Translator;
 
+use Async\BoundedScope;
 use Async\Coroutine;
 use Async\Scope;
 use function Async\spawn;
@@ -23,7 +24,7 @@ final class Translator
     
     public function __construct(private LongPoll $longPoll, private \TranslatorHttpClient $translatorClient)
     {
-        $this->scope = new Scope();
+        $this->scope = new BoundedScope();
         
         // Define an exception handle for all child scopes
         // Handling exceptions from child **Scopes** ensures that errors in child coroutines do not propagate
