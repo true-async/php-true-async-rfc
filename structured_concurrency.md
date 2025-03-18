@@ -81,6 +81,39 @@ From this perspective, it may be more beneficial
 to take a different approach and use functions themselves as natural structural elements. 
 In other words, a function call within another function can be considered as a concurrency hierarchy.
 
+In other words, we could say that the following code represents a structure:
+
+```php
+function task()
+{
+    spawn function1();
+    spawn function2();
+}
+
+spawn task();
+```
+
+However, if we consider a different piece of code, we can notice a serious logical issue:
+
+```php
+function task()
+{
+    spawn function1();
+    spawn function2();
+}
+
+task();
+```
+
+In the first case, `task` is called as a coroutine, while in the second case, it is called as a regular function.  
+`task` itself has no way of knowing how it was invoked.
+
+As a result, the programmer cannot make assumptions about which code the expression `spawn task()` belongs to.
+
+This means that a function cannot be used as a structural scope.
+Thus, we will use `Scope` as an element of structured concurrency, 
+following the same model as in Python, Go, and other similar languages.
+
 Now that the structural elements have been defined, 
 it is necessary to determine how the relationships between coroutines will be described.
 
