@@ -272,7 +272,7 @@ spawn in $this->scope $this->method();
 spawn in $this->getScope() $this->method();
 ```
 > **Warning:** The `spawn` function does not allow passing reference data as parameters. 
-> This limitation can be overcome using the `spawn` operator.
+> This limitation can be overcome using the `spawn` keyword.
 
 ### Suspension
 
@@ -298,12 +298,12 @@ Goodbye, World!
 Goodbye, Universe!
 ```
 
-The `suspend` operator can be used only for the current coroutine.
+The `suspend` keyword can be used only for the current coroutine.
 
-The `suspend` operator has no parameters and does not return any values, 
-unlike the yield operator.
+The `suspend` keyword has no parameters and does not return any values, 
+unlike the yield keyword.
 
-The `suspend` operator can be used in any function and in any place
+The `suspend` keyword can be used in any function and in any place
 including from the main execution flow:
 
 ```php
@@ -330,7 +330,7 @@ Back to the main flow
 Goodbye, World!
 ```
 
-The suspend operator can be a throw point 
+The suspend keyword can be a throw point 
 if someone resumes the coroutine externally with an exception.
 
 ```php
@@ -397,7 +397,7 @@ while in reality, operations occur asynchronously.
 
 ### Await
 
-The `await` operator is used to wait for the completion of another coroutine:
+The `await` keyword is used to wait for the completion of another coroutine:
 
 ```php
 
@@ -428,14 +428,14 @@ The use of `spawn`/`await`/`suspend` is allowed in almost any part of a PHP prog
 This is possible because the PHP script entry point forms the **main execution thread**, 
 which is also considered a coroutine.  
 
-As a result, operator like `suspend` and `currentCoroutine()` will behave the same way as in other cases.
+As a result, keyword like `suspend` and `currentCoroutine()` will behave the same way as in other cases.
 
 If only **one coroutine** exists in the system, calling `suspend` will immediately return control.
 
 The `register_shutdown_function` handler operates in synchronous mode, 
 after asynchronous handlers have already been destroyed. 
 Therefore, the `register_shutdown_function` code should not use the concurrency API.
-The `suspend` operator will have no effect, and the `spawn` operation will not be executed at all.
+The `suspend` keyword will have no effect, and the `spawn` operation will not be executed at all.
 
 ### Awaitable interface
 
@@ -488,7 +488,7 @@ Task 1-1
 ```
 
 In this example, **all three child coroutines** belong to the same `$scope` 
-and can be awaited using the `await` operator or canceled using the `cancel()` method.
+and can be awaited using the `await` keyword or canceled using the `cancel()` method.
 
 Note that the coroutine that prints the text `"Task 1-1"` also belongs to `$scope`, 
 meaning it is at the same level as the `"Task 1"` coroutine.
@@ -501,7 +501,7 @@ in which case the code will pause until all child tasks are completed.
 
 #### Coroutine Scope waiting
 
-The `await` operator can be used with a `Scope` object:
+The `await` keyword can be used with a `Scope` object:
 
 ```php
 function task(): void 
@@ -1168,7 +1168,7 @@ The destructor will be called, and the connection will automatically return to t
 
 An uncaught exception in a coroutine follows this flow:
 
-1. If the coroutine is awaited using the `await` operator, 
+1. If the coroutine is awaited using the `await` keyword, 
 the exception is propagated to the awaiting points. 
 If multiple points are awaiting, each will receive the same exception
 (**Each await point will receive the exact same exception object, not cloned**).
@@ -1186,7 +1186,7 @@ where the same rules apply as for a regular scope.
 @startuml
 start
 :Unhandled Exception Occurred;
-if (Await operator is used?) then (Yes)
+if (Await keyword is used?) then (Yes)
     :Exception is propagated to await points;
 else (No)
     while (Scope exists?)
@@ -1504,9 +1504,9 @@ Additionally, the `CancellationException` will not appear in `get_last_error()`,
 but it may trigger an `E_WARNING` to maintain compatibility with expected behavior 
 for functions like `fwrite` (if such behavior is specified in the documentation).
 
-#### exit and die operators
+#### exit and die keywords
 
-The `exit`/`die` operators called within a coroutine result in the immediate termination of the application.  
+The `exit`/`die` keywords called within a coroutine result in the immediate termination of the application.  
 Unlike the `cancel()` operation, they do not allow for proper resource cleanup.
 
 ### Graceful Shutdown

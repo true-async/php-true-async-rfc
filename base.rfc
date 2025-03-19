@@ -1352,9 +1352,9 @@ Additionally, the ''CancellationException'' will not appear in ''get_last_error(
 but it may trigger an ''E_WARNING'' to maintain compatibility with expected behavior
 for functions like ''fwrite'' (if such behavior is specified in the documentation).
 
-=== exit and die operators ===
+=== exit and die statements ===
 
-The ''exit''/''die'' operators called within a coroutine result in the immediate termination of the application.
+The ''exit''/''die'' statements called within a coroutine result in the immediate termination of the application.
 Unlike the ''cancel()'' operation, they do not allow for proper resource cleanup.
 
 ==== Graceful Shutdown ====
