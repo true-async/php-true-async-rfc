@@ -69,53 +69,35 @@ provided that they are directly related to concurrency functionality.
 
 Any function can be executed as a coroutine without any changes to the code.
 
+To start a coroutine, the `spawn` expression is used, 
+resulting in an instance of the `Async\Coroutine` class.
+
+A coroutine can stop itself bypassing control to the `Scheduler`. 
+However, it cannot be stopped externally.
+
+A stopped coroutine can be resumed at any time.
+
+A coroutine can be resumed with an exception, in which case an exception 
+will be thrown from the suspension point.
+
 ```php
 function example(string $name): void {
     echo "Hello, $name!";
 }
 
-// With special operator
-
 spawn example('World');
-
-// Or the same with a closure
-
-$name = 'World';
-
-spawn function() use($name): void {
-    echo "Hello, $name!";
-};
 
 // We can run as coroutine any valid function.
 spawn file_get_contents('file1.txt');
 spawn sleep(1);
 spawn strlen('Hello, World!');
-
 ```
 
-The `spawn` operator execute the `example` function in an asynchronous context:
+### Spawn keyword
 
-```php
-$coroutine = spawn function(string $name): void {
-    echo "Hello, $name!";
-}('World');
-```
-
-The `spawn` operator returns a `Coroutine` object 
-that can be used to control the execution of the coroutine:
-
-```php
-
-$coroutine = spawn function(string $name): void {
-    return "Hello, $name!";
-}('World');
-
-$coroutine->cancel();
-```
-
-### Spawn operator
-
-The general syntax of the `spawn` operator:
+The `spawn` construct is available in two variations:
+* `spawn function_call` - creates a coroutine from a callable expression
+* `spawn closure` - creates a coroutine and defines a closure
 
 ```php
 // Executing a known function
