@@ -74,9 +74,7 @@ function example(string $name): void {
     echo "Hello, $name!";
 }
 
-spawn(example(...), 'World');
-
-// With special syntax
+// With special operator
 
 spawn example('World');
 
@@ -95,33 +93,52 @@ spawn strlen('Hello, World!');
 
 ```
 
-The `spawn` function execute the `example` function in an asynchronous context.
+The `spawn` operator execute the `example` function in an asynchronous context:
 
 ```php
-
-$coroutine = spawn(function(string $name): void {
+$coroutine = spawn function(string $name): void {
     echo "Hello, $name!";
-}, 'World');
-
+}('World');
 ```
 
-The `spawn` function returns a `Coroutine` object 
+The `spawn` operator returns a `Coroutine` object 
 that can be used to control the execution of the coroutine:
 
 ```php
 
-$coroutine = spawn(function(string $name): void {
-    echo "Hello, $name!";
-}, 'World');
+$coroutine = spawn function(string $name): void {
+    return "Hello, $name!";
+}('World');
 
 $coroutine->cancel();
 ```
 
-#### Possible Syntax
+### Spawn operator
 
-The `spawn` function can be replaced using the `spawn` operator, which has two forms:
+The general syntax of the `spawn` operator:
 
-##### Executing a known function:
+```php
+// Executing a known function
+spawn [with <scope>] <function_call>;
+
+// Closure form
+spawn [with <scope>] function() [use(<parameters>)][: <returnType>] {
+    <codeBlock>
+};
+```
+
+*where:* 
+
+`function_call` - a valid function call expression:
+
+- call a standard PHP function
+
+```php
+
+spawn file_get_contents('file1.txt');
+```
+
+- call a user-defined function
 
 ```php
 function example(string $name): void {
@@ -131,87 +148,97 @@ function example(string $name): void {
 spawn example('World');
 ```
 
-**General syntax:**
+- call a static method
 
 ```php
-spawn [in <scope>] <callable>(<parameters>);
+spawn Mailer::send($message);
 ```
 
-where:
-
-- `callable` can be a function name:
-
-  ```php
-  function test() {}
-  spawn test();
-  ```
-
-- It can also be a variable:
-
-  ```php
-  $x = function() {};
-  spawn $x();
-  ```
-
-- `parameters` - a list of parameters passed to the function.
-
-**Syntactically incorrect cases:**
+- call a method of an object
 
 ```php
-// use expression instead of a function name or variable
-spawn ($this->method(...))();
-// try to call a function without brackets
-spawn test;
+$object = new Mailer();
+spawn $object->send($message);
 ```
 
-##### Executing a closure
+- self, static or parent keyword:
 
 ```php
+spawn self::send($message);
+spawn static::send($message);
+spawn parent::send($message);
+```
 
+- call `$class` method
+
+```php
+$className = 'Mailer';
+spawn $className::send($message);
+```
+
+- expression
+
+```php
+// Use result of foo()
+spawn (foo())();
+// Use foo as a closure
+spawn (foo(...))();
+// Use ternary operator
+spawn ($option ? foo() : bar())();
+```
+
+- call array dereference
+
+```php
+$array = [fn() => sleep(1)];
+spawn $array[0]();
+```
+
+- new dereference
+
+```php
+class Test {
+    public function wait(): void {
+        sleep(1);
+    }
+}
+
+spawn new Test->wait();
+```
+
+- call dereferenceable scalar:
+
+```php
+spawn "sleep"(5);
+```
+
+- call short closure
+
+```php
+spawn (fn() => sleep(1))();
+```
+
+#### Spawn closure syntax
+
+Allows creating a coroutine from a closure directly when using `spawn`:
+
+```php
+spawn [with <scope>] <inline_function>;
+```
+
+where `inline_function`:
+
+- a full closure definition.
+
+```php
 $name = 'World';
 
-spawn function() use($name): void {
-    echo "Hello, $name!";
-};
-
-// Equivalent to
-\Async\spawn(function () use ($name): void {
-    echo "Hello, $name!";
-});
-```
-
-**General syntax:**
-
-```php
-spawn [in <scope>] function [use(<parameters>)][: <returnType>] {
-    <codeBlock>
+spawn function() use($name): string {
+    return "Hello, $name!";
 };
 ```
 
-where:
-
-- `parameters` - a list of parameters passed to the closure.
-- `returnType` - the return type of the closure.
-- `codeBlock` - the body of the closure.
-
-Examples:
-
-```php
-spawn function {
-    echo "Hello";
-};
-
-spawn function:string|bool {
-    return file_get_contents('file.txt');
-};
-
-// Incorrect syntax
-spawn {
-    echo "Test\n";
-};
-```
-
-##### In scope expression
+#### In scope expression
 
 The `in` keyword allows specifying the scope in which the coroutine.
 
