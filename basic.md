@@ -167,6 +167,8 @@ spawn (foo())();
 spawn (foo(...))();
 // Use ternary operator
 spawn ($option ? foo() : bar())();
+// Scary example
+spawn (((foo())))();
 ```
 
 - call array dereference
@@ -258,12 +260,12 @@ spawn in $this->getScope() $this->method();
 
 ### Suspension
 
-A coroutine can suspend itself at any time using the `suspend` function:
+A coroutine can suspend itself at any time using the `suspend` keyword.:
 
 ```php
 function example(string $name): void {
     echo "Hello, $name!";
-    suspend();
+    suspend;
     echo "Goodbye, $name!";
 }
 
@@ -280,13 +282,26 @@ Goodbye, World!
 Goodbye, Universe!
 ```
 
+**Basic syntax:**
+
+```php
+    suspend;
+```
+
+**Wrong use:**
+
+```php
+    suspend();
+    suspend + $x;
+    my_function(suspend);
+```
+
 The `suspend` keyword can be used only for the current coroutine.
 
 The `suspend` keyword has no parameters and does not return any values, 
-unlike the yield keyword.
+unlike the `yield` keyword.
 
-The `suspend` keyword can be used in any function and in any place
-including from the main execution flow:
+The `suspend` keyword can be used in any function including from the **main execution flow**:
 
 ```php
 function example(string $name): void {
@@ -383,7 +398,7 @@ The `await` keyword is used to wait for the completion of another coroutine:
 
 ```php
 
-spawn function {
+spawn function() {
     echo "Start reading file1.txt\n";
     
     $result = await spawn function():string {
@@ -393,10 +408,108 @@ spawn function {
     echo "End reading file1.txt\n";
 };
 
-spawn function {
+spawn function() {
     echo "Sleep\n";
     sleep(1);    
 };
+```
+
+**Await basic syntax:**
+
+```php
+    [<resultExp> = ] await <AwaitExpression> [with <CancellationExp>];
+```
+
+where:
+
+- `resultExp` - an expression that will receive the result of the awaited operation.
+- `AwaitExpression` - an expression.
+- `CancellationExp` - an expression that limits the waiting time.
+
+**Await expression:**
+
+- An Awaitable object
+
+```php
+    $coroutine = spawn function():string {
+        return file_get_contents('file1.txt');    
+    };
+    
+    $result = await $coroutine;      
+```
+
+- A function that returns an Awaitable object
+
+```php
+
+    function getContents(): \Async\Coroutine {
+        return spawn function():string {
+            return file_get_contents('file1.txt');    
+        };
+    }
+
+    $result = await getContents('file1.txt');
+```
+
+- An array of Awaitable objects
+
+```php
+    $result = await [
+        spawn file_get_contents('file1.txt'),
+        spawn file_get_contents('file2.txt')
+    ];
+```
+
+- An iterator of Awaitable objects
+
+```php
+    function getFiles(array $files): \Generator {    
+        foreach ($files as $file) {
+            yield spawn file_get_contents($file);
+        }
+    };
+
+    $result = await getFiles(['file1.txt', 'file2.txt']);
+```
+
+- A new coroutine
+
+```php
+    $result = await spawn function():string {
+        return file_get_contents('file1.txt');    
+    };
+```
+
+- A new Awaitable object
+
+```php
+    $result = await new Future();
+```
+
+**CancellationExp**:
+
+- A variable of the `Awaitable` interface
+
+```php
+    $cancellation = new Future();
+    $result = await $coroutine with $cancellation;
+```
+
+- A function that returns an Awaitable object
+
+```php
+    function getCancellation(): \Async\Awaitable {
+        return new Future();
+    }
+
+    $result = await $coroutine with getCancellation();
+```
+
+- A variable with a coroutine
+
+```php
+    $timeout = spawn sleep(5);
+    $result = await $coroutine with $timeout;
 ```
 
 `await` suspends the execution of the current coroutine until 
