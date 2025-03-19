@@ -438,7 +438,7 @@ where:
     $result = await $coroutine;      
 ```
 
-- A function that returns an Awaitable object
+- A function that returns an `Awaitable` object
 
 ```php
 
