@@ -568,14 +568,14 @@ $scope = new Async\Scope();
 
 spawn in $scope function {
 
-    spawn function {
+    spawn function() {
         echo "Task 1-1\n";
     };
 
     echo "Task 1\n";
 };
 
-spawn in $scope function {
+spawn in $scope function() {
     echo "Task 2\n";
 };
 
@@ -611,7 +611,7 @@ function task(): void
 {
     $scope = new Scope();
     
-    spawn in $scope function {
+    spawn in $scope function() {
         spawn function {
             sleep(1);
             echo "Task 1-1\n";
@@ -669,11 +669,11 @@ and all coroutines within those Scopes.
 use Async\Scope;
 use Async\CancellationException;
 
-function connectionChecker($socket): void
+function connectionChecker($socket, callable $cancelToken): void
 {
     while (true) {
         if(feof($socket)) {
-            currentScope()->cancel(new CancellationException("The connection was closed by user"));
+            $cancelToken();
             return;
         }                               
         
@@ -681,19 +681,26 @@ function connectionChecker($socket): void
     }
 }
 
-function handleConnection($socket): void
+function connectionHandler($socket): void
 {
-    // A separate coroutine checks that the socket is still active.
-    spawn connectionChecker($socket);
+    $scope = Scope::inherit();
 
-    try {
-        sendResponse($socket, dispatchRequest(parseRequest($socket)));
-    } catch (Throwable $exception) {
-        fwrite($socket, "HTTP/1.1 500 Internal Server Error\r\n\r\n");
-    } finally {
-        fclose($socket);
-        currentScope()->dispose();
-    }
+    spawn in $scope function() use($socket, $scope) {
+
+        $cancelToken = fn() => $scope->cancel(new CancellationException("The connection was closed by user"));
+
+        // A separate coroutine checks that the socket is still active.    
+        spawn connectionChecker($socket, $cancelToken);
+    
+        try {
+            sendResponse($socket, dispatchRequest(parseRequest($socket)));
+        } catch (Throwable $exception) {
+            fwrite($socket, "HTTP/1.1 500 Internal Server Error\r\n\r\n");
+        } finally {
+            fclose($socket);
+            $scope->dispose();
+        }
+    };
 }
 
 function socketListen(): void
@@ -701,8 +708,8 @@ function socketListen(): void
     $scope = new Scope();    
 
     $scope->spawn(function() {
-        while ($socket = stream_socket_accept($serverSocket, 0)) {
-            spawn in Scope::inherit() connectionHandler($socket);
+        while ($socket = stream_socket_accept($serverSocket, 0)) {            
+            connectionHandler($socket);
         }
     });
 
