@@ -28,11 +28,6 @@ but its behavior is not defined within this **RFC**.
 > These components **MUST** implement the contracts defined in this document. 
 > The **Scheduler** and **Reactor** **MAY** extend the behavior of this **RFC** by providing additional functionalities.
 
-### Possible Syntax
-
-In this **RFC**, you can see a potential new syntax for describing concurrency.  
-This syntax is **NOT a mandatory** part of this **RFC** and may be adopted separately.
-
 ### Limitations
 
 This **RFC** does not implement "colored functions" 
@@ -75,9 +70,9 @@ resulting in an instance of the `Async\Coroutine` class.
 A coroutine can stop itself bypassing control to the `Scheduler`. 
 However, it cannot be stopped externally.
 
-A stopped coroutine can be resumed at any time.
+A suspended coroutine can be resumed at any time.
 
-A coroutine can be resumed with an exception, in which case an exception 
+A coroutine can be resumed with an **exception**, in which case an exception 
 will be thrown from the suspension point.
 
 ```php
@@ -346,7 +341,7 @@ function example(string $name): void {
 $coroutine = spawn example('World');
 
 // pass control to the coroutine
-suspend();
+suspend;
 
 $couroutine->cancel();
 ```
@@ -397,14 +392,19 @@ while in reality, operations occur asynchronously.
 The `await` keyword is used to wait for the completion of another coroutine:
 
 ```php
-
 spawn function() {
     echo "Start reading file1.txt\n";
     
     $result = await spawn function():string {
-        return file_get_contents('file1.txt');    
+        $result = file_get_contents('file1.txt');
+        
+        if($result === false) {
+            throw new Exception("Error reading file1.txt");
+        }
+        
+        return $result;
     };
-            
+
     echo "End reading file1.txt\n";
 };
 
@@ -432,69 +432,66 @@ try {
 **Await basic syntax:**
 
 ```php
-    [<resultExp> = ] await <AwaitExp> [until <CancellationExp>];
+    [<resultExp> = ] await <awaitExp> [until <cancellationExp>];
 ```
 
 **where:**
 
 - `resultExp` - An expression that will receive the result of the awaited operation.
-- `AwaitExp` - An expression whose result must be an object with the `Awaitable` interface. 
-- `CancellationExp` - An expression that limits the waiting time. Must be an object with the `Awaitable` interface.
+- `awaitExp` - An expression whose result must be an object with the `Async\Awaitable` interface. 
+- `cancellationExp` - An expression that limits the waiting time. 
+Must be an object with the `Async\Awaitable` interface.
 
 **Await expression:**
 
 - A variable of the `Awaitable` interface
 
 ```php
-    $coroutine = spawn function():string {
-        return file_get_contents('file1.txt');    
-    };
+    $readFileJob = spawn file_get_contents('file1.txt');
     
-    $result = await $coroutine;      
+    $result = await $readFileJob;
 ```
 
 - A function that returns an `Awaitable` object
 
 ```php
-    function getContents(): \Async\Coroutine {
-        return spawn file_get_contents('file1.txt');
+    function getContentsJobStarter(string $fileName): \Async\Coroutine {
+        return spawn file_get_contents($fileName);
     }
 
-    $result = await getContents('file1.txt');
+    $result = await getContentsJobStarter('file1.txt');
 ```
 
 - A new coroutine
 
 ```php
-    $result = await spawn function():string {
-        return file_get_contents('file1.txt');    
-    };
+    $result = await spawn file_get_contents('file1.txt');
 ```
 
 - A new Awaitable object
 
 ```php
-    $result = await new Future();
+    $result = await new Async\Future();
 ```
 
 - A static method
 
 ```php
-    $result = await Future::create();
+    $result = await SomeClass::create();
 ```
 
 - A method of an object
 
 ```php
-    $future = new Future();
-    $result = await $future->create();
+    $service = new Mailer();
+    $result = await $service->sendMail("test@mail.com", "Hello!");
 ```
 
 - A method of a class
 
 ```php
-    $class = 'Future';
-    $result = await $class::create();
+    $serviceClass = 'Mailer';
+    $result = await $serviceClass::sendAll();
 ```
 
 - A valid expression
@@ -505,14 +502,14 @@ try {
 
 **CancellationExp**:
 
-- A variable of the `Awaitable` interface
+- A variable of the `Async\Awaitable` interface
 
 ```php
     $cancellation = new Future();
     $result = await $coroutine until $cancellation;
 ```
 
-- A function that returns an Awaitable object
+- A function that returns an `Awaitable` object
 
 ```php
     function getCancellation(): \Async\Awaitable {
