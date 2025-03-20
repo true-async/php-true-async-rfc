@@ -32,11 +32,6 @@ function suspend(): void {}
  */
 function await(Awaitable $awaitable): mixed {}
 
-/**
- * Returns the current Scope.
- */
-function currentScope(): Scope {}
-
 function currentContext(): Context {}
 
 /**
@@ -45,14 +40,9 @@ function currentContext(): Context {}
 function currentCoroutine(): Coroutine {}
 
 /**
- * Returns the global Scope.
- */
-function globalScope(): Scope {}
-
-/**
  * Returns the root Scope.
  */
-function rootScope(): Scope {}
+function rootContext(): Context {}
 
 /**
  * Returns the list of all coroutines

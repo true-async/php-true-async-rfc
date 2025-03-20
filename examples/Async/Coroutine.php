@@ -17,11 +17,6 @@ final class Coroutine implements Awaitable
     public function getContext(): Context {}
     
     /**
-     * Returns the Coroutine scope.
-     */
-    public function getScope(): Scope {}
-    
-    /**
      * Returns the Coroutine debug trace.
      */
     public function getTrace(): array {}
