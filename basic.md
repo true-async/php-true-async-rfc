@@ -414,21 +414,36 @@ spawn function() {
 };
 ```
 
+`await` suspends the execution of the current coroutine until
+the awaited one returns a final result or completes with an exception.
+
+```php
+function test(): void {
+    throw new Exception("Error");
+}
+
+try {
+    await test();
+} catch (Exception $e) {
+    echo "Caught exception: ", $e->getMessage();
+}
+```
+
 **Await basic syntax:**
 
 ```php
-    [<resultExp> = ] await <AwaitExpression> [with <CancellationExp>];
+    [<resultExp> = ] await <AwaitExp> [with <CancellationExp>];
 ```
 
-where:
+**where:**
 
-- `resultExp` - an expression that will receive the result of the awaited operation.
-- `AwaitExpression` - an expression.
-- `CancellationExp` - an expression that limits the waiting time.
+- `resultExp` - An expression that will receive the result of the awaited operation.
+- `AwaitExp` - An expression whose result must be an object with the `Awaitable` interface. 
+- `CancellationExp` - An expression that limits the waiting time. Must be an object with the `Awaitable` interface.
 
 **Await expression:**
 
-- An Awaitable object
+- A variable of the `Awaitable` interface
 
 ```php
     $coroutine = spawn function():string {
@@ -441,35 +456,11 @@ where:
 - A function that returns an `Awaitable` object
 
 ```php
-
     function getContents(): \Async\Coroutine {
-        return spawn function():string {
-            return file_get_contents('file1.txt');    
-        };
+        return spawn file_get_contents('file1.txt');
     }
 
     $result = await getContents('file1.txt');
-```
-
-- An array of Awaitable objects
-
-```php
-    $result = await [
-        spawn file_get_contents('file1.txt'),
-        spawn file_get_contents('file2.txt')
-    ];
-```
-
-- An iterator of Awaitable objects
-
-```php
-    function getFiles(array $files): \Generator {    
-        foreach ($files as $file) {
-            yield spawn file_get_contents($file);
-        }
-    };
-
-    $result = await getFiles(['file1.txt', 'file2.txt']);
 ```
 
 - A new coroutine
@@ -484,6 +475,32 @@ where:
 
 ```php
     $result = await new Future();
+```
+
+- A static method
+
+```php
+    $result = await Future::create();
+```
+
+- A method of an object
+
+```php
+    $future = new Future();
+    $result = await $future->create();
+```
+
+- A method of a class
+
+```php
+    $class = 'Future';
+    $result = await $class::create();
+```
+
+- A valid expression
+
+```php
+    $result = await ($bool ? foo() : bar());
 ```
 
 **CancellationExp**:
@@ -505,17 +522,12 @@ where:
     $result = await $coroutine with getCancellation();
 ```
 
-- A variable with a coroutine
+- A new coroutine
 
 ```php
-    $timeout = spawn sleep(5);
-    $result = await $coroutine with $timeout;
+    $result = await $coroutine with spawn sleep(5);
 ```
 
-`await` suspends the execution of the current coroutine until 
-the awaited one returns a final result or completes with an exception.
-
-> **Warning:** As a result of waiting for an object of the `Scope` class, `NULL` is returned.
 
 ### Edge Behavior
 
