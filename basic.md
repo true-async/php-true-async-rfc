@@ -432,7 +432,7 @@ try {
 **Await basic syntax:**
 
 ```php
-    [<resultExp> = ] await <AwaitExp> [with <CancellationExp>];
+    [<resultExp> = ] await <AwaitExp> [until <CancellationExp>];
 ```
 
 **where:**
@@ -509,7 +509,7 @@ try {
 
 ```php
     $cancellation = new Future();
-    $result = await $coroutine with $cancellation;
+    $result = await $coroutine until $cancellation;
 ```
 
 - A function that returns an Awaitable object
@@ -519,15 +519,14 @@ try {
         return new Future();
     }
 
-    $result = await $coroutine with getCancellation();
+    $result = await $coroutine until getCancellation();
 ```
 
 - A new coroutine
 
 ```php
-    $result = await $coroutine with spawn sleep(5);
+    $result = await $coroutine until spawn sleep(5);
 ```
-
 
 ### Edge Behavior
 
