@@ -1,11 +1,5 @@
 # PHP True Async
 
-* Version: 0.9
-* Date: 2025-03-01
-* Author: Edmond [HT], edmondifthen@proton.me
-* Status: Draft
-* First Published at: http://wiki.php.net/rfc/true_async
-
 ## Proposal
 
 ### Scheduler and Reactor
@@ -387,6 +381,21 @@ Inside each coroutine,
 there is an illusion that all actions are executed sequentially, 
 while in reality, operations occur asynchronously.
 
+### Awaitable interface
+
+The `Awaitable` interface is a contract that allows objects to be used in the `await` expression.
+
+The interface does not have any methods on the user-land side
+and is intended for objects implemented as PHP extensions, such as:
+
+- `Future`
+- `Cancellation`
+
+The following classes from this **RFC** also implement this interface:
+
+- `Coroutine`
+- `Scope`
+
 ### Await
 
 The `await` keyword is used to wait for the completion of another coroutine:
@@ -540,21 +549,6 @@ after asynchronous handlers have already been destroyed.
 Therefore, the `register_shutdown_function` code should not use the concurrency API.
 The `suspend` keyword will have no effect, and the `spawn` operation will not be executed at all.
 
-### Awaitable interface
-
-The `Awaitable` interface is a contract that allows objects to be used in the `await` expression.
-
-The interface does not have any methods on the user-land side 
-and is intended for objects implemented as PHP extensions, such as:
-
-- `Future`
-- `Cancellation`
-
-The following classes from this **RFC** also implement this interface:
-
-- `Coroutine`
-- `Scope`
-
 ### Scope and structured concurrency
 
 **Structured concurrency** allows organizing coroutines into 
@@ -602,7 +596,7 @@ meaning it is at the same level as the `"Task 1"` coroutine.
 The `Scope` primitive can be used in an `await` expression, 
 in which case the code will pause until all child tasks are completed.
 
-#### Coroutine Scope waiting
+#### Scope waiting
 
 The `await` keyword can be used with a `Scope` object:
 
@@ -735,6 +729,101 @@ GLOBAL <- globalScope
 │   ├── connectionHandler (Scope) <- request scope2
 │   │   └── connectionChecker (Coroutine)
 │   │
+```
+
+### Async blocks
+
+The `async` block allows for describing groups of coroutines in a clearer and safer way than manually using `Async\Scope`.
+
+Consider the following code:
+
+```php
+function generateReport(): void
+{
+    $scope = Scope::inherit();
+
+    try {
+        [$employees, $salaries, $workHours] = await Async\all([
+            spawn in $scope fetchEmployees(),
+            spawn in $scope fetchSalaries(),
+            spawn in $scope fetchWorkHours()
+        ]);
+
+        foreach ($employees as $id => $employee) {
+            $salary = $salaries[$id] ?? 'N/A';
+            $hours = $workHours[$id] ?? 'N/A';
+            echo "{$employee['name']}: salary = $salary, hours = $hours\n";
+        }
+
+    } catch (Exception $e) {
+        echo "Failed to generate report: ", $e->getMessage(), "\n";
+    }
+}
+```
+
+The `async` statement allows you to group coroutines together:
+
+```php
+function generateReport(): void
+{
+    try {
+    
+        $scope = Scope::inherit();
+        
+        async $scope {
+            [$employees, $salaries, $workHours] = await Async\all([
+                spawn fetchEmployees(),
+                spawn fetchSalaries(),
+                spawn fetchWorkHours()
+            ]);
+    
+            foreach ($employees as $id => $employee) {
+                $salary = $salaries[$id] ?? 'N/A';
+                $hours = $workHours[$id] ?? 'N/A';
+                echo "{$employee['name']}: salary = $salary, hours = $hours\n";
+            }        
+        }
+        
+    } catch (Exception $e) {
+        echo "Failed to generate report: ", $e->getMessage(), "\n";
+    }
+}
+
+```
+
+#### async syntax
+
+```php
+async <scope> {
+    <codeBlock>
+}
+```
+
+**where:**
+
+- `scope` - An expression that must contain a `Scope` object.
+
+options:
+
+```php
+// variable
+async $scope {}
+// array element
+async $scope[0] {}
+async $$scope {}
+// object property
+async $object->scope {}
+async Object::$scope {}
+async getScope() {}
+```
+
+wrong use:
+
+```php
+// The nullsafe operator is not allowed.  
+async $object?->scope
+// Using references is not allowed.
+async &$object
 ```
 
 ### Context
