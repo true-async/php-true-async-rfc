@@ -976,9 +976,9 @@ class ConnectionPool
 
 function getDb(): ConnectionProxy
 {
-    static $key = new Async\Key('db_connection');
+    static $key = new Key('db_connection');
     
-    $context = Async\localContext();
+    $context = Async\coroutineContext();
 
     if ($context->has($key)) {
         return $context->get($key);
@@ -1251,9 +1251,9 @@ An exception handler has the right to suppress the exception.
 However, if the exception handler throws another exception, 
 the exception propagation algorithm will continue.
 
-#### onExit
+#### onCompletion
 
-The `onExit` method allows defining a callback function that will be invoked when a coroutine or scope completes.  
+The `onCompletion` method allows defining a callback function that will be invoked when a coroutine or scope completes.  
 This method can be considered a direct analog of `defer` in Go.
 
 ```php
@@ -1263,7 +1263,7 @@ $scope->spawn(function() {
   throw new Exception("Task 1");        
 });
 
-$scope->onExit(function () {
+$scope->onCompletion(function () {
     echo "Task 1 completed\n";
 });
 
@@ -1275,24 +1275,25 @@ Or for coroutines:
 ```php
 function task(): void 
 {
-    onExit(function () {
-        echo "Task completed\n";
-    });
-    
     throw new Exception("Task 1");
 }
 
-spawn task();
+$coroutine = spawn task();
+
+$coroutine->onCompletion(function () {
+    echo "Task completed\n";
+});
+
 ```
 
-The `onExit` semantics are most commonly used to release resources, 
+The `onCompletion` semantics are most commonly used to release resources, 
 serving as a shorter alternative to `try-finally` blocks:
 
 ```php
 function task(): void 
 {
     $file = fopen('file.txt', 'r');    
-    onExit(fn() => fclose($file));
+    onCompletion(fn() => fclose($file));
     
     throw new Exception("Task 1");
 }
@@ -1427,8 +1428,6 @@ The `Async\getCoroutines()` method returns an array of all coroutines in the app
 * [Coroutine](./examples/Async/Coroutine.php)
 * [Coroutine Context](./examples/Async/Context.php)
 * [Coroutine Scope](./examples/Async/Scope.php)
-* [Coroutine BoundedScope](./examples/Async/BoundedScope.php)
-* [Coroutine Key](./examples/Async/Key.php)
 
 ## Backward Incompatible Changes
 

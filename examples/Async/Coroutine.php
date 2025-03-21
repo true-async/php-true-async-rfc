@@ -71,8 +71,6 @@ final class Coroutine implements Awaitable
      */
     public function isFinished(): bool {}
     
-    public function getResult(): mixed {}
-    
     /**
      * Return awaiting debug information.
      */
@@ -86,5 +84,5 @@ final class Coroutine implements Awaitable
     /**
      * Define a callback to be executed when the coroutine is finished.
      */
-    public function onExit(\Closure $callback): void {}
+    public function onCompletion(\Closure $callback): void {}
 }

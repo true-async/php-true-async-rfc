@@ -24,8 +24,6 @@ class Scope implements Awaitable
     
     public function cancel(CancellationException $cancellationException): void {}
     
-    public function defineTimeout(int $milliseconds): void {}
-    
     /**
      * Sets an error handler that is called when an exception is passed to the Scope from one of its child coroutines.
      */
@@ -37,5 +35,5 @@ class Scope implements Awaitable
      */
     public function setChildScopeExceptionHandler(callable $exceptionHandler): void {}
     
-    public function onExit(\Closure $callback): void {}
+    public function onCompletion(\Closure $callback): void {}
 }
