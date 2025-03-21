@@ -88,7 +88,7 @@ spawn sleep(1);
 spawn strlen('Hello, World!');
 ```
 
-### Spawn keyword
+### Spawn
 
 The `spawn` construct is available in two variations:
 * `spawn function_call` - creates a coroutine from a callable expression
@@ -561,12 +561,12 @@ The following classes from this **RFC** also implement this interface:
 a group or hierarchy to manage their lifetime or exception handling.
 
 The `Async\Scope` class enables grouping coroutines together, 
-allowing the creation of a hierarchy of groups (i.e., a hierarchy of `Async\Scope`).
+allowing to create a hierarchy of groups (i.e., a hierarchy of `Async\Scope`).
 
 ```php
 $scope = new Async\Scope();
 
-spawn in $scope function {
+spawn in $scope function() {
 
     spawn function() {
         echo "Task 1-1\n";
@@ -612,7 +612,7 @@ function task(): void
     $scope = new Scope();
     
     spawn in $scope function() {
-        spawn function {
+        spawn function() {
             sleep(1);
             echo "Task 1-1\n";
         };
@@ -720,7 +720,8 @@ Let's examine how this example works.
 
 1. `socketListen` creates a new Scope for coroutines that will handle all connections.
 2. Each new connection is processed using `connectionHandler()` in a separate Scope, which is inherited from the main one.
-3. `connectionHandler` creates another coroutine, `connectionChecker()`, to monitor the connection's activity. As soon as the client disconnects, `connectionChecker` will cancel all coroutines related to the request.
+3. `connectionHandler` creates another coroutine, `connectionChecker()`, to monitor the connection's activity. 
+As soon as the client disconnects, `connectionChecker` will cancel all coroutines related to the request.
 4. If the main Scope is closed, all coroutines handling requests will also be canceled.
 
 ```
@@ -812,29 +813,8 @@ The `Async\Context` class defines three groups of methods:
 | `unset(string\|object $key): self`                                    | Delete a value by key from the Context.                 |
 
 
-The `Scope` class provides a mechanism 
-for storing data that is accessible to all child coroutines.
-
-```php
-$scope = new Scope();
-
-$scope->context->set('connections', 0);
-
-$scope->spawn(function() {
-    sleep(1);
-    echo currentContext()->get('connections')."\n";
-});
-
-$scope->spawn(function() {
-    sleep(2);
-    echo currentContext()->get('connections')."\n";
-});
-
-await $scope;
-```
-
 **Context Slots** are an efficient mechanism for managing memory 
-associated with coroutine lifetimes.  
+associated with `Scope` or coroutine lifetimes.  
 Once all coroutines owning the Scope complete, 
 or the Scope itself is terminated, all data in the slots will be released.
 
@@ -850,11 +830,11 @@ This pattern is used in many programming languages and is represented in JavaScr
 ```php
 $key = 'pdo connection';
 
-if(currentScope()->has($key)) {
+if(currentContext()->has($key)) {
     $pdo = currentContext()->get($key);
 } else {
     $pdo = new PDO('sqlite::memory:');
-    currentScope()->set($key, new PDO('sqlite::memory:'));
+    currentContext()->set($key, new PDO('sqlite::memory:'));
 }
 ```
 
@@ -875,153 +855,52 @@ currentContext()->set('pdo', new WeakReference($pdo));
 spawn task();
 ```
 
-#### Coroutine Scope Inheritance
+#### Context inheritance
 
-Scope primitives, like coroutines, can be structured into a hierarchy. 
-To create a Scope object that inherits from another, use the static method `inherit()`.
-
-```php
-$parentScope = new Scope();
-$parentScope->set('connections', 0);
-$parentScope->set('pdo', new PDO('sqlite::memory:'));
-$childScope = Scope::inherit($parentScope);
-$childScope->set('connections', 1);
-
-$childScope->spawn(function() {
-    echo "Child\n";
-    echo currentScope()->get('connections')."\n";
-});
-
-$parentScope->spawn(function() {
-    echo "Parent\n";
-    echo currentScope()->get('connections')."\n";
-});
-
-await $parentScope;
-```
-
-A child `Scope` overrides the parent's memory slots. 
-If a slot with the same key is defined in the child `Scope`, 
-the `get` method will return the value from the child slot; 
-otherwise, it will return the value from the parent.
-
-Waiting for a parent Scope extends to waiting for all child Scopes in the hierarchy.
-
-The restrictions of a parent `Scope` do not directly apply to child `Scope` instances. 
-However, the lifetime of child `Scope` instances cannot exceed that of the parent. 
-Therefore, if the parent is completed or canceled, the same will happen to all child `Scope` instances.
+The context belongs to the `Scope` and is created along with it.  
+If a `Scope` is inherited from a parent, the new context also inherits the parent.  
+Thus, the hierarchy of Scope objects forms exactly the same hierarchy of contexts.
 
 ```php
-$parentScope = new BoundedScope();
-$parentScope->withTimeout(1000);
-$childScope = Scope::inherit($parentScope);
 
-$childScope->spawn(function() {
-    sleep(2);
-    echo "This code will not be executed";
-});
+use Async\Scope;
+use function \Async\currentContext;
+use function \Async\rootContext;
 
-await $parentScope;
-```
-
-#### Coroutine Scope Lifetime
-
-The lifetime of a `Scope` is determined by the lifetime of the PHP object `$scope`. 
-The lifetime of coroutines belonging to a `Scope` is restricted by the lifetime of that `Scope`. 
-This rule allows the creation of coroutine groups that can be tied to the lifetime of a service.
-
-Let's consider an example:
-
-```php
-final class SocketPoll
+function handleRequest($socket): void
 {
-    private $serverSocket;
-    private Scope $scope;
+    echo currentContext()->get('request_id')."\n"; // <-- From request context
+    echo currentContext()->get('server_id')."\n"; // <-- From server context
+    echo rootContext()->get('request_id')."\n"; // <-- Should be NULL
+}
 
-    public function __construct(string $host, int $port)
-    {
-        $this->serverSocket = stream_socket_server("tcp://$host:$port", $errno, $errstr);
-        
-        if (!$this->serverSocket) {
-            throw new RuntimeException("Failed to create server socket: $errstr ($errno)");
-        }
-        
-        $this->scope = new Scope();
-    }
+function startRequestHandler($socket): void
+{
+    $requestScope = Scope::inherit(); // <-- Inherit server context
+    $requestScope->context->set('request_id', uniqid()); // <-- Override server context slot
     
-    public function __destruct()
-    {
-        $this->stop();
-    }
+    // Handle request in separate coroutine and scope
+    spawn in $requestScope handleRequest($socket);
+}
 
-    public function start(): void
-    {
-        $this->scope->spawn(function () {
-           try {
-              while (($clientSocket = stream_socket_accept($this->serverSocket, 0)) !== null) {
-                  $this->scope->spawn($this->handleConnection(...), $clientSocket);
-              }           
-           } finally {
-               fclose($this->serverSocket);
-           }
-        });   
-    }
-
-    private function handleConnection($clientSocket): void
-    {
-         try {
-             fwrite($clientSocket, "Hello! You're connected.\n");
-         
-             while (!feof($clientSocket)) {
-                 $data = fread($clientSocket, 1024);
-                 if ($data === false || $data === '') {
-                     break;
-                 }
-                 
-                 fwrite($clientSocket, "Received: $data");
-             }
-         } finally {
-             fclose($clientSocket);
-         }         
-    }
-
-    public function stop(): void
-    {
-        fclose($this->serverSocket);
-        $this->scope->cancel();
-    }
+function startServer(): void
+{
+    $serverScope = new Scope();
+    $serverScope->context->set('server_id', uniqid());
+    $serverScope->context->set('request_id', null);
+    
+    while (true) {
+        $socket = stream_socket_accept($serverSocket, 0);
+        startRequestHandler($socket);
+    }    
 }
 ```
 
-The `SocketPoll` service creates a separate private `Scope` for all the coroutines it starts.  
-This allows it to easily cancel the connection handling process, 
-which will terminate both the coroutine waiting for new connections and all coroutines processing them.
+The special functions `Async\currentContext()` and `Async\rootContext()` help
+quickly access the current context from any function.
 
-   **Note:** 
-   This example contains a circular dependency between objects, which should be avoided in real-world development.
-
-Coroutines belonging to a `Scope` do not increase its reference count.  
-This rule has several important consequences:
-
-```php
-function test(): void
-{
-    $scope = new Scope();
-    
-    $scope->spawn(function() {
-        sleep(1);
-    });
-    
-    $scope->spawn(function() {
-        sleep(2);        
-    });
-    
-    // No coroutine will ever be started.
-    unset($scope);
-}
-
-spawn test();
-```
+`Async\rootContext()` returns the context at the very root of the hierarchy,
+if it exists, or the global application context if it does not.
 
 #### Coroutine local context
 
@@ -1029,18 +908,18 @@ While a `Scope` can serve as a shared context in the coroutine hierarchy,
 a coroutine's **local context** is a personal data store strictly tied to the coroutine's lifetime. 
 The local context allows associating data slots that are automatically freed once the coroutine completes.
 
-The local coroutine context is accessible via the `Async\localContext()` function, 
+The local coroutine context is accessible via the `Async\coroutineContext()` function, 
 which returns an `Async\Context` object. 
 The `Async\Context` class provides the same methods for working with slots as the `Scope` class:
 
 ```php
 function task(): void 
 {
-    localContext()->set('data', 'This local data');
+    coroutineContext()->set('data', 'This local data');
     
-    spawn function {
+    spawn function() {
          // No data will be found
-         echo localContext()->find('data')."\n";
+         echo coroutineContext()->find('data')."\n";
     };
 }
 ```
