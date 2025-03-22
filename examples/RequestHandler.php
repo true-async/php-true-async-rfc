@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 use Async\Coroutine;
 use Async\Scope;
-use Async\BoundedScope;
 
 final class RequestHandler
 {
@@ -12,7 +11,7 @@ final class RequestHandler
     
     public function __construct()
     {
-        $this->scope = new BoundedScope();
+        $this->scope = new Scope();
         $this->scope->setChildScopeExceptionHandler(static function (Scope $scope, Coroutine $coroutine, \Throwable $exception): void {
             echo "Occurred an exception: {$exception->getMessage()} in Coroutine {$coroutine->getSpawnLocation()}\n";
         });

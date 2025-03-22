@@ -3,7 +3,8 @@
 declare(strict_types=1);
 
 use Async\Scope;
-use function Async\currentScope;
+use function Async\await;
+use function Async\all;
 
 function fetchUrl(string $url): string {
     $ctx = stream_context_create(['http' => ['timeout' => 5]]);
@@ -18,7 +19,7 @@ function fetchAllUrls(array $urls): array
         $futures[$url] = spawn fetchUrl($url);
     }
     
-    await children;
+    await all($futures);
     
     $results = [];
     

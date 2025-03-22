@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Async;
 
-class Scope implements Awaitable
+class Scope
 {
     public readonly Context $context;
     
@@ -23,6 +23,10 @@ class Scope implements Awaitable
     public function spawn(\Closure $callable, ...$params): Coroutine {}
     
     public function cancel(CancellationException $cancellationException): void {}
+    
+    public function tasks(): Awaitable {}
+    
+    public function all(): Awaitable {}
     
     /**
      * Sets an error handler that is called when an exception is passed to the Scope from one of its child coroutines.

@@ -32,6 +32,21 @@ function suspend(): void {}
  */
 function await(Awaitable $awaitable): mixed {}
 
+function any(iterable $futures, ?Awaitable $cancellation = null): Awaitable
+{
+
+}
+
+function all(iterable $futures, ?Awaitable $cancellation = null): Awaitable
+{
+
+}
+
+function anyOf(int $limit, iterable $futures, ?Awaitable $cancellation = null): Awaitable
+{
+
+}
+
 function currentContext(): Context {}
 
 function coroutineContext(): Context {}

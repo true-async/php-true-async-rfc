@@ -56,44 +56,53 @@ provided that they are directly related to concurrency functionality.
 > A `Coroutine` is an `execution container`, transparent to the code, 
 > that can be suspended on demand and resumed at any time.
 
-Any function can be executed as a coroutine without any changes to the code.
+Isolated execution contexts make it possible to switch between coroutines and execute tasks concurrently.
 
-To start a coroutine, the `spawn` expression is used, 
-resulting in an instance of the `Async\Coroutine` class.
+Any function can be executed as a coroutine without any changes to the code.
 
 A coroutine can stop itself bypassing control to the `Scheduler`. 
 However, it cannot be stopped externally.
 
 A suspended coroutine can be resumed at any time.
+The `Scheduler` component is responsible for the coroutine resumption algorithm.
 
 A coroutine can be resumed with an **exception**, in which case an exception 
 will be thrown from the suspension point.
 
+### Spawn
+
+To create coroutines, the `spawn <callable>` expression is used. 
+It launches the `<callable>` in a separate execution context and returns 
+an instance of the `Async\Coroutine` class as a result.
+
+Let's look at two examples:
+
 ```php
-function example(string $name): void {
-    echo "Hello, $name!";
-}
-
-spawn example('World');
-
-// We can run as coroutine any valid function.
-spawn file_get_contents('file1.txt');
-spawn sleep(1);
-spawn strlen('Hello, World!');
+$result = file_get_contents('https://php.net');
+echo "next line".__LINE__."\n";
 ```
 
-### Spawn
+This code first returns the contents of the PHP website, 
+then executes the `echo` statement.
+
+```php
+$coroutine = spawn file_get_contents('https://php.net');
+echo "next line".__LINE__."\n";
+```
+
+This code starts a coroutine with the `file_get_contents` function.
+The next line is executed without waiting for the result of `file_get_contents`.
 
 The `spawn` construct is available in two variations:
 * `spawn function_call` - creates a coroutine from a callable expression
-* `spawn closure` - creates a coroutine and defines a closure
+* `spawn closure_block` - creates a coroutine and defines a closure
 
 ```php
 // Executing a known function
 spawn [with <scope>] <function_call>;
 
 // Closure form
-spawn [with <scope>] function() [use(<parameters>)][: <returnType>] {
+spawn [with <scope>] [use(<parameters>)][: <returnType>] {
     <codeBlock>
 };
 ```
@@ -196,18 +205,40 @@ spawn (fn() => sleep(1))();
 Allows creating a coroutine from a closure directly when using `spawn`:
 
 ```php
-spawn [with <scope>] <inline_function>;
+spawn [with <scope>] [use(<parameters>)[: <returnType>]] {
+    <codeBlock>
+};
 ```
 
-where `inline_function`:
-
-- a full closure definition.
+- full form
 
 ```php
-$name = 'World';
+$file = 'main.log';
 
-spawn function() use($name): string {
-    return "Hello, $name!";
+spawn use($file): string {
+    $result = file_get_contents($file);
+    
+    if($result === false) {
+        throw new Exception("Error reading $file");
+    }
+    
+    return $result;
+};
+```
+
+- short form
+
+```php
+spawn {
+    return file_get_contents('main.log');
+};
+```
+
+- with return type
+
+```php
+spawn use():string {
+    return file_get_contents('main.log');
 };
 ```
 
@@ -218,7 +249,7 @@ The `in` keyword allows specifying the scope in which the coroutine.
 ```php
 $scope = new Async\Scope();
 
-$coroutine = spawn in $scope function:string {
+$coroutine = spawn in $scope use():string {
     return "Hello, World!";
 };
 
@@ -244,12 +275,10 @@ spawn in $scope function:void {
 spawn in $this->scope $this->method();
 spawn in $this->getScope() $this->method();
 ```
-> **Warning:** The `spawn` function does not allow passing reference data as parameters. 
-> This limitation can be overcome using the `spawn` keyword.
 
 ### Suspension
 
-A coroutine can suspend itself at any time using the `suspend` keyword.:
+A coroutine can suspend itself at any time using the `suspend` keyword:
 
 ```php
 function example(string $name): void {
@@ -280,15 +309,17 @@ Goodbye, Universe!
 **Wrong use:**
 
 ```php
+    // not function
     suspend();
-    suspend + $x;
+    // not part of the expression
+    suspend + $any;
+    // not parameter
     my_function(suspend);
 ```
 
 The `suspend` keyword can be used only for the current coroutine.
 
-The `suspend` keyword has no parameters and does not return any values, 
-unlike the `yield` keyword.
+The `suspend` keyword has no parameters and does not return any values, unlike the `yield` keyword.
 
 The `suspend` keyword can be used in any function including from the **main execution flow**:
 
@@ -305,7 +336,6 @@ $coroutine = spawn example('World');
 suspend;
 
 echo "Back to the main flow";
-
 ```
 
 Expected output:
@@ -316,8 +346,7 @@ Back to the main flow
 Goodbye, World!
 ```
 
-The suspend keyword can be a throw point 
-if someone resumes the coroutine externally with an exception.
+The `suspend` keyword can be a throw point if someone resumes the coroutine externally with an exception.
 
 ```php
 function example(string $name): void {
@@ -401,26 +430,22 @@ The following classes from this **RFC** also implement this interface:
 The `await` keyword is used to wait for the completion of another coroutine:
 
 ```php
-spawn function() {
-    echo "Start reading file1.txt\n";
+function readFile(string $fileName):string 
+{
+    $result = file_get_contents($fileName);
     
-    $result = await spawn function():string {
-        $result = file_get_contents('file1.txt');
-        
-        if($result === false) {
-            throw new Exception("Error reading file1.txt");
-        }
-        
-        return $result;
-    };
+    if($result === false) {
+        throw new Exception("Error reading file1.txt");
+    }
+    
+    return $result;
+}
 
-    echo "End reading file1.txt\n";
-};
+$coroutine = spawn readFile('file1.txt');
 
-spawn function() {
-    echo "Sleep\n";
-    sleep(1);    
-};
+echo await $coroutine;
+// or
+echo await spawn readFile('file2.txt');
 ```
 
 `await` suspends the execution of the current coroutine until
@@ -441,7 +466,7 @@ try {
 **Await basic syntax:**
 
 ```php
-    [<resultExp> = ] await <awaitExp> [until <cancellationExp>];
+    [<resultExp> = ] await <awaitExp>;
 ```
 
 **where:**
@@ -509,7 +534,38 @@ Must be an object with the `Async\Awaitable` interface.
     $result = await ($bool ? foo() : bar());
 ```
 
-**CancellationExp**:
+#### Await with cancellation
+
+##### Motivation
+
+The wait operation is often combined with a `cancellation token`.  
+In modern programming languages, the cancellation token is typically passed as 
+an additional parameter to functions, 
+which makes the semantics somewhat unclear.
+
+For example:
+```php
+await all([...], $cancellation);
+```
+
+Clearer semantics would allow us to logically and visually separate the wait operation into two conditions:
+1. What we're waiting for
+2. How long we're willing to wait
+
+For example:
+```php
+await all([...]) until $cancellation;
+// or if timeout() returns a awaitable object
+await all([...]) until timeout(5);
+```
+
+**basic syntax:**
+
+```php
+    [<resultExp> = ] await <awaitExp> [until <cancellationExp>];
+```
+
+**where:**
 
 - A variable of the `Async\Awaitable` interface
 
@@ -522,7 +578,7 @@ Must be an object with the `Async\Awaitable` interface.
 
 ```php
     function getCancellation(): \Async\Awaitable {
-        return new Future();
+        return spawn sleep(5);
     }
 
     $result = await $coroutine until getCancellation();
