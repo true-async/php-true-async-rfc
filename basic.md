@@ -1022,6 +1022,23 @@ async $object?->scope
 async &$object
 ```
 
+### Error detection
+
+Detecting erroneous situations when using coroutines is an important part of analyzing an application's reliability.
+
+The following scenarios are considered potentially erroneous:
+
+1. A coroutine belongs to a global scope and is not awaited by anyone (a **detached coroutine**).
+2. The root scope has been destroyed (its destructor was called), but no one awaited 
+it or ensured that its resources were explicitly cleaned up (e.g., by calling `$scope->cancel()` or `$scope->dispose()`).
+3. Tasks were not cancelled using the `cancel()` method, but through a call to `dispose()`.  
+This indicates that the programmer did not intend to cancel the execution of the coroutine,  
+yet it happened because the scope was destroyed.
+4. Deadlocks caused by circular dependencies between coroutines.
+
+**PHP** will respond to such situations by issuing **warnings**, including debug information about the involved coroutines.  
+Developers are expected to write code in a way that avoids triggering these warnings.
+
 ### Context
 
 #### Motivation
