@@ -614,22 +614,24 @@ The `Async\Scope` class enables grouping coroutines together,
 allowing to create a hierarchy of groups (i.e., a hierarchy of `Async\Scope`).
 
 ```php
-$scope = new Async\Scope();
 
-spawn in $scope function() {
+use Async\Scope;
 
-    spawn function() {
-        echo "Task 1-1\n";
+$scope = new Scope();
+
+spawn in $scope {
+    spawn {
+        echo "Child of Task 1\n";
     };
-
-    echo "Task 1\n";
+    
+    echo "Task 1\n";    
 };
 
-spawn in $scope function() {
+spawn in $scope {
     echo "Task 2\n";
 };
 
-await $scope;
+await $scope->all();
 ```
 
 **Expected output:**
@@ -637,54 +639,192 @@ await $scope;
 ```
 Task 1
 Task 2
-Task 1-1
+Child of Task 1
 ```
 
-In this example, **all three child coroutines** belong to the same `$scope` 
-and can be awaited using the `await` keyword or canceled using the `cancel()` method.
+In this example, **all three child coroutines** belong to the same `$scope`.
 
-Note that the coroutine that prints the text `"Task 1-1"` also belongs to `$scope`, 
-meaning it is at the same level as the `"Task 1"` coroutine.
+The coroutine with text `"Child of Task 1"` also belongs to `$scope`, 
+meaning it is at the same level as the `"Task 1"` and `"Task 2"` coroutines.
 
-> By default, coroutines that are called from other coroutines 
-> inherit the same `Scope` and are at the same level in the hierarchy.
+If the `$scope` is destroyed, all associated coroutines will be reliably terminated along with it.
+Therefore, the following code will not print anything.
 
-The `Scope` primitive can be used in an `await` expression, 
-in which case the code will pause until all child tasks are completed.
+```php
+
+use Async\Scope;
+
+$scope = new Scope();
+
+spawn in $scope {
+    spawn {
+        echo "Child of Task 1\n";
+    };
+    
+    echo "Task 1\n";    
+};
+
+spawn in $scope {
+    echo "Task 2\n";
+};
+
+unset($scope);
+```
+
+**Expected output:**
+
+```
+```
+
+This happens because the `Scope` object loses its last reference, 
+triggering the destructor, which cancels the coroutines before they even get a chance to start.
+
+This makes `Scope` objects a good (though not the best) tool for managing the lifetime of coroutines.  
+For example, you can assign the `$scope` object to another object and explicitly control its lifetime:
+
+```php
+use Async\Scope;
+
+class Service 
+{
+    private Scope $scope;
+    
+    public function __construct() {
+        $this->scope = new Scope();
+    }
+    
+    public function __destruct() {
+        $this->scope->dispose();
+    }
+    
+    public function run(): void {
+        spawn in $this->scope {
+            echo "Task 1\n";
+        };
+    }    
+}
+```
 
 #### Scope waiting
 
-The `await` keyword can be used with a `Scope` object:
+`Scope` can be useful both for waiting on coroutines and for limiting their lifetime.  
+It works especially well when the waiting logic is used together with a `try`–`finally` block:
+
+```
+main()                          ← defines a request Scope and run handleRequest()
+└── handleRequest()
+    └── processUser()
+        └── fetchProfile()      ← creates coroutine
+        └── fetchSettings()     ← creates coroutine
+```
+
+Code that creates a `Scope` typically intends to control only the tasks it has **explicitly** defined,  
+because it knows nothing about the coroutines created deeper in the call stack.
+
+Let's say we have a function that creates an array of tasks performing some background work:
 
 ```php
-function task(): void 
+function processAllUsers(string ...$users): array
+{
+    $coroutines = [];
+    
+    foreach ($users as $user) {
+        $coroutines[] = spawn processUser($user);
+    }
+    
+    return await all($coroutines);
+}
+```
+
+The code `return await all($coroutines)` waits for the completion of all tasks 
+that were explicitly started within this function.  
+However, if the `processUser` function created other coroutines that, 
+for some reason, continue to run after `processUser` has finished,  
+there is a risk of a resource leak.
+
+This problem has two solutions:
+
+1. You can wait for all coroutines that were created within a single `Scope`.  
+   In this case, there is a higher chance that all nested calls will eventually complete properly.  
+   However, there's also a higher risk that more tasks will remain in a waiting state, which means more memory consumption.
+
+2. You can wait only for the coroutines that are explicitly needed,  
+   and cancel all others that were implicitly created in the current `Scope` with an error.  
+   In this case, there will be no resource leaks.  
+   However, there's a risk that an important coroutine might be mistakenly cancelled.
+
+`Scope` supports both strategies:
+
+```php
+function processAllUsers(string ...$users): array
 {
     $scope = new Scope();
     
-    spawn in $scope function() {
-        spawn function() {
-            sleep(1);
-            echo "Task 1-1\n";
-        };
+    foreach ($users as $user) {
+        spawn in $scope processUser($user);
+    }
     
-        sleep(1);
-        echo "Task 1-1\n";
-    };
-    
-    $scope->spawn(function() {
-        sleep(2);
-        echo "Task 2\n";
-    });
-    
-    // wait for all child coroutines
-    await $scope;
+    return await $scope->tasks();
 }
-
-spawn task();
 ```
 
-The expression `$await $scope` suspends the current coroutine 
-until all coroutines in the `$scope` group have completed or an exception occurs.
+In this example, the `processAllUsers` function must return the computation results of `processUser` for each user.  
+`processAllUsers` has no knowledge of how `processUser` is implemented.  
+Using `await $scope->tasks()`, `processAllUsers` waits for the results of all coroutines created inside the `foreach ($users as $user)` loop.
+
+When the waiting completes, the `$scope` goes out, 
+thereby cancelling any coroutines that continue running by mistake.
+
+We can imagine another scenario.  
+There is a Job Manager that launches various tasks.  
+It has no idea what exactly each task might do.  
+However, it must guarantee that no more than **X** tasks are running at the same time.
+
+To achieve this, it needs to wait until all tasks have completed — regardless of whether some coroutines were mistakenly created or not —  
+because for the Job Manager, **waiting is more important than forcefully destroying data**.
+
+```php
+function processBackgroundJobs(string ...$jobs): array
+{
+    $scope = new Scope();
+    
+    foreach ($jobs as $job) {
+        spawn with $scope processJob($users);
+    }
+    
+    await $scope->all();
+}
+```
+
+You can use an additional constraint like `until timeout($value)` to limit the waiting time,  
+or you can approach the problem a bit differently:
+
+```php
+function processBackgroundJobs(string ...$jobs): array
+{
+    $scope = new Scope();
+    
+    foreach ($jobs as $job) {
+        spawn with $scope processJob($users);
+    }
+    
+    await $scope->tasks();
+    
+    try {
+        await $scope->all() until timeout(1);    
+    } catch (CancellationException) {
+       logWrongTasks($scope);
+    }
+    
+    await $scope->all() until timeout(10000);
+}
+```
+
+This demonstrates a soft cancellation strategy.  
+First, the code waits for the main tasks to complete.  
+Then, it waits for any remaining tasks. If there are any, a `CancellationException` is thrown,  
+and the code logs information about which coroutines were not properly completed.  
+After that, it waits for their completion again.
 
 #### Scope cancellation
 
