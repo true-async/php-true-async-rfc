@@ -809,7 +809,8 @@ function processAllUsers(string ...$users): array
 
 In this example, the `processAllUsers` function must return the computation results of `processUser` for each user.  
 `processAllUsers` has no knowledge of how `processUser` is implemented.  
-Using `await $scope->tasks()`, `processAllUsers` waits for the results of all coroutines created inside the `foreach ($users as $user)` loop.
+Using `await $scope->tasks()`, `processAllUsers` waits for the results of all coroutines created 
+inside the `foreach ($users as $user)` loop.
 
 When the waiting completes, the `$scope` goes out, 
 thereby cancelling any coroutines that continue running by mistake.
