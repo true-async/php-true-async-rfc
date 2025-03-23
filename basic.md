@@ -970,7 +970,43 @@ GLOBAL <- globalScope
 
 ### Async blocks
 
-The `async` block allows for describing groups of coroutines in a clearer and safer way than manually using `Async\Scope`.
+The `async` block allows you to create a code section in which the `$scope` is explicitly created and explicitly disposed. 
+The following is a code example:
+
+```php
+$scope = new Scope();
+
+try {
+   await spawn in $scope {
+       echo "Task 1\n";
+   };
+} finally {
+    $scope->dispose();
+}
+```
+
+Can be written using an `async` block as follows:
+
+```php
+async $scope {
+   await spawn {
+       echo "Task 1\n";
+   };
+}
+```
+
+The `async` block does the following:
+
+1. It creates a new `Scope` object and assigns it to the variable specified at the beginning of the block as `$scope`.
+2. All coroutines will, by default, be created within `$scope`. 
+That is, expressions like `spawn <callable>` will be equivalent to `spawn in $scope <callable>`.
+3. `async` ensures that once the block is exited, the created `Scope` will be explicitly released 
+using the `dispose()` method, which means all coroutines created inside the block's `Scope` will be cancelled.
+
+#### Motivation
+
+The `async` block allows for describing groups of coroutines in a clearer 
+and safer way than manually using `Async\Scope`.
 
 Consider the following code:
 
@@ -994,20 +1030,19 @@ function generateReport(): void
 
     } catch (Exception $e) {
         echo "Failed to generate report: ", $e->getMessage(), "\n";
+    } finally {
+        $scope->dispose();
     }
 }
 ```
 
-The `async` statement allows you to group coroutines together:
+The `async` statement allows you to group coroutines together and explicitly limiting the lifetime of the `Scope`:
 
 ```php
 function generateReport(): void
 {
     try {
-    
-        $scope = Scope::inherit();
-        
-        async $scope {
+        async inherit $scope {
             [$employees, $salaries, $workHours] = await Async\all([
                 spawn fetchEmployees(),
                 spawn fetchSalaries(),
@@ -1031,37 +1066,42 @@ function generateReport(): void
 #### async syntax
 
 ```php
-async <scope> {
+async [inherit] [<scope>] {
     <codeBlock>
 }
 ```
 
 **where:**
 
-- `scope` - An expression that must contain a `Scope` object.
+- `scope` - a variable that will hold the `Async\Scope` object.
 
 options:
 
 ```php
 // variable
 async $scope {}
+```
+
+wrong use:
+
+```php
 // array element
 async $scope[0] {}
 async $$scope {}
 // object property
 async $object->scope {}
 async Object::$scope {}
+// function call
 async getScope() {}
-```
-
-wrong use:
-
-```php
 // The nullsafe operator is not allowed.  
 async $object?->scope
 // Using references is not allowed.
 async &$object
 ```
+
+- `inherit` - a keyword that allows inheriting the parent `Scope` object.
+
+- `codeBlock` - a block of code that will be executed in the `Scope` context.
 
 ### Error detection
 
