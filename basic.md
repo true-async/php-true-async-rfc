@@ -1571,43 +1571,43 @@ stop
 use Async\Scope;
 
 $scope = new Scope();
-$scope->spawn(function() {
+
+spawn in $scope {
     throw new Exception("Task 1");
-});
+};
 
 $exception1 = null;
 $exception2 = null;
 
 $scope2 = new Scope();
 
-$scope2->spawn(function() use($scope, &$exception1) {
+spawn in $scope2 use($scope, &$exception1) {
     try {
         await $scope;
     } catch (Exception $e) {
         $exception1 = $e;
         echo "Caught exception1: {$e->getMessage()}\n";
     }
-});
+};
 
-$scope2->spawn(function use($scope, &$exception2) {
+spawn in $scope2 use($scope, &$exception2) {
     try {
         await $scope;
     } catch (Exception $e) {
         $exception2 = $e;
-        echo "Caught exception1: {$e->getMessage()}\n";
+        echo "Caught exception2: {$e->getMessage()}\n";
     }
-});
+};
 
-await $scope2;
+await $scope2->tasks();
 
 echo $exception1 === $exception2 ? "The same exception\n" : "Different exceptions\n";
 ```
 
-
 If an exception reaches `globalScope` and is not handled in any way, 
 it triggers **Graceful Shutdown Mode**, which will terminate the entire application.
 
-The `BoundedScope` class allows defining an exception handler that can prevent exception propagation.
+The `Scope` class allows defining an exception handler that can prevent exception propagation.
 
 For this purpose, two methods are used:
 - **`setExceptionHandler`** – triggers for any exceptions thrown within this **Scope**.
@@ -1616,7 +1616,7 @@ For this purpose, two methods are used:
 **Example:**
 
 ```php
-$scope = new BoundedScope();
+$scope = new Scope();
 $scope->setExceptionHandler(function (Async\Scope $scope, Async\Coroutine $coroutine, Throwable $e) {
     echo "Caught exception: {$e->getMessage()}\n in coroutine: {$coroutine->getSpawnLocation()}\n";
 });
@@ -1639,6 +1639,10 @@ while **child Scopes** handle additional ones.
 For example:
 
 ```php
+
+use Async\Scope;
+use Async\Coroutine;
+
 final class Service
 {
     private Scope $scope;
@@ -1655,7 +1659,7 @@ final class Service
     
     public function start(): void
     {
-        $this->scope->spawn($this->run(...));
+        spawn in $this->scope $this->run();
     }
     
     public function stop(): void 
@@ -1666,7 +1670,7 @@ final class Service
     private function run(): void
     {
         while (($socket = $this->service->receive()) !== null) {
-            Scope::inherit($this->scope)->spawn($this->handleRequest(...), $socket);
+            spawn in Scope::inherit($this->scope) $this->handleRequest($socket);
         }
     }
 }
@@ -1730,14 +1734,14 @@ not only the result of the coroutine execution but also an unhandled exception.
 
 #### Exception Handling
 
-The `BoundedScope` class provides a method for handling exceptions:
+The `Scope` class provides a method for handling exceptions:
 
 ```php
-$scope = new BoundedScope();
+$scope = new Scope();
 
-$scope->spawn(function() {
-  throw new Exception("Task 1");        
-});
+spawn in $scope {
+    throw new Exception("Task 1");
+};
 
 $scope->setExceptionHandler(function (Exception $e) {
     echo "Caught exception: {$e->getMessage()}\n";
@@ -1758,9 +1762,9 @@ This method can be considered a direct analog of `defer` in Go.
 ```php
 $scope = new Scope();
 
-$scope->spawn(function() {
-  throw new Exception("Task 1");        
-});
+spawn in $scope {
+    throw new Exception("Task 1");
+};
 
 $scope->onCompletion(function () {
     echo "Task 1 completed\n";
@@ -1828,10 +1832,10 @@ The `CancellationException`, if unhandled within a coroutine, is automatically s
 ```php
 $scope = new Scope();
 
-$scope->spawn(function() {
+spawn in $scope {
     sleep(1);        
     echo "Task 1\n";
-});
+};
 
 $scope->cancel(new Async\CancellationException('Task was cancelled'));
 ```
