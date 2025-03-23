@@ -1152,6 +1152,33 @@ function generateReport(): void
 
 ```
 
+Using an `async` block makes it easier to describe a pattern 
+where a group of coroutines is created with one main coroutine and several secondary ones.  
+As soon as the main coroutine completes, all the secondary coroutines will be terminated along with it.
+
+```php
+function startServer(): void
+{
+    async $serverSupervisor {
+    
+      // Secondary coroutine that listens for a shutdown signal
+      spawn use($serverSupervisor) {
+         await Async\signal(SIGINT);
+         $serverSupervisor->cancel(new CancellationException("Server shutdown"));
+      }    
+    
+      // Main coroutine that listens for incoming connections
+      await spawn {
+            while ($socket = stream_socket_accept($serverSocket, 0)) {            
+                connectionHandler($socket);
+            }
+        };
+    }
+}
+```
+
+In this example, the server runs until `stream_socket_accept` returns `false`, or until the user presses **CTRL-C**.
+
 #### async syntax
 
 ```php
