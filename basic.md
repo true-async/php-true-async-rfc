@@ -820,8 +820,9 @@ There is a Job Manager that launches various tasks.
 It has no idea what exactly each task might do.  
 However, it must guarantee that no more than **X** tasks are running at the same time.
 
-To achieve this, it needs to wait until all tasks have completed — regardless of whether some coroutines were mistakenly created or not —  
-because for the Job Manager, **waiting is more important than forcefully destroying data**.
+To achieve this, it needs to wait until all tasks have completed — regardless of whether some coroutines 
+were mistakenly created or not — because for the Job Manager, 
+**waiting is more important than forcefully destroying data**.
 
 ```php
 function processBackgroundJobs(string ...$jobs): array
