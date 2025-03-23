@@ -705,6 +705,43 @@ class Service
 }
 ```
 
+#### Point of Responsibility
+
+The `spawn <callable>` expression allows you to create coroutines, 
+but it says nothing about who "owns" the coroutines. 
+This can become a source of errors, as resources are allocated without explicit management.
+
+Scope helps solve this problem by implementing responsibility for coroutine ownership.
+
+```php
+
+function subtask() {
+    
+}
+
+function task(): void
+{
+    spawn subtask();
+}
+
+$scope = new Scope();
+spawn in $scope task();
+```
+
+```
+main()                          ← defines a $scope and run task()
+└── task()                      ← inherits $scope and run subtask()
+    └── subtask()               ← inherits $scope
+```
+
+Once `$scope` is defined and a coroutine is created from it, 
+`$scope` is inherited throughout the entire depth of function calls.
+
+This way, a place in the code is created that can control the lifetime of coroutines, 
+wait for their completion, handle exceptions, or cancel their execution.
+
+Scope serves as a **point of responsibility** in managing coroutine resources.
+
 #### Scope waiting
 
 `Scope` can be useful both for waiting on coroutines and for limiting their lifetime.  
@@ -742,7 +779,7 @@ However, if the `processUser` function created other coroutines that,
 for some reason, continue to run after `processUser` has finished,  
 there is a risk of a resource leak.
 
-This problem has two solutions:
+This problem has three solutions:
 
 1. You can wait for all coroutines that were created within a single `Scope`.  
    In this case, there is a higher chance that all nested calls will eventually complete properly.  
@@ -753,7 +790,9 @@ This problem has two solutions:
    In this case, there will be no resource leaks.  
    However, there's a risk that an important coroutine might be mistakenly cancelled.
 
-`Scope` supports both strategies:
+3. You can create a **point of responsibility**, a special place in the code where resource leak control will be performed.
+
+Scope helps implement any of these strategies.
 
 ```php
 function processAllUsers(string ...$users): array
