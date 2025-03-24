@@ -9,9 +9,11 @@ This **RFC** describes the **API** and **new syntax** for writing concurrent cod
 #### Launching any function in non-blocking mode:  
    
 ```php 
-function myFunction(): void {
+function myFunction(): void 
+{
     echo "Hello, World!\n";
 }
+
 spawn myFunction();
 sleep(1);
 echo "Next line\n";
