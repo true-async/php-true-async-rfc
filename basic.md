@@ -52,6 +52,35 @@ File content: ...
 echo await spawn file_get_contents("file.txt");
 ```
 
+#### Awaiting a result with cancellation
+
+```php
+echo await spawn file_get_contents("https://php.net/") until spawn sleep(2);
+```
+
+#### Suspend keyword
+
+Transferring control from the coroutine to the `Scheduler`:
+
+```php
+function myFunction(): void {
+    echo "Hello, World!\n";
+    suspend;
+    echo "Goodbye, World!\n";
+}
+
+spawn myFunction();
+echo "Next line\n";
+```
+
+Output:
+
+```
+Hello, World
+Next line
+Goodbye, World
+```
+
 #### Working with a group of concurrent tasks.
 
 ```php
@@ -135,10 +164,25 @@ handleRequest()  ← async $requestScope
 #### Await all child tasks.
 
 ```php
+function processBackgroundJobs(string ...$jobs): array
+{
+    $scope = new Scope();
+    
+    foreach ($jobs as $job) {
+        spawn with $scope processJob($job);
+    }
+    
+    // Waiting for all child tasks throughout the entire depth of the hierarchy.
+    await $scope->all();
+}
+
+function processJob(mixed $job): void {
+    async inherit $jobScope {
+       spawn task1($job);
+       spawn task2($job);    
+    }
+}
 ```
-
-
-
 
 ### Scheduler and Reactor
 
