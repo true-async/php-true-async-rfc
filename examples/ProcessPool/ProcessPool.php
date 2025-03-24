@@ -12,7 +12,16 @@ final class ProcessPool
     private Scope $watcherScope;
     private Scope $poolScope;
     private Scope $jobsScope;
+    /**
+     * List of pipes for each process.
+     * @var array
+     */
     private array $pipes = [];
+    /**
+     * Map of process descriptors: pid => bool
+     * If the value is true, the process is free.
+     * @var array
+     */
     private array $descriptors = [];
     
     public function __construct(readonly public string $entryPoint, readonly public int $max, readonly public int $min)
