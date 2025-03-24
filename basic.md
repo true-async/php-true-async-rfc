@@ -4,10 +4,7 @@
 
 ### Scheduler and Reactor
 
-The **Scheduler** and **Reactor** components should be described in a separate **RFC**, 
-which should focus on the low-level implementation in **C** and define **API** contracts for PHP extensions. 
-These components should be developed as extensions that may be included 
-in the PHP standard library but can also be replaced with custom implementations.
+The **Scheduler** and **Reactor** components are part of the low-level implementation of this **RFC**.
 
 The **Scheduler** is a component responsible for managing the execution order of coroutines.  
 
@@ -17,10 +14,6 @@ The **Scheduler** is a component responsible for managing the execution order of
 The **Reactor** is a component that implements the **Event Loop**. 
 It may be exposed as a separate API in **PHP-land**, 
 but its behavior is not defined within this **RFC**.
-
-> ⚠️ **Notice:** The logic of **Scheduler** and **Reactor** **MUST NOT** contradict the logic of this RFC!
-> These components **MUST** implement the contracts defined in this document. 
-> The **Scheduler** and **Reactor** **MAY** extend the behavior of this **RFC** by providing additional functionalities.
 
 ### Limitations
 
