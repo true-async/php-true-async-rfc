@@ -70,6 +70,25 @@ function mergeFiles(string ...$files): string
 #### Structured concurrency: task hierarchy.
 
 ```php
+function handleRequest(): array {
+    async $requestScope {
+         spawn getUserData();
+         spawn getUserOrders();
+         spawn getRecommendations();
+         
+         try {
+            $results = await $requestScope->tasks();
+            return [
+               'user' => $results[0],
+               'orders' => $results[1],
+               'recommendations' => $results[2],
+            ];         
+         } catch (\Exception $e) {
+            return ['error' => $e->getMessage()];
+         }
+    }
+}
+
 function fetchCustomers() {
     // This exception stops all tasks in the hierarchy that were created as part of the request.
     throw new Exception("Error fetching customers");
@@ -97,25 +116,6 @@ function getUserData(): array {
         }
          
         return $users;
-    }
-}
-
-function handleRequest(): array {
-    async $requestScope {
-         $user = spawn getUserData();
-         $orders = spawn getUserOrders();
-         $recommendations = spawn getRecommendations();
-         
-         try {
-            $results = await $requestScope->tasks();
-            return [
-               'user' => $results[0],
-               'orders' => $results[1],
-               'recommendations' => $results[2],
-            ];         
-         } catch (\Exception $e) {
-            return ['error' => $e->getMessage()];
-         }
     }
 }
 ```
