@@ -96,30 +96,13 @@ final class ProcessPool
         while (true) {
             
             try {
-                /**
-                 * We expect all major tasks to be within the Scope for processes.
-                 * Once a process is completed, the coroutine handling it should throw
-                 * a StopProcessException or another exception.
-                 * The exception will interrupt the infinite wait.
-                 * If the coroutine exits with an exception other than StopProcessException,
-                 * we will start another process. Otherwise, nothing needs to be done.
-                 */
                 await $this->poolScope->tasks();
-            } catch (CancellationException) {
-                return;
             } catch (StopProcessException $exception)  {
                 echo "Process was stopped with message: {$exception->getMessage()}\n";
                 
-                // Start a new process if we are below the minimum
-                if(count($this->descriptors) < $this->min) {
+                if($exception->getCode() !== 0 || count($this->descriptors) < $this->min) {
                     spawn in $this->poolScope $this->startProcess();
                 }
-                
-            } catch (\Throwable $exception) {
-                echo "Pool Exception: {$exception->getMessage()}\n";
-                
-                // restart
-                spawn in $this->poolScope $this->startProcess();
             }
         }
     }
@@ -162,11 +145,7 @@ final class ProcessPool
         fclose($pipes[1]);
         fclose($pipes[2]);
         
-        if($exitCode === 0) {
-            throw new StopProcessException('Process finished with code 0');
-        } else {
-            throw new \Exception("Process finished with code $exitCode");
-        }
+        throw new StopProcessException('Process finished', $exitCode);
     }
     
     private function sendJobAndReceiveResult(int $pid, mixed $job, callable $resultHandle): void

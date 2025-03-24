@@ -1236,6 +1236,114 @@ yet it happened because the scope was destroyed.
 **PHP** will respond to such situations by issuing **warnings**, including debug information about the involved coroutines.  
 Developers are expected to write code in a way that avoids triggering these warnings.
 
+#### Error mitigation strategies
+
+The only way to create **detached coroutines** is by using the `spawn` expression in the `globalScope`.  
+However, if the initial code explicitly creates a scope and treats it as the application's entry point, 
+the initializing code gains full control — because `spawn <callable>` will no longer 
+be able to create a coroutine in `globalScope`, thus preventing the application from hanging beyond the entry point.
+
+There’s still a way to use global variables and `new Scope` to launch a coroutine that runs unchecked:
+
+```php
+$GLOBALS['my'] = new Scope();
+spawn in $GLOBALS['my'] { ... };
+```
+
+But such code can't be considered an accidental mistake.
+
+To avoid accidentally hanging coroutines whose lifetimes were not correctly limited, follow these rules:
+ 
+* Use separate Scopes for different coroutines. This is the best practice, 
+as it allows explicitly defining lifetime dependencies between Scopes.
+* Use `Scope::dispose()`. The `dispose()` method cancels coroutine execution and logs an error.
+* Don’t mix semantically different coroutines within the same `Scope`.
+* Avoid building hierarchies between `Scopes` with complex interdependencies.
+* Do not use cyclic dependencies between `Scopes`.
+
+```php
+namespace ProcessPool;
+
+use Async\CancellationException;
+use Async\Scope;
+
+final class ProcessPool
+{
+    private Scope $watcherScope;
+    private Scope $poolScope;
+    private Scope $jobsScope;
+    /**
+     * List of pipes for each process.
+     * @var array
+     */
+    private array $pipes = [];
+    /**
+     * Map of process descriptors: pid => bool
+     * If the value is true, the process is free.
+     * @var array
+     */
+    private array $descriptors = [];
+    
+    public function __construct(readonly public string $entryPoint, readonly public int $max, readonly public int $min)
+    {
+        // Define the coroutine scopes for the pool, watcher, and jobs
+        $this->poolScope = new Scope();
+        $this->watcherScope = new Scope();
+        $this->jobsScope = new Scope();
+    }
+    
+    public function __destruct()
+    {
+        $this->watcherScope->dispose();
+        $this->poolScope->dispose();
+        $this->jobsScope->dispose();
+    }
+    
+    public function start(): void
+    {
+        spawn in $this->watcherScope $this->processWatcher();
+        
+        for ($i = 0; $i < $this->min; $i++) {
+            spawn in $this->poolScope $this->startProcess();
+        }
+    }
+    
+    public function stop(): void
+    {
+        $this->watcherScope->cancel();
+        $this->poolScope->cancel();
+        $this->jobsScope->cancel();
+    }
+    
+    private function processWatcher(): void
+    {
+        while (true) {            
+            try {
+                await $this->poolScope->tasks();
+            } catch (StopProcessException $exception)  {
+                echo "Process was stopped with message: {$exception->getMessage()}\n";
+                
+                if($exception->getCode() !== 0 || count($this->descriptors) < $this->min) {
+                    spawn in $this->poolScope $this->startProcess();
+                }
+            }
+        }
+    }
+}
+```
+
+The example above demonstrates how splitting coroutines into 
+Scopes helps manage their interaction and reduces the likelihood of errors.
+
+Here, `watcherScope` monitors tasks in `poolScope`. 
+When a process finishes, the watcher detects this event and, if necessary, starts a new process or not. 
+The monitoring logic is completely separated from the process startup logic.
+
+The lifetime of `watcherScope` matches that of `poolScope`, but not longer than the lifetime of the watcher itself.
+
+The overall lifetime of all coroutines in the `ProcessPool` is determined by the lifetime of the `ProcessPool` 
+object or by the moment the `stop()` method is explicitly called.
+
 ### Context
 
 #### Motivation
