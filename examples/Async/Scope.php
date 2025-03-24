@@ -22,7 +22,7 @@ class Scope
     
     public function spawn(\Closure $callable, ...$params): Coroutine {}
     
-    public function cancel(CancellationException $cancellationException): void {}
+    public function cancel(?CancellationException $cancellationException = null): void {}
     
     public function tasks(): Awaitable {}
     
@@ -40,4 +40,6 @@ class Scope
     public function setChildScopeExceptionHandler(callable $exceptionHandler): void {}
     
     public function onCompletion(\Closure $callback): void {}
+    
+    public function dispose(): void {}
 }
