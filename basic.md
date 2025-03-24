@@ -2,6 +2,144 @@
 
 ## Proposal
 
+### Overview
+
+This **RFC** describes the **API** and **new syntax** for writing concurrent code in PHP, which includes:
+
+#### Launching any function in non-blocking mode:  
+   
+```php 
+function myFunction(): void {
+    echo "Hello, World!\n";
+}
+spawn myFunction();
+sleep(1);
+echo "Next line\n";
+```
+
+Output:
+
+```
+Hello, World!
+Next line
+```
+
+#### Non-blocking versions of built-in PHP functions:
+```php
+   spawn {
+        $result = file_get_contents("file.txt");        
+        
+        if($result === false) {
+            echo "Error reading file.txt\n";
+        }
+        
+        echo "File content: $result\n";
+   };
+
+   echo "Next line\n";
+```
+
+Output:
+
+```
+Next line
+File content: ...
+```
+
+#### Waiting for coroutine results 
+
+```php
+echo await spawn file_get_contents("file.txt");
+```
+
+#### Working with a group of concurrent tasks.
+
+```php
+function mergeFiles(string ...$files): string
+{
+   async $tasks {
+       foreach ($files as $file) {
+           spawn file_get_contents($file);
+       }
+       
+       return array_merge("\n", await $tasks->tasks());
+   }
+}
+```
+
+#### Structured concurrency: task hierarchy.
+
+```php
+function fetchCustomers() {
+    // This exception stops all tasks in the hierarchy that were created as part of the request.
+    throw new Exception("Error fetching customers");
+}
+
+function getUserData(): array {
+    async inherit $userDataScope {        
+        spawn fetchUserData();
+        
+        spawn {
+            $settings = await fetchUserSettings();
+            
+            if($settings['isManager']) {
+                return spawn fetchCustomers();
+            }
+        };
+        
+        [$users, $customers] = await $userDataScope->tasks();
+       
+        // merge customers' info with users
+        foreach ($users as $user) {
+            if(!empty($customers[$user['id']])) {
+                $user['customers'] = $customers[$user['id']];
+            }
+        }
+         
+        return $users;
+    }
+}
+
+function handleRequest(): array {
+    async $requestScope {
+         $user = spawn getUserData();
+         $orders = spawn getUserOrders();
+         $recommendations = spawn getRecommendations();
+         
+         try {
+            $results = await $requestScope->tasks();
+            return [
+               'user' => $results[0],
+               'orders' => $results[1],
+               'recommendations' => $results[2],
+            ];         
+         } catch (\Exception $e) {
+            return ['error' => $e->getMessage()];
+         }
+    }
+}
+```
+
+```text
+handleRequest()  ← async $requestScope
+├── getUserData()  ← async inherit $userDataScope
+│   ├── spawn fetchUserData()
+│   └── spawn {
+│       ├── await fetchUserSettings()
+│       └── (if isManager) → spawn fetchCustomers()
+│           └── throw new Exception(...) ← ❗can stop all tasks in the hierarchy
+├── spawn getUserOrders()
+└── spawn getRecommendations()
+```
+
+#### Await all child tasks.
+
+```php
+```
+
+
+
+
 ### Scheduler and Reactor
 
 The **Scheduler** and **Reactor** components are part of the low-level implementation of this **RFC**.
