@@ -41,10 +41,10 @@ final class ProcessPool
     
     public function start(): void
     {
-        spawn in $this->watcherScope $this->processWatcher();
+        spawn with $this->watcherScope $this->processWatcher();
         
         for ($i = 0; $i < $this->min; $i++) {
-            spawn in $this->poolScope $this->startProcess();
+            spawn with $this->poolScope $this->startProcess();
         }
     }
     
@@ -67,10 +67,10 @@ final class ProcessPool
         $pid = array_search(true, $this->descriptors, true);
         
         if ($pid === false && count($this->descriptors) < $this->max) {
-            spawn in $this->poolScope $this->startProcess();
+            spawn with $this->poolScope $this->startProcess();
             
             // Try to find a free process again after a short delay
-            spawn in $this->jobsScope use($job, $resultHandle) {
+            spawn with $this->jobsScope use($job, $resultHandle) {
                 usleep(100);
                 
                 $pid = array_search(true, $this->descriptors, true);
@@ -87,7 +87,7 @@ final class ProcessPool
             $resultHandle(new \Exception('No free process'));
         } else {
             $this->descriptors[$pid] = false;
-            spawn in $this->jobsScope $this->sendJobAndReceiveResult($pid, $job, $resultHandle);
+            spawn with $this->jobsScope $this->sendJobAndReceiveResult($pid, $job, $resultHandle);
         }
     }
     
@@ -101,7 +101,7 @@ final class ProcessPool
                 echo "Process was stopped with message: {$exception->getMessage()}\n";
                 
                 if($exception->getCode() !== 0 || count($this->descriptors) < $this->min) {
-                    spawn in $this->poolScope $this->startProcess();
+                    spawn with $this->poolScope $this->startProcess();
                 }
             }
         }

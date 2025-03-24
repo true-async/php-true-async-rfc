@@ -62,7 +62,7 @@ The `Scheduler` component is responsible for the coroutine resumption algorithm.
 A coroutine can be resumed with an **exception**, in which case an exception 
 will be thrown from the suspension point.
 
-### Spawn
+### Spawn expression
 
 To create coroutines, the `spawn <callable>` expression is used. 
 It launches the `<callable>` in a separate execution context and returns 
@@ -104,14 +104,13 @@ spawn [with <scope>] [use(<parameters>)][: <returnType>] {
 
 `function_call` - a valid function call expression:
 
-- call a standard PHP function
+- call a standard PHP function:
 
 ```php
-
 spawn file_get_contents('file1.txt');
 ```
 
-- call a user-defined function
+- call a user-defined function:
 
 ```php
 function example(string $name): void {
@@ -121,13 +120,13 @@ function example(string $name): void {
 spawn example('World');
 ```
 
-- call a static method
+- call a static method:
 
 ```php
 spawn Mailer::send($message);
 ```
 
-- call a method of an object
+- call a method of an object:
 
 ```php
 $object = new Mailer();
@@ -142,14 +141,14 @@ spawn static::send($message);
 spawn parent::send($message);
 ```
 
-- call `$class` method
+- call `$class` method:
 
 ```php
 $className = 'Mailer';
 spawn $className::send($message);
 ```
 
-- expression
+- expression:
 
 ```php
 // Use result of foo()
@@ -162,14 +161,14 @@ spawn ($option ? foo() : bar())();
 spawn (((foo())))();
 ```
 
-- call array dereference
+- call array dereference:
 
 ```php
 $array = [fn() => sleep(1)];
 spawn $array[0]();
 ```
 
-- new dereference
+- new dereference:
 
 ```php
 class Test {
@@ -187,13 +186,13 @@ spawn new Test->wait();
 spawn "sleep"(5);
 ```
 
-- call short closure
+- call short closure:
 
 ```php
 spawn (fn() => sleep(1))();
 ```
 
-#### Spawn closure syntax
+#### Spawn closure expression
 
 Allows creating a coroutine from a closure directly when using `spawn`:
 
@@ -203,7 +202,7 @@ spawn [with <scope>] [use(<parameters>)[: <returnType>]] {
 };
 ```
 
-- full form
+- full form:
 
 ```php
 $file = 'main.log';
@@ -219,7 +218,7 @@ spawn use($file): string {
 };
 ```
 
-- short form
+- short form:
 
 ```php
 spawn {
@@ -227,7 +226,7 @@ spawn {
 };
 ```
 
-- with return type
+- with return type:
 
 ```php
 spawn use():string {
@@ -235,14 +234,14 @@ spawn use():string {
 };
 ```
 
-#### In scope expression
+#### With scope expression
 
-The `in` keyword allows specifying the scope in which the coroutine.
+The `with` keyword allows specifying the scope in which the coroutine.
 
 ```php
 $scope = new Async\Scope();
 
-$coroutine = spawn in $scope use():string {
+$coroutine = spawn with $scope use():string {
     return "Hello, World!";
 };
 
@@ -250,23 +249,23 @@ function test(): string {
     return "Hello, World!";
 }
 
-spawn in $scope test();
+spawn with $scope test();
 ```
 
 The `scope` expression can be:
-- A variable
+- A variable:
 
 ```php
-spawn in $scope function:void {
+spawn with $scope function:void {
     echo "Hello, World!";
 };
 ```
 
-- The result of a method or function call
+- The result of a method or function call:
 
 ```php
-spawn in $this->scope $this->method();
-spawn in $this->getScope() $this->method();
+spawn with $this->scope $this->method();
+spawn with $this->getScope() $this->method();
 ```
 
 ### Suspension
@@ -420,7 +419,8 @@ The following classes from this **RFC** also implement this interface:
 
 ### Await
 
-The `await` keyword is used to wait for the completion of another coroutine:
+The `await` keyword is used to wait for the completion of another coroutine 
+or any object that implements the `Awaitable` interface.:
 
 ```php
 function readFile(string $fileName):string 
@@ -479,7 +479,7 @@ Must be an object with the `Async\Awaitable` interface.
     $result = await $readFileJob;
 ```
 
-- A function that returns an `Awaitable` object
+- A function that returns an `Async\Awaitable` object:
 
 ```php
     function getContentsJobStarter(string $fileName): \Async\Coroutine {
@@ -489,39 +489,39 @@ Must be an object with the `Async\Awaitable` interface.
     $result = await getContentsJobStarter('file1.txt');
 ```
 
-- A new coroutine
+- A new coroutine:
 
 ```php
     $result = await spawn file_get_contents('file1.txt');
 ```
 
-- A new Awaitable object
+- A new Awaitable object:
 
 ```php
     $result = await new Async\Future();
 ```
 
-- A static method
+- A static method:
 
 ```php
     $result = await SomeClass::create();
 ```
 
-- A method of an object
+- A method of an object:
 
 ```php
     $service = new Mailer();
     $result = await $service->sendMail("test@mail.com", "Hello!");
 ```
 
-- A method of a class
+- A method of a class:
 
 ```php
     $serviceClass = 'Mailer';
     $result = await $serviceClass::sendAll();
 ```
 
-- A valid expression
+- A valid expression:
 
 ```php
     $result = await ($bool ? foo() : bar());
@@ -612,7 +612,7 @@ use Async\Scope;
 
 $scope = new Scope();
 
-spawn in $scope {
+spawn with $scope {
     spawn {
         echo "Child of Task 1\n";
     };
@@ -620,7 +620,7 @@ spawn in $scope {
     echo "Task 1\n";    
 };
 
-spawn in $scope {
+spawn with $scope {
     echo "Task 2\n";
 };
 
@@ -649,7 +649,7 @@ use Async\Scope;
 
 $scope = new Scope();
 
-spawn in $scope {
+spawn with $scope {
     spawn {
         echo "Child of Task 1\n";
     };
@@ -657,7 +657,7 @@ spawn in $scope {
     echo "Task 1\n";    
 };
 
-spawn in $scope {
+spawn with $scope {
     echo "Task 2\n";
 };
 
@@ -691,7 +691,7 @@ class Service
     }
     
     public function run(): void {
-        spawn in $this->scope {
+        spawn with $this->scope {
             echo "Task 1\n";
         };
     }    
@@ -718,7 +718,7 @@ function task(): void
 }
 
 $scope = new Scope();
-spawn in $scope task();
+spawn with $scope task();
 ```
 
 ```
@@ -793,7 +793,7 @@ function processAllUsers(string ...$users): array
     $scope = new Scope();
     
     foreach ($users as $user) {
-        spawn in $scope processUser($user);
+        spawn with $scope processUser($user);
     }
     
     return await $scope->tasks();
@@ -960,7 +960,7 @@ function connectionHandler($socket): void
 {
     $scope = Scope::inherit();
 
-    spawn in $scope use($socket, $scope) {
+    spawn with $scope use($socket, $scope) {
 
         $cancelToken = fn(string $message) => $scope->cancel(new CancellationException($message));        
 
@@ -986,14 +986,14 @@ function socketListen(): void
     $scope = new Scope();
 
     // Child coroutine that listens for a shutdown signal
-    spawn in $scope use($scope) {
+    spawn with $scope use($scope) {
         await Async\signal(SIGINT);
         $scope->cancel(new CancellationException("Server shutdown"));
     }
 
     try {
        // Main coroutine that listens for incoming connections
-       await spawn in $scope {
+       await spawn with $scope {
            while ($socket = stream_socket_accept($serverSocket, 0)) {            
                connectionHandler($socket);
            }
@@ -1059,7 +1059,7 @@ The following is a code example:
 $scope = new Scope();
 
 try {
-   await spawn in $scope {
+   await spawn with $scope {
        echo "Task 1\n";
    };
 } finally {
@@ -1081,7 +1081,7 @@ The `async` block does the following:
 
 1. It creates a new `Scope` object and assigns it to the variable specified at the beginning of the block as `$scope`.
 2. All coroutines will, by default, be created within `$scope`. 
-That is, expressions like `spawn <callable>` will be equivalent to `spawn in $scope <callable>`.
+That is, expressions like `spawn <callable>` will be equivalent to `spawn with $scope <callable>`.
 3. `async` ensures that once the block is exited, the created `Scope` will be explicitly released 
 using the `dispose()` method, which means all coroutines created inside the block's `Scope` will be cancelled.
 
@@ -1099,9 +1099,9 @@ function generateReport(): void
 
     try {
         [$employees, $salaries, $workHours] = await Async\all([
-            spawn in $scope fetchEmployees(),
-            spawn in $scope fetchSalaries(),
-            spawn in $scope fetchWorkHours()
+            spawn with $scope fetchEmployees(),
+            spawn with $scope fetchSalaries(),
+            spawn with $scope fetchWorkHours()
         ]);
 
         foreach ($employees as $id => $employee) {
@@ -1240,7 +1240,7 @@ There’s still a way to use global variables and `new Scope` to launch a corout
 
 ```php
 $GLOBALS['my'] = new Scope();
-spawn in $GLOBALS['my'] { ... };
+spawn with $GLOBALS['my'] { ... };
 ```
 
 But such code can't be considered an accidental mistake.
@@ -1293,10 +1293,10 @@ final class ProcessPool
     
     public function start(): void
     {
-        spawn in $this->watcherScope $this->processWatcher();
+        spawn with $this->watcherScope $this->processWatcher();
         
         for ($i = 0; $i < $this->min; $i++) {
-            spawn in $this->poolScope $this->startProcess();
+            spawn with $this->poolScope $this->startProcess();
         }
     }
     
@@ -1316,7 +1316,7 @@ final class ProcessPool
                 echo "Process was stopped with message: {$exception->getMessage()}\n";
                 
                 if($exception->getCode() !== 0 || count($this->descriptors) < $this->min) {
-                    spawn in $this->poolScope $this->startProcess();
+                    spawn with $this->poolScope $this->startProcess();
                 }
             }
         }
@@ -1479,7 +1479,7 @@ function startRequestHandler($socket): void
     $requestScope->context->set('request_id', uniqid()); // <-- Override server context slot
     
     // Handle request in separate coroutine and scope
-    spawn in $requestScope handleRequest($socket);
+    spawn with $requestScope handleRequest($socket);
 }
 
 function startServer(): void
@@ -1672,7 +1672,7 @@ use Async\Scope;
 
 $scope = new Scope();
 
-spawn in $scope {
+spawn with $scope {
     throw new Exception("Task 1");
 };
 
@@ -1681,7 +1681,7 @@ $exception2 = null;
 
 $scope2 = new Scope();
 
-spawn in $scope2 use($scope, &$exception1) {
+spawn with $scope2 use($scope, &$exception1) {
     try {
         await $scope;
     } catch (Exception $e) {
@@ -1690,7 +1690,7 @@ spawn in $scope2 use($scope, &$exception1) {
     }
 };
 
-spawn in $scope2 use($scope, &$exception2) {
+spawn with $scope2 use($scope, &$exception2) {
     try {
         await $scope;
     } catch (Exception $e) {
@@ -1759,7 +1759,7 @@ final class Service
     
     public function start(): void
     {
-        spawn in $this->scope $this->run();
+        spawn with $this->scope $this->run();
     }
     
     public function stop(): void 
@@ -1770,7 +1770,7 @@ final class Service
     private function run(): void
     {
         while (($socket = $this->service->receive()) !== null) {
-            spawn in Scope::inherit($this->scope) $this->handleRequest($socket);
+            spawn with Scope::inherit($this->scope) $this->handleRequest($socket);
         }
     }
 }
@@ -1839,7 +1839,7 @@ The `Scope` class provides a method for handling exceptions:
 ```php
 $scope = new Scope();
 
-spawn in $scope {
+spawn with $scope {
     throw new Exception("Task 1");
 };
 
@@ -1862,7 +1862,7 @@ This method can be considered a direct analog of `defer` in Go.
 ```php
 $scope = new Scope();
 
-spawn in $scope {
+spawn with $scope {
     throw new Exception("Task 1");
 };
 
@@ -1932,7 +1932,7 @@ The `CancellationException`, if unhandled within a coroutine, is automatically s
 ```php
 $scope = new Scope();
 
-spawn in $scope {
+spawn with $scope {
     sleep(1);        
     echo "Task 1\n";
 };
