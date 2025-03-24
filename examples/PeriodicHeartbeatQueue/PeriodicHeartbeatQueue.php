@@ -42,7 +42,7 @@ final class PeriodicHeartbeatQueue
     
     private function startHeartbeat(): void
     {
-        $this->scope->spawn(function () {
+        spawn in $this->scope {
             while (true) {
                 foreach ($this->clients as $id => $weakRef) {
                     
@@ -58,12 +58,12 @@ final class PeriodicHeartbeatQueue
                         continue;
                     }
                     
-                    $this->scope->spawn($client->ping(...));
+                    spawn $client->ping();
                 }
                 
                 sleep($this->heartbeatPeriod);
             }
-        });
+        };
     }
     
     public function stop(): void
