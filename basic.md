@@ -1264,7 +1264,6 @@ as it allows explicitly defining lifetime dependencies between Scopes.
 ```php
 namespace ProcessPool;
 
-use Async\CancellationException;
 use Async\Scope;
 
 final class ProcessPool
