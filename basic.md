@@ -93,12 +93,12 @@ function mergeFiles(string ...$files): string
            spawn file_get_contents($file);
        }
        
-       return array_merge("\n", await $tasks->tasks());
+       return array_merge("\n", await $tasks->directTasks());
    }
 }
 ```
 
-#### Structured concurrency: task hierarchy.
+#### Structured concurrency
 
 ```php
 function handleRequest(): array {
@@ -108,7 +108,7 @@ function handleRequest(): array {
          spawn getRecommendations();
          
          try {
-            $results = await $requestScope->tasks();
+            $results = await $requestScope->allTasks();
             return [
                'user' => $results[0],
                'orders' => $results[1],
@@ -137,7 +137,7 @@ function getUserData(): array {
             }
         };
         
-        [$users, $customers] = await $userDataScope->tasks();
+        [$users, $customers] = await $userDataScope->allTasks();
        
         // merge customers' info with users
         foreach ($users as $user) {
@@ -185,6 +185,29 @@ function processJob(mixed $job): void {
     }
 }
 ```
+
+#### Await only direct child tasks.
+
+```php
+function mergeFiles(string ...$files): string
+{
+   async $tasks {
+       foreach ($files as $file) {
+           spawn file_get_contents($file);
+       }
+       
+       try {
+          $results = await $tasks->directTasks();
+       } finally {
+          // cancel all remaining tasks
+          $scope->dispose();
+       }
+       
+       return array_merge("\n", $results);
+   }
+}
+```
+
 
 ### Scheduler and Reactor
 
@@ -980,13 +1003,13 @@ function processAllUsers(string ...$users): array
         spawn with $scope processUser($user);
     }
     
-    return await $scope->tasks();
+    return await $scope->directTasks();
 }
 ```
 
 In this example, the `processAllUsers` function must return the computation results of `processUser` for each user.  
 `processAllUsers` has no knowledge of how `processUser` is implemented.  
-Using `await $scope->tasks()`, `processAllUsers` waits for the results of all coroutines created 
+Using `await $scope->directTasks()`, `processAllUsers` waits for the results of all coroutines created 
 inside the `foreach ($users as $user)` loop.
 
 When the waiting completes, the `$scope` goes out, 
@@ -1026,7 +1049,7 @@ function processBackgroundJobs(string ...$jobs): array
         spawn with $scope processJob($users);
     }
     
-    await $scope->tasks();
+    await $scope->directTasks();
     
     try {
         await $scope->all() until timeout(1);    
@@ -1495,7 +1518,7 @@ final class ProcessPool
     {
         while (true) {            
             try {
-                await $this->poolScope->tasks();
+                await $this->poolScope->directTasks();
             } catch (StopProcessException $exception)  {
                 echo "Process was stopped with message: {$exception->getMessage()}\n";
                 
@@ -1883,7 +1906,7 @@ spawn with $scope2 use($scope, &$exception2) {
     }
 };
 
-await $scope2->tasks();
+await $scope2->directTasks();
 
 echo $exception1 === $exception2 ? "The same exception\n" : "Different exceptions\n";
 ```

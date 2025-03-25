@@ -32,7 +32,7 @@ function taskGroup(array $files): void
         }
         
         try {
-            foreach (await $scope->tasks() as $file => $result) {
+            foreach (await $scope->directTasks() as $file => $result) {
                 echo "File $file: $result\n";
             }
         } catch (Exception $e) {

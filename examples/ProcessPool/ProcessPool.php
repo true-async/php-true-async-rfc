@@ -96,7 +96,7 @@ final class ProcessPool
         while (true) {
             
             try {
-                await $this->poolScope->tasks();
+                await $this->poolScope->directTasks();
             } catch (StopProcessException $exception)  {
                 echo "Process was stopped with message: {$exception->getMessage()}\n";
                 
