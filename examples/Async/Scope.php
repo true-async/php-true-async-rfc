@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Async;
 
-class Scope implements Awaitable
+class Scope
 {
     public readonly Context $context;
     
@@ -42,4 +42,5 @@ class Scope implements Awaitable
     public function onCompletion(\Closure $callback): void {}
     
     public function dispose(): void {}
+    public function disposeWithTimeout(int $timeout): void {}
 }

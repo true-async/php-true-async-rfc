@@ -29,7 +29,7 @@ Next line
 #### Non-blocking versions of built-in PHP functions:
 ```php
    spawn {
-        $result = file_get_contents("file.txt");        
+        $result = file_get_contents("file.txt");
         
         if($result === false) {
             echo "Error reading file.txt\n";
@@ -175,7 +175,7 @@ function processBackgroundJobs(string ...$jobs): array
     }
     
     // Waiting for all child tasks throughout the entire depth of the hierarchy.
-    await $scope->all();
+    await $scope->allTasks();
 }
 
 function processJob(mixed $job): void {
@@ -200,7 +200,7 @@ function mergeFiles(string ...$files): string
           $results = await $tasks->directTasks();
        } finally {
           // cancel all remaining tasks
-          $scope->dispose();
+          $scope->disposeWithTimeout(5000);
        }
        
        return array_merge("\n", $results);
@@ -805,13 +805,23 @@ after asynchronous handlers have already been destroyed.
 Therefore, the `register_shutdown_function` code should not use the concurrency API.
 The `suspend` keyword will have no effect, and the `spawn` operation will not be executed at all.
 
-### Scope and structured concurrency
+### Coroutine Scope
 
-**Structured concurrency** allows organizing coroutines into 
-a group or hierarchy to manage their lifetime or exception handling.
+To manage the lifetime of coroutines and wait for their results, it's convenient to organize them into groups. 
+`Coroutine Scope` is a basic primitive 
+that helps associate coroutines with other PHP objects and track their execution at the group level.
 
-The `Async\Scope` class enables grouping coroutines together, 
-allowing to create a hierarchy of groups (i.e., a hierarchy of `Async\Scope`).
+`Coroutine Scope` can be used to implement the **structural concurrency** pattern, 
+but an `async` block is usually a better fit 
+(see [async blocks and structured concurrency](#async-blocks-and-structured-concurrency)).
+
+`Coroutine Scope` is especially useful when you need to bind coroutines to a PHP object 
+and ensure their execution is terminated as soon as a destructor or a special method is called.
+
+`Coroutine Scope` helps organize a hierarchy of coroutine groups 
+and implement all possible scenarios for waiting and management, taking the hierarchy into account.
+
+Let’s look at an example:
 
 ```php
 
@@ -819,19 +829,19 @@ use Async\Scope;
 
 $scope = new Scope();
 
-spawn with $scope {
-    spawn {
+spawn with $scope { // <- Task1 will be executed in the $scope context
+    spawn { // <- Subtask executed in the same scope
         echo "Child of Task 1\n";
     };
     
-    echo "Task 1\n";    
+    echo "Task 1\n";
 };
 
-spawn with $scope {
+spawn with $scope { // <- Task2 will be executed in the $scope context
     echo "Task 2\n";
 };
 
-await $scope->all();
+await $scope->allTasks();
 ```
 
 **Expected output:**
@@ -842,16 +852,27 @@ Task 2
 Child of Task 1
 ```
 
+Structure:
+
+```
+main()                          ← defines a $scope and run task()
+├── task1()                     ← inherits $scope and run subtask()
+│   └── subtask()               ← inherits $scope
+└── task2()                     ← inherits $scope
+```
+
 In this example, **all three child coroutines** belong to the same `$scope`.
 
 The coroutine with text `"Child of Task 1"` also belongs to `$scope`, 
 meaning it is at the same level as the `"Task 1"` and `"Task 2"` coroutines.
 
-If the `$scope` is destroyed, all associated coroutines will be reliably terminated along with it.
-Therefore, the following code will not print anything.
+If the `$scope` object is destroyed (i.e., its destructor is called), 
+the coroutines that did not have time to complete will be marked as "leaked coroutine" or "orphan coroutine"
+
+Leaked coroutines are considered a result of a programming error and are handled specially  
+(See section: *Leaked Coroutines*).
 
 ```php
-
 use Async\Scope;
 
 $scope = new Scope();
@@ -874,10 +895,14 @@ unset($scope);
 **Expected output:**
 
 ```
+Warning: Coroutine is leaked at ...
+Task 1
+Task 2
+Child of Task 1
 ```
 
 This happens because the `Scope` object loses its last reference, 
-triggering the destructor, which cancels the coroutines before they even get a chance to start.
+triggering the destructor, which monitors the execution progress of all child coroutines.
 
 This makes `Scope` objects a good (though not the best) tool for managing the lifetime of coroutines.  
 For example, you can assign the `$scope` object to another object and explicitly control its lifetime:
@@ -894,7 +919,7 @@ class Service
     }
     
     public function __destruct() {
-        $this->scope->dispose();
+        $this->scope->disposeWithTimeout(5000);
     }
     
     public function run(): void {
@@ -974,7 +999,7 @@ function processAllUsers(string ...$users): array
 ```
 
 The code `return await all($coroutines)` waits for the completion of all tasks 
-that were explicitly started within this function.  
+that were explicitly started within this function.
 However, if the `processUser` function created other coroutines that, 
 for some reason, continue to run after `processUser` has finished,  
 there is a risk of a resource leak.
@@ -1066,25 +1091,6 @@ First, the code waits for the main tasks to complete.
 Then, it waits for any remaining tasks. If there are any, a `CancellationException` is thrown,  
 and the code logs information about which coroutines were not properly completed.  
 After that, it waits for their completion again.
-
-#### Scope cancellation
-
-The `cancel` method cancels all child coroutines:
-
-```php
-$scope = new Scope();
-$scope->spawn(function() {
-    sleep(1);
-    echo "Task 1\n";
-});
-
-$scope->spawn(function() {
-    sleep(2);
-    echo "Task 2\n";
-});
-
-$scope->cancel();
-```
 
 #### Scope Hierarchy
 
@@ -1257,7 +1263,73 @@ all child `Scopes` will be cancelled because the main `Scope` will be cancelled 
 Note that the coroutine waiting on `await Async\signal(SIGINT)` will not remain hanging in memory 
 if the server shuts down in another way, because `$scope` will be explicitly closed in the `finally` block.
 
-### Async blocks
+#### Scope cancellation
+
+The `cancel` method cancels all child coroutines:
+
+```php
+$scope = new Scope();
+$scope->spawn(function() {
+    sleep(1);
+    echo "Task 1\n";
+});
+
+$scope->spawn(function() {
+    sleep(2);
+    echo "Task 2\n";
+});
+
+$scope->cancel();
+```
+
+#### Scope disposal
+
+The `Scope::dispose` method terminates the execution of a `Scope` differently than `cancel()`.
+
+It goes through all child coroutines that were explicitly defined using a `spawn with` expression and cancels them.
+All implicit coroutines are marked as **Leaked** and continue execution under
+the restrictions of the **Leaked policy**, after a warning is issued.
+
+```php
+$scope = new Scope();
+
+spawn in $scope {
+    spawn {
+        sleep(1);
+        echo "Task 1\n";
+    };
+    
+    spawn {
+        sleep(2);
+        echo "Task 2\n";
+    };
+    
+    echo "Root task\n";
+};
+
+$scope->dispose();
+```
+
+**Expected output:**
+
+```
+Warning: Coroutine is leaked at ...
+Warning: Coroutine is leaked at ...
+Task 1
+Task 2
+```
+
+### Async blocks and structured concurrency
+
+**Structured concurrency** allows organizing coroutines into
+a group or hierarchy to manage their lifetime or exception handling.
+
+The `Async\Scope` class enables grouping coroutines together,
+allowing to create a hierarchy of groups (i.e., a hierarchy of `Async\Scope`).
+
+Structural concurrency implies that a parent cannot complete until all its child elements have finished executing.
+This behavior helps prevent the release of resources allocated in the parent coroutine
+until all children have completed their execution.
 
 The `async` block allows you to create a code section in which the `$scope` is explicitly created and explicitly disposed. 
 The following is a code example:
@@ -1542,6 +1614,21 @@ The lifetime of `watcherScope` matches that of `poolScope`, but not longer than 
 
 The overall lifetime of all coroutines in the `ProcessPool` is determined by the lifetime of the `ProcessPool` 
 object or by the moment the `stop()` method is explicitly called.
+
+#### Leaked coroutine policy
+
+Coroutines whose lifetime extends beyond the boundaries of their parent `Scope`
+are handled according to a separate **policy**.
+
+This policy aims to strike a balance between uncontrolled resource leaks and the need to abruptly
+terminate coroutines, which could lead to data integrity violations.
+
+If there are no active coroutines left in the execution queue and no events to wait for, the application is considered complete.
+
+Leaked coroutines differ from regular ones in that they are not counted as active. 
+Once the application is considered finished, 
+leaked coroutines are given a time limit within which they must complete execution. 
+If this limit is exceeded, all leaked coroutines are cancelled.
 
 ### Context
 
