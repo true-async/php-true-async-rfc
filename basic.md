@@ -208,7 +208,6 @@ function mergeFiles(string ...$files): string
 }
 ```
 
-
 ### Scheduler and Reactor
 
 The **Scheduler** and **Reactor** components are part of the low-level implementation of this **RFC**.
@@ -236,14 +235,6 @@ or separate extensions but does not describe this capability.
 
 This **RFC** also assumes functionality expansion using **SharedMemory**, 
 specifically designed shared memory objects, through a separate API that is not part of this **RFC**.
-
-This *RFC* is a core part of the **PHP TRUE ASYNC** contracts 
-but assumes the development and approval of the following RFCs:
-
-- **True Async API** – a low-level API for PHP extensions
-- **Scheduler/Reactor API** – additional API for managing coroutines and the event loop
-- **Primitives:** `Channel`, `Future`, `Iterator`, `Interval`
-- **Inter-thread communication / Shared Memory objects**
 
 ### Namespace
 
@@ -811,8 +802,7 @@ To manage the lifetime of coroutines and wait for their results, it's convenient
 `Coroutine Scope` is a basic primitive 
 that helps associate coroutines with other PHP objects and track their execution at the group level.
 
-`Coroutine Scope` can be used to implement the **structural concurrency** pattern, 
-but an `async` block is usually a better fit 
+`Coroutine Scope` can be used to implement the **structural concurrency** pattern with asynchronous blocks
 (see [async blocks and structured concurrency](#async-blocks-and-structured-concurrency)).
 
 `Coroutine Scope` is especially useful when you need to bind coroutines to a PHP object 
@@ -870,7 +860,7 @@ If the `$scope` object is destroyed (i.e., its destructor is called),
 the coroutines that did not have time to complete will be marked as "leaked coroutine" or "orphan coroutine"
 
 Leaked coroutines are considered a result of a programming error and are handled specially  
-(See section: *Leaked Coroutines*).
+(See section: [Leaked coroutine policy](#leaked-coroutine-policy)).
 
 ```php
 use Async\Scope;
@@ -1020,6 +1010,17 @@ This problem has three solutions:
 Scope helps implement any of these strategies.
 
 ```php
+function processUser(string $user): void
+{
+    spawn { // <- a leaked coroutine
+        while (true) {
+            sleep(1);
+        }
+    };
+    
+    // some else code...
+}
+
 function processAllUsers(string ...$users): array
 {
     $scope = new Scope();
@@ -1037,13 +1038,13 @@ In this example, the `processAllUsers` function must return the computation resu
 Using `await $scope->directTasks()`, `processAllUsers` waits for the results of all coroutines created 
 inside the `foreach ($users as $user)` loop.
 
-When the waiting completes, the `$scope` goes out, 
-thereby cancelling any coroutines that continue running by mistake.
+When the `await $scope->directTasks()` has completed,  
+the coroutine created by `processUser` will not stop its execution.
 
-We can imagine another scenario.  
-There is a Job Manager that launches various tasks.  
-It has no idea what exactly each task might do.  
-However, it must guarantee that no more than **X** tasks are running at the same time.
+We can imagine another scenario:  
+* There is a **Job Manager** that launches various tasks.  
+* It has no idea what exactly each task might do.  
+* However, it must guarantee that no more than **N** tasks are running at the same time.
 
 To achieve this, it needs to wait until all tasks have completed — regardless of whether some coroutines 
 were mistakenly created or not — because for the Job Manager, 
@@ -1058,11 +1059,11 @@ function processBackgroundJobs(string ...$jobs): array
         spawn with $scope processJob($users);
     }
     
-    await $scope->all();
+    await $scope->allTasks();
 }
 ```
 
-You can use an additional constraint like `until timeout($value)` to limit the waiting time,  
+You can use an additional constraint like `until timeout(int $value)` to limit the waiting time,  
 or you can approach the problem a bit differently:
 
 ```php
@@ -1077,12 +1078,13 @@ function processBackgroundJobs(string ...$jobs): array
     await $scope->directTasks();
     
     try {
-        await $scope->all() until timeout(1);    
+        await $scope->allTasks() until timeout(1);    
     } catch (CancellationException) {
        logWrongTasks($scope);
     }
     
-    await $scope->all() until timeout(10000);
+    await $scope->allTasks() until timeout(10000);
+    $scope->cancel();
 }
 ```
 
@@ -1140,10 +1142,8 @@ A new child `Scope` can be created using a special constructor:
 It returns a new `Scope` object that acts as a child.  
 A coroutine created within the child `Scope` can also be considered a child relative to the coroutines in the parent `Scope`.
 
-The advantage of a child scope is that it’s not “floating” — it’s attached to its parent.  
-The code that creates a child `Scope` doesn't need to know the intentions of the code that created the parent, except for one thing:  
-all tasks within the child `Scope` cannot outlive the parent `Scope`.  
-This means the tasks must be logically connected in such a way that if the parent is cancelled, it makes sense to cancel all of its descendants too.
+The advantage of a child `Scope` is that it’s not “detached” — it’s attached to its parent.
+The code that owns the parent `Scope` can control the entire hierarchy of coroutines at once.
 
 Let’s look at an example.
 
@@ -1159,13 +1159,13 @@ function connectionChecker($socket, callable $cancelToken): void
             return;
         }                               
         
-        sleep(1);
+        Async\timeout(1000);
     }
 }
 
 function connectionLimiter(callable $cancelToken): void
 {
-   sleep(10);
+   Async\timeout(10000);
    $cancelToken("The request processing limit has been reached.");   
 }
 
@@ -1174,34 +1174,40 @@ function connectionHandler($socket): void
     $scope = Scope::inherit();
 
     spawn with $scope use($socket, $scope) {
+    
+        $limiterScope = Scope::inherit();
 
         $cancelToken = fn(string $message) => $scope->cancel(new CancellationException($message));        
 
         // Limiter coroutine
-        spawn connectionLimiter($cancelToken);
+        spawn with $limiterScope connectionLimiter($cancelToken);
         
         // A separate coroutine checks that the socket is still active.    
-        spawn connectionChecker($socket, $cancelToken);
+        spawn with $limiterScope connectionChecker($socket, $cancelToken);
     
         try {
             sendResponse($socket, dispatchRequest(parseRequest($socket)));
-        } catch (Throwable $exception) {
+        } catch (\Exception $exception) {
             fwrite($socket, "HTTP/1.1 500 Internal Server Error\r\n\r\n");
         } finally {
             fclose($socket);
+            $limiterScope->cancel();
             $scope->cancel();
         }
     };
 }
 
-function socketListen(): void
+function socketServer(): void
 {
     $scope = new Scope();
 
     // Child coroutine that listens for a shutdown signal
     spawn with $scope use($scope) {
-        await Async\signal(SIGINT);
-        $scope->cancel(new CancellationException("Server shutdown"));
+        try {
+            await Async\signal(SIGINT);
+        } finally {
+            $scope->cancel(new CancellationException('Server shutdown'));
+        }        
     }
 
     try {
@@ -1219,7 +1225,7 @@ function socketListen(): void
         // Graceful exit
         try {
             $scope->cancel();
-            await $scope->all() until Async\timeout(5);
+            await $scope->allTasks() until Async\timeout(5);
             echo "Server stopped\n";
         } catch (\Throwable $exception) {
             // Force exit
@@ -1231,12 +1237,14 @@ function socketListen(): void
 ```
 Let's examine how this example works.
 
-1. `socketListen` creates a new Scope for coroutines that will handle all connections.
-2. Each new connection is processed using `connectionHandler()` in a separate Scope, which is inherited from the main one.
-3. `connectionHandler` creates two coroutines: `connectionLimiter()` and `connectionChecker()`.
-4. `connectionHandler` creates another coroutine, `connectionChecker()`, to monitor the connection's activity. 
+1. `socketServer` creates a new Scope for coroutines that will handle all connections.
+2. Each new connection is processed using `connectionHandler()` in a separate `Scope`, 
+which is inherited from the main one.
+3. `connectionHandler` creates a new `Scope` for the `connectionLimiter` and `connectionChecker` coroutines.
+4. `connectionHandler` creates coroutine: `connectionLimiter()` to limit the processing time of the request.
+5. `connectionHandler` creates coroutine, `connectionChecker()`, to monitor the connection's activity. 
 As soon as the client disconnects, `connectionChecker` will cancel all coroutines related to the request.
-5. If the main Scope is closed, all coroutines handling requests will also be canceled.
+6. If the main `Scope` is closed, all coroutines handling requests will also be canceled.
 
 ```
 GLOBAL <- globalScope
@@ -1244,18 +1252,21 @@ GLOBAL <- globalScope
 ├── socketListen (Scope) <- rootScope
 │   │
 │   ├── connectionHandler (Scope) <- request scope1
-│   │   └── connectionLimiter (Coroutine)
-│   │   └── connectionChecker (Coroutine)
+│   │   └── connectionLimiter (Coroutine) <- $limiterScope
+│   │   └── connectionChecker (Coroutine) <- $limiterScope
 │   │
 │   ├── connectionHandler (Scope) <- request scope2
-│   │   └── connectionLimiter (Coroutine)
-│   │   └── connectionChecker (Coroutine)
+│   │   └── connectionLimiter (Coroutine) <- $limiterScope
+│   │   └── connectionChecker (Coroutine) <- $limiterScope
 │   │
 ```
 
 The `connectionHandler` doesn't worry if the lifetimes of the `connectionLimiter` or `connectionChecker`
 coroutines exceed the lifetime of the main coroutine handling the request, 
-because it is guaranteed to call `$scope->cancel()` when the main coroutine finishes.
+because it is guaranteed to call `$limiterScope->cancel()` when the main coroutine finishes.
+
+`$limiterScope` is used to explicitly define a group of coroutines 
+that should be cancelled when the request is completed. This approach minimizes errors.
 
 On the other hand, if the server receives a shutdown signal, 
 all child `Scopes` will be cancelled because the main `Scope` will be cancelled as well.
