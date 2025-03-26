@@ -1352,7 +1352,7 @@ $scope->cancel();
 
 #### Scope Cancellation Order
 
-If a `Scope` has child `Scopes`, the coroutines in the child `Scopes` will be cancelled first, 
+If a `Scope` has child `Scopes`, the coroutines in the child `Scopes` will be canceled first,
 followed by those in the parent — from the bottom up in the hierarchy. 
 This approach increases the likelihood that resources will be released correctly. 
 However, it does not guarantee this, 
@@ -1442,6 +1442,25 @@ $scope->dispose();
 Warning: Coroutine is leaked at ...
 Warning: Coroutine is leaked at ...
 Warning: Coroutine is leaked at ...
+```
+
+#### Spawn with disposed scope
+
+When the `cancel()` or `dispose()` method is called, the `Scope` is marked as closed.  
+Attempting to launch a coroutine with this Scope will result in a fatal exception.
+
+```php
+$scope = new Scope();
+
+spawn with $scope {
+    echo "Task 1\n";
+};
+
+$scope->cancel();
+
+spawn with $scope { // <- Fatal error
+    echo "Task 2\n";
+};
 ```
 
 ### Async blocks
