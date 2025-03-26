@@ -42,10 +42,10 @@ function processOrder(Order $order, BackgroundLogger $logger): void
 {
     $logger->logAsync("Order processed: " . $order->id);
     
-    spawn in globalScope() function() use ($order, $logger) {
+    spawn use ($order, $logger) {
         try {
             Mailer::send($order->getUserEmail(), "Order Confirmation");
-        } catch (Throwable $e) {
+        } catch (\Throwable $e) {
             $logger->logAsync("Email failed: " . $e->getMessage());
         }
     };

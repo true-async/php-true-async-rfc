@@ -3,7 +3,6 @@
 declare(strict_types=1);
 
 use Async\Scope;
-use function Async\await;
 use function Async\all;
 
 function fetchUrl(string $url): string {
@@ -13,21 +12,19 @@ function fetchUrl(string $url): string {
 
 function fetchAllUrls(array $urls): array
 {
-    $futures = [];
-    
-    foreach ($urls as $url) {
-        $futures[$url] = spawn fetchUrl($url);
+    async bounded $scope {
+        foreach ($urls as $url) {
+            spawn fetchUrl($url);
+        }
+
+        $results = [];
+        
+        foreach (await $scope->directTasks() as $url => $future) {
+            $results[$url] = $future->getResult();
+        }
+        
+        return $results;
     }
-    
-    await all($futures);
-    
-    $results = [];
-    
-    foreach ($futures as $url => $future) {
-        $results[$url] = $future->getResult();
-    }
-    
-    return $results;
 }
 
 $urls = [

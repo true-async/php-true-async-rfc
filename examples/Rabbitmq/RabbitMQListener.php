@@ -8,8 +8,6 @@ use PhpAmqpLib\Connection\AMQPStreamConnection;
 use PhpAmqpLib\Message\AMQPMessage;
 use Async\Coroutine;
 use Async\Scope;
-use function Async\spawn;
-use function Async\await;
 
 final class RabbitMQListener
 {

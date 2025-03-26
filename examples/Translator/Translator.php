@@ -4,10 +4,8 @@ declare(strict_types=1);
 
 namespace Translator;
 
-use Async\BoundedScope;
 use Async\Coroutine;
 use Async\Scope;
-use function Async\spawn;
 use LongPoll;
 
 /**
@@ -24,7 +22,7 @@ final class Translator
     
     public function __construct(private LongPoll $longPoll, private \TranslatorHttpClient $translatorClient)
     {
-        $this->scope = new BoundedScope();
+        $this->scope = new Scope();
         
         // Define an exception handle for all child scopes
         // Handling exceptions from child **Scopes** ensures that errors in child coroutines do not propagate
@@ -42,7 +40,7 @@ final class Translator
     private function run(): void
     {
         while (($socket = $this->longPoll->receive()) !== null) {
-            Scope::inherit($this->scope)->spawn($this->handleRequest(...), $socket);
+            spawn with Scope::inherit($this->scope) $this->handleRequest($socket);
         }
     }
     
@@ -71,10 +69,10 @@ final class Translator
                     return;
                 }
                 
-                spawn(function () use ($line, $socket) {
+                spawn use ($line, $socket) {
                     $translation = $this->translatorClient->translate($line);
                     socket_write($socket, json_encode(['translation' => $translation, 'line' => $line, 'code' => 200]));
-                });
+                };
             }
         }
     }

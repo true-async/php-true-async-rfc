@@ -5,8 +5,9 @@ declare(strict_types=1);
 namespace PeriodicHeartbeatQueue;
 
 use Async\Scope;
-use function Async\spawn;
 use WeakReference;
+
+use function Async\delay;
 
 /**
  * https://github.com/amphp/websocket/blob/2.x/src/PeriodicHeartbeatQueue.php
@@ -61,7 +62,7 @@ final class PeriodicHeartbeatQueue
                     spawn $client->ping();
                 }
                 
-                sleep($this->heartbeatPeriod);
+                delay($this->heartbeatPeriod * 1000);
             }
         };
     }

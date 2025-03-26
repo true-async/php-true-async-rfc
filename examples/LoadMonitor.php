@@ -42,10 +42,8 @@ function loadMonitor(\Async\Coroutine $task, float $threshold = 1.00, int $check
     }
 }
 
-simpleLoadMonitor();
-
 $task = spawn processAll('users');
-$monitor = spawn simpleLoadMonitor($task, 0.5, 5);
+$monitor = spawn loadMonitor($task, 0.5, 5);
 
 try {
     await $task;
