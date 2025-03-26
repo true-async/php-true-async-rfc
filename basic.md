@@ -781,6 +781,35 @@ await all([...]) until timeout(5);
     $result = await $coroutine until spawn sleep(5);
 ```
 
+#### Using Coroutines with `until`
+
+The `until` keyword allows using coroutines as a `CancellationToken`.
+If an exception occurs in a coroutine that participates in `until`, 
+that exception will be thrown at the point where the `await` expression is called.
+
+Example:
+
+```php
+function cancellationToken(): void {
+    throw new Exception("Error");
+}
+
+try {
+    await spawn sleep(5) until spawn cancellationToken();
+} catch (Exception $exception) {
+    echo "Caught exception: ", $exception->getMessage();
+}
+```
+
+**Expected output:**
+
+```
+Caught exception: Error
+```
+
+> ⚠️ **Warning:** Note that completing the coroutine's await 
+> does not affect the lifetime of the coroutine used with `until`.
+
 ### Edge Behavior
 
 The use of `spawn`/`await`/`suspend` is allowed in almost any part of a PHP program.
