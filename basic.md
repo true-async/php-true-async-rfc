@@ -101,39 +101,43 @@ function mergeFiles(string ...$files): string
 #### Structured concurrency
 
 ```php
-function handleRequest(): array {
-    async $requestScope {
-         spawn getUserData();
-         spawn getUserOrders();
-         spawn getRecommendations();
-         
-         try {
-            $results = await $requestScope->allTasks();
+function loadDashboardData(string $userId): array 
+{
+    async $dashboardScope {
+        
+        try {
+            [$profile, $notifications, $activity] = await [
+                spawn fetchUserProfile($userId),
+                spawn fetchUserNotifications($userId),
+                spawn fetchRecentActivity($userId)
+            ];
+            
             return [
-               'user' => $results[0],
-               'orders' => $results[1],
-               'recommendations' => $results[2],
-            ];         
-         } catch (\Exception $e) {
+                'profile' => $profile,
+                'notifications' => $notifications,
+                'activity' => $activity,
+            ];
+        } catch (\Exception $e) {
+            logError("Dashboard loading failed", $e);
             return ['error' => $e->getMessage()];
-         }
+        }
     }
 }
 
-function fetchCustomers() {
+function fetchCustomers(string $userId): array {
     // This exception stops all tasks in the hierarchy that were created as part of the request.
     throw new Exception("Error fetching customers");
 }
 
-function getUserData(): array {
+function fetchUserProfile(string $userId): array {
     async inherit $userDataScope {        
         spawn fetchUserData();
         
         spawn {
-            $settings = await fetchUserSettings();
+            $settings = await fetchUserSettings($userId);
             
             if($settings['isManager']) {
-                return spawn fetchCustomers();
+                return spawn fetchCustomers($userId);
             }
         };
         
@@ -152,8 +156,8 @@ function getUserData(): array {
 ```
 
 ```text
-handleRequest()  ← async $requestScope
-├── getUserData()  ← async inherit $userDataScope
+loadDashboardData()  ← async $dashboardScope
+├── fetchUserProfile()  ← async inherit $userDataScope
 │   ├── spawn fetchUserData()
 │   └── spawn {
 │       ├── await fetchUserSettings()
