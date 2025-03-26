@@ -2494,6 +2494,9 @@ function task(): void
 spawn task();
 ```
 
+If a `CancellationException` was sent to a coroutine during withoutCancellation,
+the exception will be thrown immediately after the execution of withoutCancellation completes.
+
 #### exit and die keywords
 
 The `exit`/`die` keywords called within a coroutine result in the immediate termination of the application.  
