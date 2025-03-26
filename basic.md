@@ -1428,7 +1428,7 @@ try {
        echo "Task 1\n";
    };
 } finally {
-    $scope->dispose();
+    $scope->disposeSafely();
 }
 ```
 
@@ -1448,7 +1448,7 @@ The `async` block does the following:
 2. All coroutines will, by default, be created within `$scope`. 
 That is, expressions like `spawn <callable>` will be equivalent to `spawn with $scope <callable>`.
 3. `async` ensures that once the block is exited, the created `Scope` will be explicitly released 
-using the `dispose()` method, which means all coroutines created inside the block's `Scope` will be cancelled.
+using the `disposeSafely()` method, which means all coroutines created inside the block's `Scope` will be cancelled.
 
 #### Motivation
 
