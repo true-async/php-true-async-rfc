@@ -5,47 +5,15 @@ declare(strict_types=1);
 namespace Async;
 
 /**
- * Initiates the execution of the function $fn in an asynchronous context with arguments.
- * Returns a Coroutine object that describes the coroutine.
- *
- * @param \Closure $fn
- * @param          ...$args
- *
- * @return Coroutine
+ * Execute the provided closure in non-cancellable mode.
  */
-function spawn(\Closure $fn, ...$args): Coroutine {}
+function withoutCancellation(\Closure $closure): void {}
 
-/**
- * Suspends the execution of the current coroutine.
- */
-function suspend(): void {}
+function any(iterable $futures, ?Awaitable $cancellation = null): Awaitable {}
 
-/**
- * Suspends the execution of the current coroutine until the awaitable completing.
- * The awaitable can be a Coroutine or a CoroutineScope object.
- *
- * Returns the result of the awaitable or throws an exception if the awaitable fails.
- *
- * @param Awaitable $awaitable
- *
- * @return mixed
- */
-function await(Awaitable $awaitable): mixed {}
+function all(iterable $futures, ?Awaitable $cancellation = null): Awaitable {}
 
-function any(iterable $futures, ?Awaitable $cancellation = null): Awaitable
-{
-
-}
-
-function all(iterable $futures, ?Awaitable $cancellation = null): Awaitable
-{
-
-}
-
-function anyOf(int $limit, iterable $futures, ?Awaitable $cancellation = null): Awaitable
-{
-
-}
+function anyOf(int $limit, iterable $futures, ?Awaitable $cancellation = null): Awaitable {}
 
 function delay(int $ms): void {}
 

@@ -2396,7 +2396,73 @@ within that `Scope` and all child `Scopes` in hierarchical order.
 >
 > **Note:** `CancellationException` can be extended by the user 
 > to add metadata that can be used for debugging purposes.
-> 
+>
+
+#### CancellationException handling
+
+In the context of coroutines, it is not recommended to use `catch \Throwable` or `catch CancellationException`.
+
+Since `CancellationException` does not extend the `\Exception` class, 
+using `catch \Exception` is a safe way to handle exceptions, 
+and the `finally` block is the recommended way to execute finalizing code.
+
+```php
+try {
+    $coroutine = spawn {
+        sleep(1);
+        throw new \Exception("Task 1");
+    };    
+    
+    spawn use($coroutine) {        
+        $coroutine->cancel();
+    };
+    
+    try {
+        await $coroutine;        
+    } catch (\Exception $exception) {
+        // recommended way to handle exceptions
+        echo "Caught exception: {$exception->getMessage()}\n";
+    }
+} finally {
+    echo "The end\n";
+}
+```
+
+Expected output:
+
+```
+The end
+```
+
+```php
+try {
+    $coroutine = spawn {
+        sleep(1);
+        throw new \Exception("Task 1");
+    };    
+    
+    spawn use($coroutine) {        
+        $coroutine->cancel();
+    };
+    
+    try {
+        await $coroutine;        
+    } catch (Async\CancellationException $exception) {
+        // not recommended way to handle exceptions
+        echo "Caught CancellationException\n";
+        throw $exception;
+    }
+} finally {
+    echo "The end\n";
+}
+```
+
+Expected output:
+
+```
+Caught CancellationException
+The end
+```
 
 #### CancellationException propagation
 
@@ -2410,6 +2476,23 @@ PHP standard library functions behave as if the operation had failed.
 Additionally, the `CancellationException` will not appear in `get_last_error()`, 
 but it may trigger an `E_WARNING` to maintain compatibility with expected behavior 
 for functions like `fwrite` (if such behavior is specified in the documentation).
+
+#### withoutCancellation function
+
+Sometimes it's necessary to execute a critical section of code that must not be cancelled via `CancellationException`. 
+For example, this could be a sequence of write operations or a transaction.
+
+For this purpose, the `Async\withoutCancellation` function is used, 
+which allows executing a closure in a non-cancellable (silent) mode.
+
+```php
+function task(): void 
+{
+    Async\withoutCancellation(fn() => fwrite($file, "Critical data\n"));
+}
+
+spawn task();
+```
 
 #### exit and die keywords
 
