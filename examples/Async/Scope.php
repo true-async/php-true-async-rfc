@@ -42,5 +42,8 @@ class Scope
     public function onCompletion(\Closure $callback): void {}
     
     public function dispose(): void {}
-    public function disposeWithTimeout(int $timeout): void {}
+    
+    public function disposeSafely(): void {}
+    
+    public function disposeAfterTimeout(int $timeout): void {}
 }

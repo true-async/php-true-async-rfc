@@ -200,7 +200,7 @@ function mergeFiles(string ...$files): string
           $results = await $tasks->directTasks();
        } finally {
           // cancel all remaining tasks
-          $scope->disposeWithTimeout(5000);
+          $scope->disposeAfterTimeout(5000);
        }
        
        return array_merge("\n", $results);
@@ -909,7 +909,7 @@ class Service
     }
     
     public function __destruct() {
-        $this->scope->disposeWithTimeout(5000);
+        $this->scope->disposeAfterTimeout(5000);
     }
     
     public function run(): void {
@@ -976,6 +976,23 @@ because it knows nothing about the coroutines created deeper in the call stack.
 Let's say we have a function that creates an array of tasks performing some background work:
 
 ```php
+function fetchProfile(string $user): array
+{
+    spawn { // <- a leaked coroutine
+        sleep(100);       
+    };
+}
+
+function processUser(string $user): array
+{
+    $tasks = [];
+    
+    $tasks[] = spawn fetchProfile($user);
+    $tasks[] = spawn fetchSettings($user);
+    
+    return await all($tasks);
+}
+
 function processAllUsers(string ...$users): array
 {
     $coroutines = [];
@@ -996,31 +1013,22 @@ there is a risk of a resource leak.
 
 This problem has three solutions:
 
-1. You can wait for all coroutines that were created within a single `Scope`.  
+1. You can wait for **all coroutines** that were created within a single `Scope`.  
    In this case, there is a higher chance that all nested calls will eventually complete properly.  
-   However, there's also a higher risk that more tasks will remain in a waiting state, which means more memory consumption.
+   However, there's also a higher risk that more tasks will remain in a waiting state, 
+   which means more memory consumption.
 
 2. You can wait only for the coroutines that are explicitly needed,  
    and cancel all others that were implicitly created in the current `Scope` with an error.  
    In this case, there will be no resource leaks.  
    However, there's a risk that an important coroutine might be mistakenly cancelled.
 
-3. You can create a **point of responsibility**, a special place in the code where resource leak control will be performed.
+3. You can create a **point of responsibility**, 
+   a special place in the code where resource leak control will be performed.
 
 Scope helps implement any of these strategies.
 
 ```php
-function processUser(string $user): void
-{
-    spawn { // <- a leaked coroutine
-        while (true) {
-            sleep(1);
-        }
-    };
-    
-    // some else code...
-}
-
 function processAllUsers(string ...$users): array
 {
     $scope = new Scope();
@@ -1029,7 +1037,11 @@ function processAllUsers(string ...$users): array
         spawn with $scope processUser($user);
     }
     
-    return await $scope->directTasks();
+    try {
+        return await $scope->directTasks();    
+    } finally {
+        $scope->dispose();
+    }
 }
 ```
 
@@ -1041,7 +1053,11 @@ inside the `foreach ($users as $user)` loop.
 When the `await $scope->directTasks()` has completed,  
 the coroutine created by `processUser` will not stop its execution.
 
-We can imagine another scenario:  
+The `finally` block calls `$scope->dispose()`, which cancels all coroutines that were created within the `Scope`.
+Calling `dispose()` explicitly cancels all leaked coroutines with a warning message.
+
+**Another scenario:**
+
 * There is a **Job Manager** that launches various tasks.  
 * It has no idea what exactly each task might do.  
 * However, it must guarantee that no more than **N** tasks are running at the same time.
@@ -1084,7 +1100,7 @@ function processBackgroundJobs(string ...$jobs): array
     }
     
     await $scope->allTasks() until timeout(10000);
-    $scope->cancel();
+    $scope->dispose();
 }
 ```
 
@@ -1159,13 +1175,13 @@ function connectionChecker($socket, callable $cancelToken): void
             return;
         }                               
         
-        Async\timeout(1000);
+        Async\delay(1000);
     }
 }
 
 function connectionLimiter(callable $cancelToken): void
 {
-   Async\timeout(10000);
+   Async\delay(10000);
    $cancelToken("The request processing limit has been reached.");   
 }
 
@@ -1295,23 +1311,71 @@ $scope->cancel();
 
 #### Scope disposal
 
-The `Scope::dispose` method terminates the execution of a `Scope` differently than `cancel()`.
+The `Async\Scope` class implements several methods for resource cleanup:
+
+- `dispose` – cleans up resources and cancels coroutines, possibly with errors.
+- `disposeSafely` – cleans up resources while preserving leaked coroutines.
+- `disposeAfterTimeout` – cleans up resources and cancels coroutines after a timeout.
+
+The `Scope::dispose*` methods terminates the execution of a `Scope` differently than `cancel()`.
 
 It goes through all child coroutines that were explicitly defined using a `spawn with` expression and cancels them.
-All implicit coroutines are marked as **Leaked** and continue execution under
-the restrictions of the **Leaked policy**, after a warning is issued.
+All implicit coroutines that have not completed execution are marked as **Leaked**.
+
+When a **Leaked** coroutine is detected, PHP generates a warning indicating the location where the coroutine was started. 
+The later behavior depends on the selected strategy:
+
+- `dispose` – immediately cancels the coroutine.
+- `disposeAfterTimeout` – delays the cancellation for a specified duration.
+- `disposeSafely` – runs the coroutine under the **Leaked** policy.
 
 ```php
+use function Async\Scope\delay;
+
 $scope = new Scope();
 
 spawn in $scope {
     spawn {
-        sleep(1);
+        delay(1000);
         echo "Task 1\n";
     };
     
     spawn {
-        sleep(2);
+        delay(2000);
+        echo "Task 2\n";
+    };
+    
+    echo "Root task\n";
+};
+
+$scope->disposeSafely();
+```
+
+**Expected output:**
+
+```
+Warning: Coroutine is leaked at ...
+Warning: Coroutine is leaked at ...
+Task 1
+Task 2
+```
+
+Compare this to the `dispose` method:
+
+```php
+
+use function Async\Scope\delay;
+
+$scope = new Scope();
+
+spawn in $scope {
+    spawn {
+        delay(1000);
+        echo "Task 1\n";
+    };
+    
+    spawn {
+        delay(2000);
         echo "Task 2\n";
     };
     
@@ -1326,9 +1390,8 @@ $scope->dispose();
 ```
 Warning: Coroutine is leaked at ...
 Warning: Coroutine is leaked at ...
-Task 1
-Task 2
 ```
+
 
 ### Async blocks and structured concurrency
 
