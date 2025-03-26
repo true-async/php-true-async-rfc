@@ -293,7 +293,7 @@ The `spawn` construct is available in two variations:
 spawn [with <scope>] <function_call>;
 
 // Closure form
-spawn [with <scope>] [use(<parameters>)][: <returnType>] {
+spawn [with <scope>] [static] [use(<parameters>)][: <returnType>] {
     <codeBlock>
 };
 ```
@@ -395,7 +395,7 @@ spawn (fn() => sleep(1))();
 Allows creating a coroutine from a closure directly when using `spawn`:
 
 ```php
-spawn [with <scope>] [use(<parameters>)[: <returnType>]] {
+spawn [with <scope>] [static] [use(<parameters>)[: <returnType>]] {
     <codeBlock>
 };
 ```
@@ -430,6 +430,21 @@ spawn {
 spawn use():string {
     return file_get_contents('main.log');
 };
+```
+
+- with static keyword:
+
+Define closure as static:
+
+```php
+class Test {
+    private $property = 'main.log';
+    public function method(): void {
+        spawn static {
+            //$this->property <- not available    
+        };
+    }
+}
 ```
 
 #### With scope expression
