@@ -28,6 +28,10 @@ class Scope
     
     public function allTasks(): Awaitable {}
     
+    public function isFinished(): bool {}
+    
+    public function isClosed(): bool {}
+    
     /**
      * Sets an error handler that is called when an exception is passed to the Scope from one of its child coroutines.
      */

@@ -1097,7 +1097,7 @@ function processBackgroundJobs(string ...$jobs): array
     await $scope->directTasks();
     
     try {
-        await $scope->allTasks() until timeout(1);    
+        await $scope->allTasks() until timeout(1);
     } catch (CancellationException) {
        logWrongTasks($scope);
     }
@@ -1368,6 +1368,8 @@ $scope->disposeSafely();
 ```
 Warning: Coroutine is leaked at ...
 Warning: Coroutine is leaked at ...
+Warning: Coroutine is leaked at ...
+Root task
 Task 1
 Task 2
 ```
@@ -1402,22 +1404,14 @@ $scope->dispose();
 ```
 Warning: Coroutine is leaked at ...
 Warning: Coroutine is leaked at ...
+Warning: Coroutine is leaked at ...
 ```
 
+### Async blocks
 
-### Async blocks and structured concurrency
+The `async` block allows you to create a code section in which 
+the `$scope` is explicitly created and explicitly disposed. 
 
-**Structured concurrency** allows organizing coroutines into
-a group or hierarchy to manage their lifetime or exception handling.
-
-The `Async\Scope` class enables grouping coroutines together,
-allowing to create a hierarchy of groups (i.e., a hierarchy of `Async\Scope`).
-
-Structural concurrency implies that a parent cannot complete until all its child elements have finished executing.
-This behavior helps prevent the release of resources allocated in the parent coroutine
-until all children have completed their execution.
-
-The `async` block allows you to create a code section in which the `$scope` is explicitly created and explicitly disposed. 
 The following is a code example:
 
 ```php
@@ -1426,9 +1420,9 @@ $scope = new Scope();
 try {
    await spawn with $scope {
        echo "Task 1\n";
-   };
+   };     
 } finally {
-    $scope->disposeSafely();
+   $scope->disposeSafely();
 }
 ```
 
@@ -1447,13 +1441,17 @@ The `async` block does the following:
 1. It creates a new `Scope` object and assigns it to the variable specified at the beginning of the block as `$scope`.
 2. All coroutines will, by default, be created within `$scope`. 
 That is, expressions like `spawn <callable>` will be equivalent to `spawn with $scope <callable>`.
-3. `async` ensures that once the block is exited, the created `Scope` will be explicitly released 
-using the `disposeSafely()` method, which means all coroutines created inside the block's `Scope` will be cancelled.
-
+3. When the async block finishes its execution, 
+   it calls the `Scope::disposeSafely` method, 
+   or `Scope::dispose` if the `bounded` attribute is specified.
+   
 #### Motivation
 
 The `async` block allows for describing groups of coroutines in a clearer 
 and safer way than manually using `Async\Scope`.
+
+* **Advantages**: Using `async` blocks improves code readability and makes it easier to analyze with static analyzers.  
+* **Drawback**: an `async` block is useless if `Scope` is used as an object property.
 
 Consider the following code:
 
@@ -1478,7 +1476,7 @@ function generateReport(): void
     } catch (Exception $e) {
         echo "Failed to generate report: ", $e->getMessage(), "\n";
     } finally {
-        $scope->dispose();
+        $scope->disposeSafely();        
     }
 }
 ```
@@ -1510,14 +1508,14 @@ function generateReport(): void
 
 ```
 
-Using an `async` block makes it easier to describe a pattern 
+Using an `async` block with `bounded` attribute makes it easier to describe a pattern 
 where a group of coroutines is created with one main coroutine and several secondary ones.  
 As soon as the main coroutine completes, all the secondary coroutines will be terminated along with it.
 
 ```php
 function startServer(): void
 {
-    async $serverSupervisor {
+    async bounded $serverSupervisor {
     
       // Secondary coroutine that listens for a shutdown signal
       spawn use($serverSupervisor) {
@@ -1540,7 +1538,7 @@ In this example, the server runs until `stream_socket_accept` returns `false`, o
 #### async syntax
 
 ```php
-async [inherit] [<scope>] {
+async [inherit] [bounded] [<scope>] {
     <codeBlock>
 }
 ```
@@ -1575,7 +1573,79 @@ async &$object
 
 - `inherit` - a keyword that allows inheriting the parent `Scope` object.
 
+- `bounded` - a keyword that cancels all child coroutines 
+   if they have not been completed by the time the `Scope` block exits. 
+   Without this attribute, such coroutines are marked as **Leaked**.
+
 - `codeBlock` - a block of code that will be executed in the `Scope` context.
+
+### Structured concurrency support
+
+**Structured concurrency** allows organizing coroutines into a group or hierarchy
+to manage their lifetime or exception handling.
+
+Structural concurrency implies that a parent cannot complete until all its child elements have finished executing.
+This behavior helps prevent the release of resources allocated in the parent coroutine
+until all children have completed their execution.
+
+The following code implements this idea:
+
+```php
+use Async\Scope;
+
+$source = fopen('input.txt', 'r');
+$target = fopen('output.txt', 'w');
+
+$buffer = null;
+
+try {
+    async $scope {
+
+        // Read data from the source file
+        spawn use(&$buffer, $source) {
+            while (!feof($source)) {
+                if ($buffer === null) {
+                    $chunk = fread($source, 1024);
+                    $buffer = $chunk !== false && $chunk !== '' ? $chunk : null;
+                }
+
+                suspend;
+            }
+
+            $buffer = '';
+        };
+
+        // Write data to the target file
+        spawn use(&$buffer, $target) {
+            while (true) {
+                if (is_string($buffer)) {
+                    if ($buffer === '') {
+                        break; // End of a file
+                    }
+
+                    fwrite($target, $buffer);
+                    $buffer = null;
+                }
+
+                suspend;
+            }
+            
+            echo "Copy complete.\n";
+        };
+
+        await $scope->allTasks();
+    };
+} finally {
+    fclose($source);
+    fclose($target);
+}
+```
+
+In this example, the main task opens files in order to process data in subtasks.  
+The files must remain open until the subtasks are completed.  
+This illustrates the key idea of structured concurrency: 
+tying the lifetime of child tasks to the scope that allocates resources.  
+Both the child tasks and the resources must be cleaned up in a well-defined order.
 
 ### Error detection
 

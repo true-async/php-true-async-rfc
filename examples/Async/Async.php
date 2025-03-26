@@ -47,6 +47,10 @@ function anyOf(int $limit, iterable $futures, ?Awaitable $cancellation = null): 
 
 }
 
+function delay(int $ms): void {}
+
+function timeout(int $ms): Awaitable {}
+
 function currentContext(): Context {}
 
 function coroutineContext(): Context {}
