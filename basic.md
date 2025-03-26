@@ -1056,6 +1056,9 @@ the coroutine created by `processUser` will not stop its execution.
 The `finally` block calls `$scope->dispose()`, which cancels all coroutines that were created within the `Scope`.
 Calling `dispose()` explicitly cancels all leaked coroutines with a warning message.
 
+You can also use the `disposeAfterTimeout` and `disposeSafely` methods 
+as alternative scenarios for cleaning up a `Scope`, see [Scope disposal](#scope-disposal).
+
 **Another scenario:**
 
 * There is a **Job Manager** that launches various tasks.  
@@ -1207,7 +1210,6 @@ function connectionHandler($socket): void
             fwrite($socket, "HTTP/1.1 500 Internal Server Error\r\n\r\n");
         } finally {
             fclose($socket);
-            $limiterScope->cancel();
             $scope->cancel();
         }
     };
@@ -1279,9 +1281,9 @@ GLOBAL <- globalScope
 
 The `connectionHandler` doesn't worry if the lifetimes of the `connectionLimiter` or `connectionChecker`
 coroutines exceed the lifetime of the main coroutine handling the request, 
-because it is guaranteed to call `$limiterScope->cancel()` when the main coroutine finishes.
+because it is guaranteed to call `$scope->cancel()` when the main coroutine finishes.
 
-`$limiterScope` is used to explicitly define a group of coroutines 
+`$limiterScope` is used to explicitly define a child-group of coroutines 
 that should be cancelled when the request is completed. This approach minimizes errors.
 
 On the other hand, if the server receives a shutdown signal, 
@@ -1292,21 +1294,31 @@ if the server shuts down in another way, because `$scope` will be explicitly clo
 
 #### Scope cancellation
 
-The `cancel` method cancels all child coroutines:
+The `cancel` method cancels all child coroutines and all child `Scopes` of the current `Scope`.:
 
 ```php
-$scope = new Scope();
-$scope->spawn(function() {
-    sleep(1);
-    echo "Task 1\n";
-});
+use function Async\Scope\delay;
 
-$scope->spawn(function() {
-    sleep(2);
-    echo "Task 2\n";
-});
+$scope = new Scope();
+
+spawn with $scope {
+    spawn {
+        delay(1000);
+        echo "Task 1\n";
+    };
+    
+    spawn {
+        delay(2000);
+        echo "Task 2\n";
+    };
+};
 
 $scope->cancel();
+```
+
+**Expected output:**
+
+```
 ```
 
 #### Scope disposal
