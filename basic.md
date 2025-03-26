@@ -1321,6 +1321,14 @@ $scope->cancel();
 ```
 ```
 
+#### Scope Cancellation Order
+
+If a `Scope` has child `Scopes`, the coroutines in the child `Scopes` will be cancelled first, 
+followed by those in the parent — from the bottom up in the hierarchy. 
+This approach increases the likelihood that resources will be released correctly. 
+However, it does not guarantee this, 
+since the exact order of coroutines in the execution queue cannot be determined with 100% certainty.
+
 #### Scope disposal
 
 The `Async\Scope` class implements several methods for resource cleanup:
@@ -1784,7 +1792,13 @@ If there are no active coroutines left in the execution queue and no events to w
 Leaked coroutines differ from regular ones in that they are not counted as active. 
 Once the application is considered finished, 
 leaked coroutines are given a time limit within which they must complete execution. 
-If this limit is exceeded, all leaked coroutines are cancelled.
+If this limit is exceeded, all leaked coroutines are canceled.
+
+The delay time for handling leaked coroutines can be configured using 
+a constant in the `ini` file: `async.leaked_coroutine_timeout`, which is set to two seconds by default.
+
+If a coroutine is created within a user-defined `Scope`, the programmer 
+can set a custom timeout for that specific `Scope` using the `Scope::disposeAfterTimeout(int $ms)` method.
 
 ### Context
 
