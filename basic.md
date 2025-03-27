@@ -110,7 +110,7 @@ function loadDashboardData(string $userId): array
                 spawn fetchUserProfile($userId),
                 spawn fetchUserNotifications($userId),
                 spawn fetchRecentActivity($userId)
-            ];
+            ] until timeout(5000);
             
             return [
                 'profile' => $profile,
@@ -124,12 +124,14 @@ function loadDashboardData(string $userId): array
     }
 }
 
-function fetchCustomers(string $userId): array {
+function fetchCustomers(string $userId): array 
+{
     // This exception stops all tasks in the hierarchy that were created as part of the request.
     throw new Exception("Error fetching customers");
 }
 
-function fetchUserProfile(string $userId): array {
+function fetchUserProfile(string $userId): array 
+{
     async inherit $userDataScope {        
         spawn fetchUserData();
         
@@ -137,7 +139,7 @@ function fetchUserProfile(string $userId): array {
             $settings = await fetchUserSettings($userId);
             
             if($settings['isManager']) {
-                return spawn fetchCustomers($userId);
+                return await spawn fetchCustomers($userId);
             }
         };
         
@@ -153,6 +155,8 @@ function fetchUserProfile(string $userId): array {
         return $users;
     }
 }
+
+spawn loadDashboardData($userId);
 ```
 
 ```text
