@@ -28,7 +28,7 @@ class Scope
     
     public function allTasks(): Awaitable {}
     
-    public function awaitAll(bool $ignoreErrors = false): void {}
+    public function awaitAll(bool $ignoreErrors = false, ?Awaitable $cancellation = null): void {}
     
     public function isFinished(): bool {}
     

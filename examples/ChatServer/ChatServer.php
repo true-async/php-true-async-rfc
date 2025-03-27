@@ -66,7 +66,7 @@ function startChatServer(string $host, int $port): void
             echo "Shutting down server...\n";
             
             try {
-                $serverScope->awaitAll(true);
+                $serverScope->awaitAll(ignoreErrors: true, cancellation: \Async\timeout(5000));
             } finally {
                 // Close all client sockets
                 if(!empty($clients)) {
