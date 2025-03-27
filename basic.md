@@ -909,10 +909,10 @@ The coroutine with text `"Child of Task 1"` also belongs to `$scope`,
 meaning it is at the same level as the `"Task 1"` and `"Task 2"` coroutines.
 
 If the `$scope` object is destroyed (i.e., its destructor is called), 
-the coroutines that did not have time to complete will be marked as "leaked coroutine" or "orphan coroutine"
+the coroutines that did not have time to complete will be marked as "zombie coroutine" or "orphan coroutine"
 
-Leaked coroutines are considered a result of a programming error and are handled specially  
-(See section: [Leaked coroutine policy](#leaked-coroutine-policy)).
+Zombie coroutines are considered a result of a programming error and are handled specially  
+(See section: [Zombie coroutine policy](#zombie-coroutine-policy)).
 
 ```php
 use Async\Scope;
@@ -937,7 +937,7 @@ unset($scope);
 **Expected output:**
 
 ```
-Warning: Coroutine is leaked at ...
+Warning: Coroutine is zombie at ...
 Task 1
 Task 2
 Child of Task 1
@@ -1030,7 +1030,7 @@ Let's say we have a function that creates an array of tasks performing some back
 ```php
 function fetchProfile(string $user): array
 {
-    spawn { // <- a leaked coroutine
+    spawn { // <- a zombie coroutine
         sleep(100);       
     };
 }
@@ -1106,7 +1106,7 @@ When the `await $scope->directTasks()` has completed,
 the coroutine created by `processUser` will not stop its execution.
 
 The `finally` block calls `$scope->dispose()`, which cancels all coroutines that were created within the `Scope`.
-Calling `dispose()` explicitly cancels all leaked coroutines with a warning message.
+Calling `dispose()` explicitly cancels all zombie coroutines with a warning message.
 
 You can also use the `disposeAfterTimeout` and `disposeSafely` methods 
 as alternative scenarios for cleaning up a `Scope`, see [Scope disposal](#scope-disposal).
@@ -1386,20 +1386,20 @@ since the exact order of coroutines in the execution queue cannot be determined 
 The `Async\Scope` class implements several methods for resource cleanup:
 
 - `dispose` – cleans up resources and cancels coroutines, possibly with errors.
-- `disposeSafely` – cleans up resources while preserving leaked coroutines.
+- `disposeSafely` – cleans up resources while preserving zombie coroutines.
 - `disposeAfterTimeout` – cleans up resources and cancels coroutines after a timeout.
 
 The `Scope::dispose*` methods terminates the execution of a `Scope` differently than `cancel()`.
 
 It goes through all child coroutines that were explicitly defined using a `spawn with` expression and cancels them.
-All implicit coroutines that have not completed execution are marked as **Leaked**.
+All implicit coroutines that have not completed execution are marked as **Zombie**.
 
-When a **Leaked** coroutine is detected, PHP generates a warning indicating the location where the coroutine was started. 
+When a **Zombie** coroutine is detected, PHP generates a warning indicating the location where the coroutine was started. 
 The later behavior depends on the selected strategy:
 
 - `dispose` – immediately cancels the coroutine.
 - `disposeAfterTimeout` – delays the cancellation for a specified duration.
-- `disposeSafely` – runs the coroutine under the **Leaked** policy.
+- `disposeSafely` – runs the coroutine under the **Zombie** policy.
 
 ```php
 use function Async\Scope\delay;
@@ -1426,9 +1426,9 @@ $scope->disposeSafely();
 **Expected output:**
 
 ```
-Warning: Coroutine is leaked at ...
-Warning: Coroutine is leaked at ...
-Warning: Coroutine is leaked at ...
+Warning: Coroutine is zombie at ...
+Warning: Coroutine is zombie at ...
+Warning: Coroutine is zombie at ...
 Root task
 Task 1
 Task 2
@@ -1462,9 +1462,9 @@ $scope->dispose();
 **Expected output:**
 
 ```
-Warning: Coroutine is leaked at ...
-Warning: Coroutine is leaked at ...
-Warning: Coroutine is leaked at ...
+Warning: Coroutine is zombie at ...
+Warning: Coroutine is zombie at ...
+Warning: Coroutine is zombie at ...
 ```
 
 #### Spawn with disposed scope
@@ -1654,7 +1654,7 @@ async &$object
 
 - `bounded` - a keyword that cancels all child coroutines 
    if they have not been completed by the time the `Scope` block exits. 
-   Without this attribute, such coroutines are marked as **Leaked**.
+   Without this attribute, such coroutines are marked as **Zombie**.
 
 - `codeBlock` - a block of code that will be executed in the `Scope` context.
 
@@ -1732,7 +1732,7 @@ Detecting erroneous situations when using coroutines is an important part of ana
 
 The following scenarios are considered potentially erroneous:
 
-1. A coroutine belongs to a global scope and is not awaited by anyone (a **detached coroutine**).
+1. A coroutine belongs to a global scope and is not awaited by anyone (a **zombie coroutine**).
 2. The root scope has been destroyed (its destructor was called), but no one awaited 
 it or ensured that its resources were explicitly cleaned up (e.g., by calling `$scope->cancel()` or `$scope->dispose()`).
 3. Tasks were not cancelled using the `cancel()` method, but through a call to `dispose()`.  
@@ -1745,7 +1745,7 @@ Developers are expected to write code in a way that avoids triggering these warn
 
 #### Error mitigation strategies
 
-The only way to create **detached coroutines** is by using the `spawn` expression in the `globalScope`.  
+The only way to create **zombie coroutines** is by using the `spawn` expression in the `globalScope`.  
 However, if the initial code explicitly creates a scope and treats it as the application's entry point, 
 the initializing code gains full control — because `spawn <callable>` will no longer 
 be able to create a coroutine in `globalScope`, thus preventing the application from hanging beyond the entry point.
@@ -1850,7 +1850,7 @@ The lifetime of `watcherScope` matches that of `poolScope`, but not longer than 
 The overall lifetime of all coroutines in the `ProcessPool` is determined by the lifetime of the `ProcessPool` 
 object or by the moment the `stop()` method is explicitly called.
 
-#### Leaked coroutine policy
+#### Zombie coroutine policy
 
 Coroutines whose lifetime extends beyond the boundaries of their parent `Scope`
 are handled according to a separate **policy**.
@@ -1860,13 +1860,13 @@ terminate coroutines, which could lead to data integrity violations.
 
 If there are no active coroutines left in the execution queue and no events to wait for, the application is considered complete.
 
-Leaked coroutines differ from regular ones in that they are not counted as active. 
+Zombie coroutines differ from regular ones in that they are not counted as active. 
 Once the application is considered finished, 
-leaked coroutines are given a time limit within which they must complete execution. 
-If this limit is exceeded, all leaked coroutines are canceled.
+zombie coroutines are given a time limit within which they must complete execution. 
+If this limit is exceeded, all zombie coroutines are canceled.
 
-The delay time for handling leaked coroutines can be configured using 
-a constant in the `ini` file: `async.leaked_coroutine_timeout`, which is set to two seconds by default.
+The delay time for handling zombie coroutines can be configured using 
+a constant in the `ini` file: `async.zombie_coroutine_timeout`, which is set to two seconds by default.
 
 If a coroutine is created within a user-defined `Scope`, the programmer 
 can set a custom timeout for that specific `Scope` using the `Scope::disposeAfterTimeout(int $ms)` method.
