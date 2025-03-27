@@ -1761,12 +1761,19 @@ But such code can't be considered an accidental mistake.
 
 To avoid accidentally hanging coroutines whose lifetimes were not correctly limited, follow these rules:
  
-* Use separate Scopes for different coroutines. This is the best practice, 
+* Use **separate Scopes** for different coroutines. This is the best practice, 
 as it allows explicitly defining lifetime dependencies between Scopes.
 * Use `Scope::dispose()`. The `dispose()` method cancels coroutine execution and logs an error.
 * Don’t mix semantically different coroutines within the same `Scope`.
 * Avoid building hierarchies between `Scopes` with complex interdependencies.
 * Do not use cyclic dependencies between `Scopes`.
+* The principle of single point of responsibility and `Scope` ownership.
+  Do not pass the `Scope` object to different coroutine functions (unless the action happens in a closure).
+  Do not store `Scope` objects in different places.
+  Violating this rule can lead to manipulations with `Scope`, 
+  which may cause a deadlock or disrupt the application's logic.
+* Child coroutines should not wait for their parents.
+  Child Scopes should not wait for their parents.
 
 ```php
 namespace ProcessPool;
