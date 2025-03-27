@@ -28,6 +28,8 @@ class Scope
     
     public function allTasks(): Awaitable {}
     
+    public function awaitAll(bool $ignoreErrors = false): void {}
+    
     public function isFinished(): bool {}
     
     public function isClosed(): bool {}
