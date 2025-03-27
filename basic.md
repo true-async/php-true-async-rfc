@@ -104,13 +104,13 @@ function mergeFiles(string ...$files): string
 function loadDashboardData(string $userId): array 
 {
     async $dashboardScope {
+    
+        spawn fetchUserProfile($userId);
+        spawn fetchUserNotifications($userId);
+        spawn fetchRecentActivity($userId);
         
         try {
-            [$profile, $notifications, $activity] = await Async\all([
-                spawn fetchUserProfile($userId),
-                spawn fetchUserNotifications($userId),
-                spawn fetchRecentActivity($userId)
-            ]) until timeout(5000);
+            [$profile, $notifications, $activity] = await $dashboardScope->allTasks();
             
             return [
                 'profile' => $profile,
@@ -124,8 +124,9 @@ function loadDashboardData(string $userId): array
     }
 }
 
-function fetchCustomers(string $userId): array 
+function fetchUserSettings(string $userId): array 
 {
+    // ...
     // This exception stops all tasks in the hierarchy that were created as part of the request.
     throw new Exception("Error fetching customers");
 }
@@ -134,25 +135,13 @@ function fetchUserProfile(string $userId): array
 {
     async inherit $userDataScope {        
         spawn fetchUserData();
+        spawn fetchUserSettings($userId);              
         
-        spawn {
-            $settings = await fetchUserSettings($userId);
-            
-            if($settings['isManager']) {
-                return await spawn fetchCustomers($userId);
-            }
-        };
+        [$userData, $settings] = await $dashboardScope->allTasks();
         
-        [$users, $customers] = await $userDataScope->allTasks();
+        $userData['settings'] = $settings ?? [];
        
-        // merge customers' info with users
-        foreach ($users as $user) {
-            if(!empty($customers[$user['id']])) {
-                $user['customers'] = $customers[$user['id']];
-            }
-        }
-         
-        return $users;
+        return $userData;
     }
 }
 
@@ -163,10 +152,8 @@ spawn loadDashboardData($userId);
 loadDashboardData()  ← async $dashboardScope
 ├── fetchUserProfile()  ← async inherit $userDataScope
 │   ├── spawn fetchUserData()
-│   └── spawn {
-│       ├── await fetchUserSettings()
-│       └── (if isManager) → spawn fetchCustomers()
-│           └── throw new Exception(...) ← ❗can stop all tasks in the hierarchy
+│   └── spawn fetchUserSettings()
+│       ├── throw new Exception(...) ← ❗can stop all tasks in the hierarchy
 ├── spawn getUserOrders()
 └── spawn getRecommendations()
 ```
