@@ -22,11 +22,6 @@ final class Coroutine implements Awaitable
     public function getTrace(): array {}
     
     /**
-     * Returns the Coroutine parent.
-     */
-    public function getParentCoroutine(): ?Coroutine {}
-    
-    /**
      * Return spawn file and line.
      */
     public function getSpawnFileAndLine(): array {}

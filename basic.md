@@ -268,16 +268,19 @@ $result = file_get_contents('https://php.net');
 echo "next line".__LINE__."\n";
 ```
 
-This code first returns the contents of the PHP website, 
-then executes the `echo` statement.
+This code: 
+1. first returns the contents of the PHP website, 
+2. then executes the `echo` statement.
 
 ```php
 $coroutine = spawn file_get_contents('https://php.net');
 echo "next line".__LINE__."\n";
 ```
 
-This code starts a coroutine with the `file_get_contents` function.
-The next line is executed without waiting for the result of `file_get_contents`.
+This code: 
+1. starts a coroutine with the `file_get_contents` function.
+2. The next line is executed without waiting for the result of `file_get_contents`.
+3. The coroutine is executed after the `echo` statement.
 
 The `spawn` construct is available in two variations:
 * `spawn function_call` - creates a coroutine from a callable expression
@@ -450,14 +453,14 @@ The `with` keyword allows specifying the scope in which the coroutine.
 $scope = new Async\Scope();
 
 $coroutine = spawn with $scope use():string {
-    return "Hello, World!";
+    return gethostbyname('php.net');
 };
 
-function test(): string {
-    return "Hello, World!";
+function defineTargetIpV4(string $host): string {
+    return gethostbyname($host);
 }
 
-spawn with $scope test();
+spawn with $scope test($host);
 ```
 
 The `scope` expression can be:
@@ -465,7 +468,7 @@ The `scope` expression can be:
 
 ```php
 spawn with $scope function:void {
-    echo "Hello, World!";
+    echo gethostbyname('php.net').PHP_EOL;
 };
 ```
 
@@ -610,6 +613,10 @@ Inside each coroutine,
 there is an illusion that all actions are executed sequentially, 
 while in reality, operations occur asynchronously.
 
+This **RFC** proposes support for core PHP functions that require non-blocking input/output, 
+as well as support for CURL, Socket, and other extensions based on the **PHP Stream API**.
+Please see Unaffected PHP Functionality.
+
 ### Awaitable interface
 
 The `Awaitable` interface is a contract that allows objects to be used in the `await` expression.
@@ -653,12 +660,12 @@ echo await spawn readFile('file2.txt');
 the awaited one returns a final result or completes with an exception.
 
 ```php
-function test(): void {
+function testException(): void {
     throw new Exception("Error");
 }
 
 try {
-    await test();
+    await spawn testException();
 } catch (Exception $e) {
     echo "Caught exception: ", $e->getMessage();
 }
@@ -771,7 +778,7 @@ await all([...]) until timeout(5);
 - A variable of the `Async\Awaitable` interface
 
 ```php
-    $cancellation = new Future();
+    $cancellation = Async\timeout(5000);
     $result = await $coroutine until $cancellation;
 ```
 
@@ -837,15 +844,37 @@ The `suspend` keyword will have no effect, and the `spawn` operation will not be
 
 ### Coroutine Scope
 
-To manage the lifetime of coroutines and wait for their results, it's convenient to organize them into groups. 
-`Coroutine Scope` is a basic primitive 
-that helps associate coroutines with other PHP objects and track their execution at the group level.
+> **Coroutine Scope** — the space associated with coroutines created using the `spawn` expression.
 
-`Coroutine Scope` can be used to implement the **structural concurrency** pattern with asynchronous blocks
-(see [async blocks and structured concurrency](#async-blocks-and-structured-concurrency)).
+By default, all coroutines are associated with the **Global Coroutine Scope**:
+
+```php
+spawn file_get_contents('file1.txt'); // <- global scope
+
+function readFile(string $file): void {
+    return file_get_contents($file); // <- global scope
+}
+
+function mainTask(): void { // <- global scope
+    spawn readFile('file1.txt'); // <- global scope
+}
+
+spawn mainTask(); // <- global scope
+```
+
+If an application never creates custom Scopes, its behavior is similar to coroutines in Go:
+* Coroutines are not explicitly linked to each other.
+* The lifetime of coroutines is not limited.
+
+To manage the lifetime of coroutines and wait for their results, it's convenient to organize them into groups.
+`Coroutine Scope` is a basic primitive
+that helps associate coroutines with other PHP objects and track their execution at the group level.
 
 `Coroutine Scope` is especially useful when you need to bind coroutines to a PHP object 
 and ensure their execution is terminated as soon as a destructor or a special method is called.
+
+`Coroutine Scope` can be used to implement the **structural concurrency** pattern
+(see [structured concurrency](#structured-concurrency)).
 
 `Coroutine Scope` helps organize a hierarchy of coroutine groups 
 and implement all possible scenarios for waiting and management, taking the hierarchy into account.
@@ -890,15 +919,18 @@ main()                          ← defines a $scope and run task()
 └── task2()                     ← inherits $scope
 ```
 
-In this example, **all three child coroutines** belong to the same `$scope`.
+After the `task1()` coroutine is started using the `spawn with $scope` expression, 
+all child coroutines created within `task1()` will inherit the same `$scope` as `task1()`.
+
+The conclusion follows: **all three child coroutines** belong to the same `$scope`.
 
 The coroutine with text `"Child of Task 1"` also belongs to `$scope`, 
 meaning it is at the same level as the `"Task 1"` and `"Task 2"` coroutines.
 
 If the `$scope` object is destroyed (i.e., its destructor is called), 
-the coroutines that did not have time to complete will be marked as "zombie coroutine" or "orphan coroutine"
+the coroutines that did not have time to complete will be marked as **zombie coroutine** or "orphan coroutine".
 
-Zombie coroutines are considered a result of a programming error and are handled specially  
+**Zombie coroutines** are considered a result of a programming error and are handled specially  
 (See section: [Zombie coroutine policy](#zombie-coroutine-policy)).
 
 ```php
@@ -914,10 +946,6 @@ spawn with $scope {
     echo "Task 1\n";    
 };
 
-spawn with $scope {
-    echo "Task 2\n";
-};
-
 unset($scope);
 ```
 
@@ -926,7 +954,6 @@ unset($scope);
 ```
 Warning: Coroutine is zombie at ...
 Task 1
-Task 2
 Child of Task 1
 ```
 
@@ -958,6 +985,44 @@ class Service
     }    
 }
 ```
+
+#### Motivation
+
+The Coroutine Scope in this **RFC**, 
+although inspired by the similarly named pattern from Kotlin, 
+is not an analog and has no equivalents in other languages.  
+
+The competitor to Coroutine Scope is the coroutine hierarchy, 
+where each coroutine started within another automatically becomes a child.
+
+The main reason why a simple coroutine hierarchy was rejected is that the following code creates ambiguity:
+
+```php
+function subtask() {
+    echo "Subtask\n";
+}
+
+function task() {
+    spawn subtask();
+}
+
+spawn task();
+task();
+```
+
+The main reason why a simple coroutine hierarchy was rejected is the absence of colored functions.  
+The following code demonstrates how the hierarchy rule behaves ambiguously 
+when the same function can be called both as a coroutine and as a regular function.
+
+In the example above, the `task()` function may or may not be a child coroutine.  
+If a programmer writes `subtask` assuming it will be called using `spawn`, 
+they can easily break the behavior if the previous function 
+(which they may not even be aware of) is called without `spawn`.
+
+Scope requires the programmer to create an explicit hierarchy.  
+Its main purpose is to provide a space for resource control that affects all coroutines created within the Scope.
+
+Resource control at the top level is a useful tool for organizing applications, frameworks, and libraries.
 
 #### Point of Responsibility
 
@@ -995,6 +1060,10 @@ This way, a place in the code is created that can control the lifetime of corout
 wait for their completion, handle exceptions, or cancel their execution.
 
 Scope serves as a **point of responsibility** in managing coroutine resources.
+
+This is especially useful for frameworks or top-level components that need to control resources and coroutines 
+created by lower-level functions without any knowledge of what those functions do. 
+Without Coroutine Scope, implementing such control at the application level is extremely difficult.
 
 #### Scope waiting
 
