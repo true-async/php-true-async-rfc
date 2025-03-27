@@ -1,22 +1,24 @@
 <?php
 
-function orchestrateDistributedProcess(array $nodes, array $taskConfig): array {
+function orchestrateDistributedProcess(array $nodes, array $taskConfig): array
+{
     async $orchestratorScope {
         $context = $orchestratorScope->context;
         $context->set('job_id', uniqid('job_'));
         $context->set('start_time', microtime(true));
-        $context->set('node_results', []);
+        $context->set('node_results', new ArrayObject());
         
         $nodeHealth = [];
         $activeTasks = [];
         
         // Health check phase
         echo "Performing health checks on {count($nodes)} nodes...\n";
-        async $healthCheckScope {
+        
+        async inherited $healthCheckScope {
             foreach ($nodes as $nodeId => $nodeConfig) {
-                spawn with $healthCheckScope use($nodeId, $nodeConfig, &$nodeHealth) {
+                spawn use($nodeId, $nodeConfig, &$nodeHealth) {
                     try {
-                        $healthResult = await checkNodeHealth($nodeConfig['endpoint']);
+                        $healthResult = checkNodeHealth($nodeConfig['endpoint']);
                         $nodeHealth[$nodeId] = $healthResult;
                         echo "Node $nodeId health: {$healthResult['status']}\n";
                     } catch (Exception $e) {
@@ -29,7 +31,7 @@ function orchestrateDistributedProcess(array $nodes, array $taskConfig): array {
                 };
             }
             
-            await $healthCheckScope->allTasks();
+            $healthCheckScope->awaitAll();
         }
         
         // Filter out unhealthy nodes
@@ -42,11 +44,11 @@ function orchestrateDistributedProcess(array $nodes, array $taskConfig): array {
         echo "Starting distributed task on " . count($availableNodes) . " nodes\n";
         
         // Task distribution phase
-        async $distributionScope {
+        async inherited $distributionScope {
             $distributedTasks = distributeTaskLoad($taskConfig, array_keys($availableNodes));
             
             foreach ($distributedTasks as $nodeId => $nodeTasks) {
-                spawn with $distributionScope use($nodeId, $nodeTasks, $nodes, &$activeTasks) {
+                spawn use($nodeId, $nodeTasks, $nodes, &$activeTasks) {
                     try {
                         $nodeConfig = $nodes[$nodeId];
                         $nodeJobId = currentContext()->get('job_id') . "-$nodeId";
@@ -54,25 +56,24 @@ function orchestrateDistributedProcess(array $nodes, array $taskConfig): array {
                         echo "Submitting " . count($nodeTasks) . " tasks to node $nodeId\n";
                         
                         // Submit tasks to node
-                        $submitResult = await submitTasksToNode($nodeConfig['endpoint'], $nodeJobId, $nodeTasks);
+                        $submitResult = submitTasksToNode($nodeConfig['endpoint'], $nodeJobId, $nodeTasks);
                         $activeTasks[$nodeId] = $submitResult['taskIds'];
                         
                         // Monitor task execution
                         while (true) {
-                            await spawn Async\delay(2000);
+                            Async\delay(2000);
                             
-                            $status = await checkTaskStatus($nodeConfig['endpoint'], $nodeJobId);
+                            $status = checkTaskStatus($nodeConfig['endpoint'], $nodeJobId);
                             
                             echo "Node $nodeId progress: {$status['completed']}/{$status['total']}\n";
                             
                             if ($status['completed'] === $status['total']) {
                                 // All tasks complete, fetch results
-                                $results = await fetchTaskResults($nodeConfig['endpoint'], $nodeJobId);
+                                $results = fetchTaskResults($nodeConfig['endpoint'], $nodeJobId);
                                 
                                 // Store in context
                                 $nodeResults = currentContext()->get('node_results');
                                 $nodeResults[$nodeId] = $results;
-                                currentContext()->set('node_results', $nodeResults);
                                 
                                 break;
                             }
@@ -83,12 +84,11 @@ function orchestrateDistributedProcess(array $nodes, array $taskConfig): array {
                         // Store error in results
                         $nodeResults = currentContext()->get('node_results');
                         $nodeResults[$nodeId] = ['error' => $e->getMessage()];
-                        currentContext()->set('node_results', $nodeResults);
                     }
                 };
             }
             
-            await $distributionScope->allTasks();
+            $distributionScope->awaitAll();
         }
         
         // Process and merge results
