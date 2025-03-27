@@ -188,7 +188,7 @@ function mergeFiles(string ...$files): string
 {
    async $tasks {
        foreach ($files as $file) {
-           spawn file_get_contents($file);
+           spawn file_get_contents($file); // <- direct child task
        }
        
        try {
