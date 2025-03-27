@@ -106,11 +106,11 @@ function loadDashboardData(string $userId): array
     async $dashboardScope {
         
         try {
-            [$profile, $notifications, $activity] = await [
+            [$profile, $notifications, $activity] = await Async\all([
                 spawn fetchUserProfile($userId),
                 spawn fetchUserNotifications($userId),
                 spawn fetchRecentActivity($userId)
-            ] until timeout(5000);
+            ]) until timeout(5000);
             
             return [
                 'profile' => $profile,
@@ -2058,8 +2058,10 @@ function task(): void
 }
 ```
 
-Using a coroutine's local context can be useful for associating objects with a coroutine that **MUST** be unique to each coroutine.  
-For example, a database connection.
+Using a coroutine's local context can be useful for associating objects 
+with a coroutine that **MUST** be unique to each coroutine.  
+
+For example, a database connection:
 
 ```php
 <?php
@@ -2080,12 +2082,23 @@ class ConnectionProxy
     
     public function __destruct()
     {
-        getGlobalConnectionPool()->releaseConnection($this->connection);
+        ConnectionPool::default()->releaseConnection($this->connection);
     }
 }
 
-class ConnectionPool
+final class ConnectionPool
 {
+    static private $pool = null;
+
+    public static function default(): ConnectionPool
+    {
+        if (self::$pool === null) {
+            self::$pool = new ConnectionPool();
+        }
+        
+        return self::$pool;
+   }
+
     private array $pool = [];
     private int $maxConnections = 10;
 
@@ -2118,21 +2131,11 @@ function getDb(): ConnectionProxy
         return $context->get($key);
     }
 
-    $pool = getGlobalConnectionPool();
-    $connection = $pool->getConnection();
+    $connection = ConnectionPool::default()->getConnection();
 
     $context->set($key, $connection);
 
     return $connection;
-}
-
-function getGlobalConnectionPool(): ConnectionPool
-{
-    static $pool = null;
-    if ($pool === null) {
-        $pool = new ConnectionPool();
-    }
-    return $pool;
 }
 
 function printUser(int $id): void 
