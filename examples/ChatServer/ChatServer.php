@@ -1,6 +1,6 @@
 <?php
 
-function handleChatServer(string $host, int $port): void
+function startChatServer(string $host, int $port): void
 {
     async $serverScope {
         // Store connected clients
@@ -15,21 +15,22 @@ function handleChatServer(string $host, int $port): void
         echo "Chat server started on $host:$port\n";
         
         // Accept new connections
-        spawn use($server, &$clients, $serverScope) {
-            while (true) {
-                $client = await spawn socket_accept($server);
+        spawn use($server, &$clients) {
+            while (($client = socket_accept($server)) !== false) {
+                
                 $id = uniqid('client_');
                 $clients[$id] = $client;
                 
-                // Handle each client in a separate coroutine
-                spawn with $serverScope use($client, $id, &$clients) {
+                // Handle each client in a separate coroutine and child scope
+                spawn with Scope::inherit() use($client, $id, &$clients) {
                     try {
                         // Send welcome message
-                        await spawn socket_write($client, "Welcome to the chat room!\n");
+                        socket_write($client, "Welcome to the chat room!\n");
                         
                         // Read messages from this client and broadcast them
                         while (true) {
-                            $message = await spawn socket_read($client, 1024);
+                            $message = socket_read($client, 1024);
+                            
                             if ($message === false || $message === '') {
                                 break; // Client disconnected
                             }
@@ -60,14 +61,27 @@ function handleChatServer(string $host, int $port): void
         try {
             await spawn Async\signal(SIGINT);
         } finally {
+            $serverScope->cancel(new Async\CancellationException("Server shutting down"));
+            
             echo "Shutting down server...\n";
-            foreach ($clients as $client) {
-                socket_close($client);
+            
+            try {
+                await $serverScope->allTasks();
+            } finally {
+                // Close all client sockets
+                if(!empty($clients)) {
+                    user_error('Closing remaining clients', E_USER_WARNING);
+                }
+                
+                foreach ($clients as $client) {
+                    socket_close($client);
+                }
+                
+                socket_close($server);
             }
-            socket_close($server);
         }
     }
 }
 
 // Start the server
-handleChatServer('127.0.0.1', 8080);
+startChatServer('127.0.0.1', 8080);
