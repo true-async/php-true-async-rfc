@@ -59,14 +59,14 @@ function startChatServer(string $host, int $port): void
         
         // Wait for Ctrl+C
         try {
-            await spawn Async\signal(SIGINT);
+            await Async\signal(SIGINT);
         } finally {
             $serverScope->cancel(new Async\CancellationException("Server shutting down"));
             
             echo "Shutting down server...\n";
             
             try {
-                $serverScope->awaitAll(ignoreErrors: true, cancellation: \Async\timeout(5000));
+                $serverScope->awaitAllIgnoringErrors(cancellation: \Async\timeout(5000));
             } finally {
                 // Close all client sockets
                 if(!empty($clients)) {

@@ -6,8 +6,8 @@
 
 This **RFC** describes the **API** and **new syntax** for writing concurrent code in PHP, which includes:
 
-#### Launching any function in non-blocking mode:  
-   
+#### Launching any function in non-blocking mode:
+
 ```php 
 function myFunction(): void 
 {
@@ -48,7 +48,7 @@ Next line
 File content: ...
 ```
 
-#### Waiting for coroutine results 
+#### Waiting for coroutine results
 
 ```php
 echo await spawn file_get_contents("file.txt");
@@ -207,58 +207,58 @@ function mergeFiles(string ...$files): string
 
 The **Scheduler** and **Reactor** components are part of the low-level implementation of this **RFC**.
 
-The **Scheduler** is a component responsible for managing the execution order of coroutines.  
+The **Scheduler** is a component responsible for managing the execution order of coroutines.
 
-> ⚠️ **Warning:** Users should not make assumptions about the execution order of coroutines unless 
+> ⚠️ **Warning:** Users should not make assumptions about the execution order of coroutines unless
 > this is a specific goal of a particular **Scheduler** implementation.
 
-The **Reactor** is a component that implements the **Event Loop**. 
-It may be exposed as a separate API in **PHP-land**, 
+The **Reactor** is a component that implements the **Event Loop**.
+It may be exposed as a separate API in **PHP-land**,
 but its behavior is not defined within this **RFC**.
 
 ### Limitations
 
-This **RFC** does not implement "colored functions" 
-(see: https://journal.stuffwithstuff.com/2015/02/01/what-color-is-your-function/). 
+This **RFC** does not implement "colored functions"
+(see: https://journal.stuffwithstuff.com/2015/02/01/what-color-is-your-function/).
 Instead, it provides **transparent concurrency**, allowing **any function** to be asynchronous.
 
-This **RFC** does not contradict a potential multitasking implementation 
+This **RFC** does not contradict a potential multitasking implementation
 where possible but does not assume its existence.
 
-This **RFC** assumes the ability to create coroutines in other **Threads** using the **Scheduler API** 
+This **RFC** assumes the ability to create coroutines in other **Threads** using the **Scheduler API**
 or separate extensions but does not describe this capability.
 
-This **RFC** also assumes functionality expansion using **SharedMemory**, 
+This **RFC** also assumes functionality expansion using **SharedMemory**,
 specifically designed shared memory objects, through a separate API that is not part of this **RFC**.
 
 ### Namespace
 
 All functions, classes, and constants defined in this **RFC** are located in the `Async` namespace.
-Extensions for **Scheduler/Reactor** are allowed to extend this namespace with functions and classes, 
+Extensions for **Scheduler/Reactor** are allowed to extend this namespace with functions and classes,
 provided that they are directly related to concurrency functionality.
 
 ### Coroutine
 
-> A `Coroutine` is an `execution container`, transparent to the code, 
+> A `Coroutine` is an `execution container`, transparent to the code,
 > that can be suspended on demand and resumed at any time.
 
 Isolated execution contexts make it possible to switch between coroutines and execute tasks concurrently.
 
 Any function can be executed as a coroutine without any changes to the code.
 
-A coroutine can stop itself bypassing control to the `Scheduler`. 
+A coroutine can stop itself bypassing control to the `Scheduler`.
 However, it cannot be stopped externally.
 
 A suspended coroutine can be resumed at any time.
 The `Scheduler` component is responsible for the coroutine resumption algorithm.
 
-A coroutine can be resumed with an **exception**, in which case an exception 
+A coroutine can be resumed with an **exception**, in which case an exception
 will be thrown from the suspension point.
 
 ### Spawn expression
 
-To create coroutines, the `spawn <callable>` expression is used. 
-It launches the `<callable>` in a separate execution context and returns 
+To create coroutines, the `spawn <callable>` expression is used.
+It launches the `<callable>` in a separate execution context and returns
 an instance of the `Async\Coroutine` class as a result.
 
 Let's look at two examples:
@@ -268,8 +268,8 @@ $result = file_get_contents('https://php.net');
 echo "next line".__LINE__."\n";
 ```
 
-This code: 
-1. first returns the contents of the PHP website, 
+This code:
+1. first returns the contents of the PHP website,
 2. then executes the `echo` statement.
 
 ```php
@@ -277,7 +277,7 @@ $coroutine = spawn file_get_contents('https://php.net');
 echo "next line".__LINE__."\n";
 ```
 
-This code: 
+This code:
 1. starts a coroutine with the `file_get_contents` function.
 2. The next line is executed without waiting for the result of `file_get_contents`.
 3. The coroutine is executed after the `echo` statement.
@@ -296,7 +296,7 @@ spawn [with <scope>] [static] [use(<parameters>)][: <returnType>] {
 };
 ```
 
-*where:* 
+*where:*
 
 `function_call` - a valid function call expression:
 
@@ -609,11 +609,11 @@ End reading file1.txt
 End reading file2.txt
 ```
 
-Inside each coroutine, 
-there is an illusion that all actions are executed sequentially, 
+Inside each coroutine,
+there is an illusion that all actions are executed sequentially,
 while in reality, operations occur asynchronously.
 
-This **RFC** proposes support for core PHP functions that require non-blocking input/output, 
+This **RFC** proposes support for core PHP functions that require non-blocking input/output,
 as well as support for CURL, Socket, and other extensions based on the **PHP Stream API**.
 Please see Unaffected PHP Functionality.
 
@@ -634,7 +634,7 @@ The following classes from this **RFC** also implement this interface:
 
 ### Await
 
-The `await` keyword is used to wait for the completion of another coroutine 
+The `await` keyword is used to wait for the completion of another coroutine
 or any object that implements the `Awaitable` interface.:
 
 ```php
@@ -680,9 +680,9 @@ try {
 **where:**
 
 - `resultExp` - An expression that will receive the result of the awaited operation.
-- `awaitExp` - An expression whose result must be an object with the `Async\Awaitable` interface. 
-- `cancellationExp` - An expression that limits the waiting time. 
-Must be an object with the `Async\Awaitable` interface.
+- `awaitExp` - An expression whose result must be an object with the `Async\Awaitable` interface.
+- `cancellationExp` - An expression that limits the waiting time.
+  Must be an object with the `Async\Awaitable` interface.
 
 **Await expression:**
 
@@ -747,8 +747,8 @@ Must be an object with the `Async\Awaitable` interface.
 ##### Motivation
 
 The wait operation is often combined with a `cancellation token`.  
-In modern programming languages, the cancellation token is typically passed as 
-an additional parameter to functions, 
+In modern programming languages, the cancellation token is typically passed as
+an additional parameter to functions,
 which makes the semantics somewhat unclear.
 
 For example:
@@ -801,7 +801,7 @@ await all([...]) until timeout(5);
 #### Using Coroutines with `until`
 
 The `until` keyword allows using coroutines as a `CancellationToken`.
-If an exception occurs in a coroutine that participates in `until`, 
+If an exception occurs in a coroutine that participates in `until`,
 that exception will be thrown at the point where the `await` expression is called.
 
 Example:
@@ -824,21 +824,21 @@ try {
 Caught exception: Error
 ```
 
-> ⚠️ **Warning:** Note that completing the coroutine's await 
+> ⚠️ **Warning:** Note that completing the coroutine's await
 > does not affect the lifetime of the coroutine used with `until`.
 
 ### Edge Behavior
 
 The use of `spawn`/`await`/`suspend` is allowed in almost any part of a PHP program.
-This is possible because the PHP script entry point forms the **main execution thread**, 
-which is also considered a coroutine.  
+This is possible because the PHP script entry point forms the **main execution thread**,
+which is also considered a coroutine.
 
 As a result, keyword like `suspend` and `currentCoroutine()` will behave the same way as in other cases.
 
 If only **one coroutine** exists in the system, calling `suspend` will immediately return control.
 
-The `register_shutdown_function` handler operates in synchronous mode, 
-after asynchronous handlers have already been destroyed. 
+The `register_shutdown_function` handler operates in synchronous mode,
+after asynchronous handlers have already been destroyed.
 Therefore, the `register_shutdown_function` code should not use the concurrency API.
 The `suspend` keyword will have no effect, and the `spawn` operation will not be executed at all.
 
@@ -870,13 +870,13 @@ To manage the lifetime of coroutines and wait for their results, it's convenient
 `Coroutine Scope` is a basic primitive
 that helps associate coroutines with other PHP objects and track their execution at the group level.
 
-`Coroutine Scope` is especially useful when you need to bind coroutines to a PHP object 
+`Coroutine Scope` is especially useful when you need to bind coroutines to a PHP object
 and ensure their execution is terminated as soon as a destructor or a special method is called.
 
 `Coroutine Scope` can be used to implement the **structural concurrency** pattern
 (see [structured concurrency](#structured-concurrency)).
 
-`Coroutine Scope` helps organize a hierarchy of coroutine groups 
+`Coroutine Scope` helps organize a hierarchy of coroutine groups
 and implement all possible scenarios for waiting and management, taking the hierarchy into account.
 
 Let’s look at an example:
@@ -888,8 +888,12 @@ use Async\Scope;
 $scope = new Scope();
 
 spawn with $scope { // <- Task1 will be executed in the $scope context
-    spawn { // <- Subtask executed in the same scope
-        echo "Child of Task 1\n";
+    spawn { // <- Subtask executed in the ChildScope context  
+        echo "Child1 of Task 1\n";
+        
+        spawn { // <- Subtask executed in the ChildScope context
+            echo "Child2 of Task 1\n";
+        };        
     };
     
     echo "Task 1\n";
@@ -897,6 +901,10 @@ spawn with $scope { // <- Task1 will be executed in the $scope context
 
 spawn with $scope { // <- Task2 will be executed in the $scope context
     echo "Task 2\n";
+    
+    spawn { // <- Subtask executed in the ChildScope context
+        echo "Child1 of Task 2\n"; 
+    };
 };
 
 await $scope->allTasks();
@@ -907,28 +915,47 @@ await $scope->allTasks();
 ```
 Task 1
 Task 2
-Child of Task 1
+Child1 of Task 1
+Child1 of Task 2
+Child2 of Task 1
 ```
 
 Structure:
 
 ```
-main()                          ← defines a $scope and run task()
-├── task1()                     ← inherits $scope and run subtask()
-│   └── subtask()               ← inherits $scope
-└── task2()                     ← inherits $scope
+main()                          ← defines a $scope
+├── task1()                     ← runs in the $scope
+│   └── subtask1()              ← runs in the childScope
+│   └── subtask2()              ← runs in the childScope
+└── task2()                     ← runs in the $scope
+    └── subtask3()              ← runs in the childScope
 ```
 
-After the `task1()` coroutine is started using the `spawn with $scope` expression, 
-all child coroutines created within `task1()` will inherit the same `$scope` as `task1()`.
+The expression `spawn in $scope` makes two important changes:
+1. Creates a coroutine that is attached to `$scope`, which is **considered** the parent.
+2. When another coroutine is created inside the new coroutine, it is linked to a child `Scope`,
+   which is specifically created for all child coroutines.
 
-The conclusion follows: **all three child coroutines** belong to the same `$scope`.
+```
+$scope = new Scope();
+├── task1()
+├── task2()
+│
+├── $childScope
+│   └── subtask1()
+│   └── subtask2()
+    └── subtask3()
+```
 
-The coroutine with text `"Child of Task 1"` also belongs to `$scope`, 
-meaning it is at the same level as the `"Task 1"` and `"Task 2"` coroutines.
+This leads to two important consequences:
+1. The direct descendants of `$scope` are only those tasks that were explicitly attached to the `Scope`.
+2. All other tasks belong either to child `Scopes`, which were created explicitly or implicitly, or to other `Scopes`.
 
-If the `$scope` object is destroyed (i.e., its destructor is called), 
-the coroutines that did not have time to complete will be marked as **zombie coroutine** or "orphan coroutine".
+This approach ensures that no "accidental tasks" are added to the `$scope`.  
+All other tasks created via `spawn` will be explicit child coroutines.
+
+If the `$scope` object is destroyed (i.e., its destructor is called),
+the coroutines that did not have time to complete will be marked as **zombie coroutine**.
 
 **Zombie coroutines** are considered a result of a programming error and are handled specially  
 (See section: [Zombie coroutine policy](#zombie-coroutine-policy)).
@@ -957,7 +984,7 @@ Task 1
 Child of Task 1
 ```
 
-This happens because the `Scope` object loses its last reference, 
+This happens because the `Scope` object loses its last reference,
 triggering the destructor, which monitors the execution progress of all child coroutines.
 
 This makes `Scope` objects a good (though not the best) tool for managing the lifetime of coroutines.  
@@ -988,11 +1015,11 @@ class Service
 
 #### Motivation
 
-The Coroutine Scope in this **RFC**, 
-although inspired by the similarly named pattern from Kotlin, 
-is not an analog and has no equivalents in other languages.  
+The Coroutine Scope in this **RFC**,
+although inspired by the similarly named pattern from Kotlin,
+is not an analog and has no equivalents in other languages.
 
-The competitor to Coroutine Scope is the coroutine hierarchy, 
+The competitor to Coroutine Scope is the coroutine hierarchy,
 where each coroutine started within another automatically becomes a child.
 
 The main reason why a simple coroutine hierarchy was rejected is that the following code creates ambiguity:
@@ -1011,12 +1038,12 @@ task();
 ```
 
 The main reason why a simple coroutine hierarchy was rejected is the absence of colored functions.  
-The following code demonstrates how the hierarchy rule behaves ambiguously 
+The following code demonstrates how the hierarchy rule behaves ambiguously
 when the same function can be called both as a coroutine and as a regular function.
 
 In the example above, the `task()` function may or may not be a child coroutine.  
-If a programmer writes `subtask` assuming it will be called using `spawn`, 
-they can easily break the behavior if the previous function 
+If a programmer writes `subtask` assuming it will be called using `spawn`,
+they can easily break the behavior if the previous function
 (which they may not even be aware of) is called without `spawn`.
 
 Scope requires the programmer to create an explicit hierarchy.  
@@ -1026,8 +1053,8 @@ Resource control at the top level is a useful tool for organizing applications, 
 
 #### Point of Responsibility
 
-The `spawn <callable>` expression allows you to create coroutines, 
-but it says nothing about who "owns" the coroutines. 
+The `spawn <callable>` expression allows you to create coroutines,
+but it says nothing about who "owns" the coroutines.
 This can become a source of errors, as resources are allocated without explicit management.
 
 Scope helps solve this problem by implementing responsibility for coroutine ownership.
@@ -1053,16 +1080,16 @@ main()                          ← defines a $scope and run task()
     └── subtask()               ← inherits $scope
 ```
 
-Once `$scope` is defined and a coroutine is created from it, 
+Once `$scope` is defined and a coroutine is created from it,
 `$scope` is inherited throughout the entire depth of function calls.
 
-This way, a place in the code is created that can control the lifetime of coroutines, 
+This way, a place in the code is created that can control the lifetime of coroutines,
 wait for their completion, handle exceptions, or cancel their execution.
 
 Scope serves as a **point of responsibility** in managing coroutine resources.
 
-This is especially useful for frameworks or top-level components that need to control resources and coroutines 
-created by lower-level functions without any knowledge of what those functions do. 
+This is especially useful for frameworks or top-level components that need to control resources and coroutines
+created by lower-level functions without any knowledge of what those functions do.
 Without Coroutine Scope, implementing such control at the application level is extremely difficult.
 
 #### Scope waiting
@@ -1113,9 +1140,9 @@ function processAllUsers(string ...$users): array
 }
 ```
 
-The code `return await all($coroutines)` waits for the completion of all tasks 
+The code `return await all($coroutines)` waits for the completion of all tasks
 that were explicitly started within this function.
-However, if the `processUser` function created other coroutines that, 
+However, if the `processUser` function created other coroutines that,
 for some reason, continue to run after `processUser` has finished,  
 there is a risk of a resource leak.
 
@@ -1123,7 +1150,7 @@ This problem has three solutions:
 
 1. You can wait for **all coroutines** that were created within a single `Scope`.  
    In this case, there is a higher chance that all nested calls will eventually complete properly.  
-   However, there's also a higher risk that more tasks will remain in a waiting state, 
+   However, there's also a higher risk that more tasks will remain in a waiting state,
    which means more memory consumption.
 
 2. You can wait only for the coroutines that are explicitly needed,  
@@ -1131,7 +1158,7 @@ This problem has three solutions:
    In this case, there will be no resource leaks.  
    However, there's a risk that an important coroutine might be mistakenly cancelled.
 
-3. You can create a **point of responsibility**, 
+3. You can create a **point of responsibility**,
    a special place in the code where resource leak control will be performed.
 
 Scope helps implement any of these strategies.
@@ -1154,9 +1181,14 @@ function processAllUsers(string ...$users): array
 ```
 
 In this example, the `processAllUsers` function must return the computation results of `processUser` for each user.  
-`processAllUsers` has no knowledge of how `processUser` is implemented.  
-Using `await $scope->directTasks()`, `processAllUsers` waits for the results of all coroutines created 
+`processAllUsers` has no knowledge of how `processUser` is implemented.
+
+Using `await $scope->directTasks()`, `processAllUsers` waits for the results of all coroutines created
 inside the `foreach ($users as $user)` loop.
+
+The `directTasks` method returns an `Awaitable` object
+that completes as soon as all direct child tasks of `$scope` have finished.  
+Only tasks that were explicitly added via `spawn with` can be direct children of `$scope`.
 
 When the `await $scope->directTasks()` has completed,  
 the coroutine created by `processUser` will not stop its execution.
@@ -1164,17 +1196,17 @@ the coroutine created by `processUser` will not stop its execution.
 The `finally` block calls `$scope->dispose()`, which cancels all coroutines that were created within the `Scope`.
 Calling `dispose()` explicitly cancels all zombie coroutines with a warning message.
 
-You can also use the `disposeAfterTimeout` and `disposeSafely` methods 
+You can also use the `disposeAfterTimeout` and `disposeSafely` methods
 as alternative scenarios for cleaning up a `Scope`, see [Scope disposal](#scope-disposal).
 
 **Another scenario:**
 
-* There is a **Job Manager** that launches various tasks.  
-* It has no idea what exactly each task might do.  
+* There is a **Job Manager** that launches various tasks.
+* It has no idea what exactly each task might do.
 * However, it must guarantee that no more than **N** tasks are running at the same time.
 
-To achieve this, it needs to wait until all tasks have completed — regardless of whether some coroutines 
-were mistakenly created or not — because for the Job Manager, 
+To achieve this, it needs to wait until all tasks have completed — regardless of whether some coroutines
+were mistakenly created or not — because for the Job Manager,
 **waiting is more important than forcefully destroying data**.
 
 ```php
@@ -1189,6 +1221,9 @@ function processBackgroundJobs(string ...$jobs): array
     await $scope->allTasks();
 }
 ```
+
+The `allTasks()` method returns an `Awaitable` object that completes when all tasks of `$scope`,
+including those within child scopes, have finished.
 
 You can use an additional constraint like `until timeout(int $value)` to limit the waiting time,  
 or you can approach the problem a bit differently:
@@ -1221,14 +1256,62 @@ Then, it waits for any remaining tasks. If there are any, a `CancellationExcepti
 and the code logs information about which coroutines were not properly completed.  
 After that, it waits for their completion again.
 
+#### directTasks and allTasks
+
+The `Scope::directTasks` and `Scope::allTasks` methods return a notifier object,
+which can be used in combination with `await`
+to suspend the coroutine until the tasks within `$scope` have completed execution.
+
+| Feature                          | `Scope::directTasks`                                  | `Scope::allTasks`                                       |
+|----------------------------------|-------------------------------------------------------|---------------------------------------------------------|
+| **Returns**                      | `Awaitable` (notifier object)                         | `Awaitable` (notifier object)                           |
+| **What it waits for**            | Only direct child tasks of `$scope`                   | All tasks within `$scope`, including in child scopes    |
+| **Includes nested scopes**       | No                                                    | Yes                                                     |
+| **Used for**                     | Waiting for explicitly spawned tasks in current scope | Waiting for complete task tree under `$scope`           |
+| **Common use case**              | Fine-grained control over immediate child tasks       | Ensuring total completion of all tasks in the hierarchy |
+
+
+#### awaitAllIgnoringErrors
+
+Sometimes it's necessary to wait for all tasks to complete before exiting a function permanently.
+
+For example, in a web server scenario, when a user presses **CTRL-C**, 
+the program should stop executing: 
+* First, the `cancel()` method is called, which cancels all child tasks. But that's not the end yet. 
+* The tasks are still running. Therefore, it's essential to explicitly wait for them to finish.
+
+```php
+    // Wait for Ctrl+C
+    try {
+       await Async\signal(SIGINT);
+    } finally {
+       $serverScope->cancel(new Async\CancellationException("Server shutting down"));
+       
+       echo "Shutting down server...\n";
+       
+       try {
+           $serverScope->awaitAllIgnoringErrors(errorHandler: function (Async\Scope $scope, Async\Coroutine $coroutine, Throwable $e) {
+                echo "Caught exception: {$e->getMessage()}\n in coroutine: {$coroutine->getSpawnLocation()}\n";
+           }, cancellation: \Async\timeout(5000));
+       } finally {
+           // Cleanup code
+       }
+    }
+```
+
+The `Scope::awaitAllIgnoringErrors` method allows waiting for the complete termination of a `Scope`, 
+ignoring exceptions. If an `$errorHandler` is defined, it can additionally output error information.
+
+Please see also the [Scope::setExceptionHandler method](#error-handling).
+
 #### Scope Hierarchy
 
 A hierarchy can be a convenient way to describe an application as a set of dependent tasks:
- 
-* Parent tasks are connected to child tasks and are responsible for their execution time.  
-* Tasks on the same hierarchy level are independent of each other.  
-* Parent tasks should control their child tasks.  
-* Child tasks MUST NOT control or wait for their parent tasks.  
+
+* Parent tasks are connected to child tasks and are responsible for their execution time.
+* Tasks on the same hierarchy level are independent of each other.
+* Parent tasks should control their child's tasks.
+* Child tasks MUST NOT control or wait for their parent tasks.
 * It is correct if tasks at the same hierarchy level are only connected to tasks of the immediate child level.
 
 ```
@@ -1364,12 +1447,12 @@ function socketServer(): void
 Let's examine how this example works.
 
 1. `socketServer` creates a new Scope for coroutines that will handle all connections.
-2. Each new connection is processed using `connectionHandler()` in a separate `Scope`, 
-which is inherited from the main one.
+2. Each new connection is processed using `connectionHandler()` in a separate `Scope`,
+   which is inherited from the main one.
 3. `connectionHandler` creates a new `Scope` for the `connectionLimiter` and `connectionChecker` coroutines.
 4. `connectionHandler` creates coroutine: `connectionLimiter()` to limit the processing time of the request.
-5. `connectionHandler` creates coroutine, `connectionChecker()`, to monitor the connection's activity. 
-As soon as the client disconnects, `connectionChecker` will cancel all coroutines related to the request.
+5. `connectionHandler` creates coroutine, `connectionChecker()`, to monitor the connection's activity.
+   As soon as the client disconnects, `connectionChecker` will cancel all coroutines related to the request.
 6. If the main `Scope` is closed, all coroutines handling requests will also be canceled.
 
 ```
@@ -1388,16 +1471,16 @@ GLOBAL <- globalScope
 ```
 
 The `connectionHandler` doesn't worry if the lifetimes of the `connectionLimiter` or `connectionChecker`
-coroutines exceed the lifetime of the main coroutine handling the request, 
+coroutines exceed the lifetime of the main coroutine handling the request,
 because it is guaranteed to call `$scope->cancel()` when the main coroutine finishes.
 
-`$limiterScope` is used to explicitly define a child-group of coroutines 
+`$limiterScope` is used to explicitly define a child-group of coroutines
 that should be cancelled when the request is completed. This approach minimizes errors.
 
-On the other hand, if the server receives a shutdown signal, 
+On the other hand, if the server receives a shutdown signal,
 all child `Scopes` will be cancelled because the main `Scope` will be cancelled as well.
 
-Note that the coroutine waiting on `await Async\signal(SIGINT)` will not remain hanging in memory 
+Note that the coroutine waiting on `await Async\signal(SIGINT)` will not remain hanging in memory
 if the server shuts down in another way, because `$scope` will be explicitly closed in the `finally` block.
 
 #### Scope cancellation
@@ -1432,9 +1515,9 @@ $scope->cancel();
 #### Scope Cancellation Order
 
 If a `Scope` has child `Scopes`, the coroutines in the child `Scopes` will be canceled first,
-followed by those in the parent — from the bottom up in the hierarchy. 
-This approach increases the likelihood that resources will be released correctly. 
-However, it does not guarantee this, 
+followed by those in the parent — from the bottom up in the hierarchy.
+This approach increases the likelihood that resources will be released correctly.
+However, it does not guarantee this,
 since the exact order of coroutines in the execution queue cannot be determined with 100% certainty.
 
 #### Scope disposal
@@ -1450,7 +1533,7 @@ The `Scope::dispose*` methods terminates the execution of a `Scope` differently 
 It goes through all child coroutines that were explicitly defined using a `spawn with` expression and cancels them.
 All implicit coroutines that have not completed execution are marked as **Zombie**.
 
-When a **Zombie** coroutine is detected, PHP generates a warning indicating the location where the coroutine was started. 
+When a **Zombie** coroutine is detected, PHP generates a warning indicating the location where the coroutine was started.
 The later behavior depends on the selected strategy:
 
 - `dispose` – immediately cancels the coroutine.
@@ -1544,8 +1627,8 @@ spawn with $scope { // <- Fatal error
 
 ### Async blocks
 
-The `async` block allows you to create a code section in which 
-the `$scope` is explicitly created and explicitly disposed. 
+The `async` block allows you to create a code section in which
+the `$scope` is explicitly created and explicitly disposed.
 
 The following is a code example:
 
@@ -1574,18 +1657,18 @@ async $scope {
 The `async` block does the following:
 
 1. It creates a new `Scope` object and assigns it to the variable specified at the beginning of the block as `$scope`.
-2. All coroutines will, by default, be created within `$scope`. 
-That is, expressions like `spawn <callable>` will be equivalent to `spawn with $scope <callable>`.
-3. When the async block finishes its execution, 
-   it calls the `Scope::disposeSafely` method, 
+2. All coroutines will, by default, be created within `$scope`.
+   That is, expressions like `spawn <callable>` will be equivalent to `spawn with $scope <callable>`.
+3. When the async block finishes its execution,
+   it calls the `Scope::disposeSafely` method,
    or `Scope::dispose` if the `bounded` attribute is specified.
-   
+
 #### Motivation
 
-The `async` block allows for describing groups of coroutines in a clearer 
+The `async` block allows for describing groups of coroutines in a clearer
 and safer way than manually using `Async\Scope`.
 
-* **Advantages**: Using `async` blocks improves code readability and makes it easier to analyze with static analyzers.  
+* **Advantages**: Using `async` blocks improves code readability and makes it easier to analyze with static analyzers.
 * **Drawback**: an `async` block is useless if `Scope` is used as an object property.
 
 Consider the following code:
@@ -1643,7 +1726,7 @@ function generateReport(): void
 
 ```
 
-Using an `async` block with `bounded` attribute makes it easier to describe a pattern 
+Using an `async` block with `bounded` attribute makes it easier to describe a pattern
 where a group of coroutines is created with one main coroutine and several secondary ones.  
 As soon as the main coroutine completes, all the secondary coroutines will be terminated along with it.
 
@@ -1708,9 +1791,9 @@ async &$object
 
 - `inherit` - a keyword that allows inheriting the parent `Scope` object.
 
-- `bounded` - a keyword that cancels all child coroutines 
-   if they have not been completed by the time the `Scope` block exits. 
-   Without this attribute, such coroutines are marked as **Zombie**.
+- `bounded` - a keyword that cancels all child coroutines
+  if they have not been completed by the time the `Scope` block exits.
+  Without this attribute, such coroutines are marked as **Zombie**.
 
 - `codeBlock` - a block of code that will be executed in the `Scope` context.
 
@@ -1778,7 +1861,7 @@ try {
 
 In this example, the main task opens files in order to process data in subtasks.  
 The files must remain open until the subtasks are completed.  
-This illustrates the key idea of structured concurrency: 
+This illustrates the key idea of structured concurrency:
 tying the lifetime of child tasks to the scope that allocates resources.  
 Both the child tasks and the resources must be cleaned up in a well-defined order.
 
@@ -1789,11 +1872,11 @@ Detecting erroneous situations when using coroutines is an important part of ana
 The following scenarios are considered potentially erroneous:
 
 1. A coroutine belongs to a global scope and is not awaited by anyone (a **zombie coroutine**).
-2. The root scope has been destroyed (its destructor was called), but no one awaited 
-it or ensured that its resources were explicitly cleaned up (e.g., by calling `$scope->cancel()` or `$scope->dispose()`).
+2. The root scope has been destroyed (its destructor was called), but no one awaited
+   it or ensured that its resources were explicitly cleaned up (e.g., by calling `$scope->cancel()` or `$scope->dispose()`).
 3. Tasks were not cancelled using the `cancel()` method, but through a call to `dispose()`.  
-This indicates that the programmer did not intend to cancel the execution of the coroutine,  
-yet it happened because the scope was destroyed.
+   This indicates that the programmer did not intend to cancel the execution of the coroutine,  
+   yet it happened because the scope was destroyed.
 4. Deadlocks caused by circular dependencies between coroutines.
 
 **PHP** will respond to such situations by issuing **warnings**, including debug information about the involved coroutines.  
@@ -1802,8 +1885,8 @@ Developers are expected to write code in a way that avoids triggering these warn
 #### Error mitigation strategies
 
 The only way to create **zombie coroutines** is by using the `spawn` expression in the `globalScope`.  
-However, if the initial code explicitly creates a scope and treats it as the application's entry point, 
-the initializing code gains full control — because `spawn <callable>` will no longer 
+However, if the initial code explicitly creates a scope and treats it as the application's entry point,
+the initializing code gains full control — because `spawn <callable>` will no longer
 be able to create a coroutine in `globalScope`, thus preventing the application from hanging beyond the entry point.
 
 There’s still a way to use global variables and `new Scope` to launch a coroutine that runs unchecked:
@@ -1816,9 +1899,9 @@ spawn with $GLOBALS['my'] { ... };
 But such code can't be considered an accidental mistake.
 
 To avoid accidentally hanging coroutines whose lifetimes were not correctly limited, follow these rules:
- 
-* Use **separate Scopes** for different coroutines. This is the best practice, 
-as it allows explicitly defining lifetime dependencies between Scopes.
+
+* Use **separate Scopes** for different coroutines. This is the best practice,
+  as it allows explicitly defining lifetime dependencies between Scopes.
 * Use `Scope::dispose()`. The `dispose()` method cancels coroutine execution and logs an error.
 * Don’t mix semantically different coroutines within the same `Scope`.
 * Avoid building hierarchies between `Scopes` with complex interdependencies.
@@ -1826,7 +1909,7 @@ as it allows explicitly defining lifetime dependencies between Scopes.
 * The principle of single point of responsibility and `Scope` ownership.
   Do not pass the `Scope` object to different coroutine functions (unless the action happens in a closure).
   Do not store `Scope` objects in different places.
-  Violating this rule can lead to manipulations with `Scope`, 
+  Violating this rule can lead to manipulations with `Scope`,
   which may cause a deadlock or disrupt the application's logic.
 * Child coroutines should not wait for their parents.
   Child Scopes should not wait for their parents.
@@ -1901,16 +1984,16 @@ final class ProcessPool
 }
 ```
 
-The example above demonstrates how splitting coroutines into 
+The example above demonstrates how splitting coroutines into
 Scopes helps manage their interaction and reduces the likelihood of errors.
 
-Here, `watcherScope` monitors tasks in `poolScope`. 
-When a process finishes, the watcher detects this event and, if necessary, starts a new process or not. 
+Here, `watcherScope` monitors tasks in `poolScope`.
+When a process finishes, the watcher detects this event and, if necessary, starts a new process or not.
 The monitoring logic is completely separated from the process startup logic.
 
 The lifetime of `watcherScope` matches that of `poolScope`, but not longer than the lifetime of the watcher itself.
 
-The overall lifetime of all coroutines in the `ProcessPool` is determined by the lifetime of the `ProcessPool` 
+The overall lifetime of all coroutines in the `ProcessPool` is determined by the lifetime of the `ProcessPool`
 object or by the moment the `stop()` method is explicitly called.
 
 #### Zombie coroutine policy
@@ -1923,27 +2006,27 @@ terminate coroutines, which could lead to data integrity violations.
 
 If there are no active coroutines left in the execution queue and no events to wait for, the application is considered complete.
 
-Zombie coroutines differ from regular ones in that they are not counted as active. 
-Once the application is considered finished, 
-zombie coroutines are given a time limit within which they must complete execution. 
+Zombie coroutines differ from regular ones in that they are not counted as active.
+Once the application is considered finished,
+zombie coroutines are given a time limit within which they must complete execution.
 If this limit is exceeded, all zombie coroutines are canceled.
 
-The delay time for handling zombie coroutines can be configured using 
+The delay time for handling zombie coroutines can be configured using
 a constant in the `ini` file: `async.zombie_coroutine_timeout`, which is set to two seconds by default.
 
-If a coroutine is created within a user-defined `Scope`, the programmer 
+If a coroutine is created within a user-defined `Scope`, the programmer
 can set a custom timeout for that specific `Scope` using the `Scope::disposeAfterTimeout(int $ms)` method.
 
 ### Context
 
 #### Motivation
 
-Libraries and frameworks often use variables that are shared within a request to store common data. 
-These variables are not **Global** in the general sense, 
+Libraries and frameworks often use variables that are shared within a request to store common data.
+These variables are not **Global** in the general sense,
 but they essentially reflect a shared state related to the request or execution scope.
 
-For example, the `TokenStorage` class 
-(https://github.com/symfony/symfony/blob/7.3/src/Symfony/Component/Security/Core/Authentication/Token/Storage/TokenStorage.php) 
+For example, the `TokenStorage` class
+(https://github.com/symfony/symfony/blob/7.3/src/Symfony/Component/Security/Core/Authentication/Token/Storage/TokenStorage.php)
 from `Symfony` allows retrieving the user token multiple times, as it is stored in a variable.
 
 Or `/src/Illuminate/Auth/TokenGuard.php` from `Laravel`:
@@ -1971,22 +2054,22 @@ Or `/src/Illuminate/Auth/TokenGuard.php` from `Laravel`:
     }
 ```
 
-This code assumes that a single `process`/`thread` always handles only one request at a time. 
-However, in a concurrent web server environment, 
+This code assumes that a single `process`/`thread` always handles only one request at a time.
+However, in a concurrent web server environment,
 shared states can no longer be used because the execution context may switch unexpectedly.
 
-You can use `Coroutine ID` and `Map` to associate a unique coroutine ID with specific data. 
-However, in this case, you must ensure that the data is properly released 
+You can use `Coroutine ID` and `Map` to associate a unique coroutine ID with specific data.
+However, in this case, you must ensure that the data is properly released
 when the coroutine ceases to exist.
 
-In addition to storing request-specific data, 
-concurrent code must also ensure the proper handling of input/output descriptors. 
-For example, when implementing a protocol, data must be sent in a specific sequence. 
-If a socket is used by two coroutines simultaneously for reading/writing, 
+In addition to storing request-specific data,
+concurrent code must also ensure the proper handling of input/output descriptors.
+For example, when implementing a protocol, data must be sent in a specific sequence.
+If a socket is used by two coroutines simultaneously for reading/writing,
 the order of operations may be disrupted.
 
-Another example is database transactions. 
-Code that starts a transaction cannot release the database connection socket until 
+Another example is database transactions.
+Code that starts a transaction cannot release the database connection socket until
 the transaction is completed.
 
 The `Async\Context` class is designed to help solve these issues.
@@ -2010,16 +2093,16 @@ The `Async\Context` class defines three groups of methods:
 | `unset(string\|object $key): self`                                    | Delete a value by key from the Context.                 |
 
 
-**Context Slots** are an efficient mechanism for managing memory 
+**Context Slots** are an efficient mechanism for managing memory
 associated with `Scope` or coroutine lifetimes.  
-Once all coroutines owning the Scope complete, 
+Once all coroutines owning the Scope complete,
 or the Scope itself is terminated, all data in the slots will be released.
 
 This helps the programmer associate data with coroutines without writing explicit cleanup code.
 
-To ensure data encapsulation between different components, 
+To ensure data encapsulation between different components,
 **Coroutine Scope Slots** provide the ability to associate data using **key objects**.  
-An object instance is unique across the entire application, 
+An object instance is unique across the entire application,
 so code that does not have access to the object cannot read the data associated with it.
 
 This pattern is used in many programming languages and is represented in JavaScript by a special class, **Symbol**.
@@ -2036,7 +2119,7 @@ if(currentContext()->has($key)) {
 ```
 
 **Coroutine Scope Slots** can automatically dereference **WeakReference**.  
-If you assign a **WeakReference** to a slot and then call `find()`, 
+If you assign a **WeakReference** to a slot and then call `find()`,
 you will receive the original object or `NULL`.
 
 ```php
@@ -2101,12 +2184,12 @@ if it exists, or the global application context if it does not.
 
 #### Coroutine local context
 
-While a `Scope` can serve as a shared context in the coroutine hierarchy, 
-a coroutine's **local context** is a personal data store strictly tied to the coroutine's lifetime. 
+While a `Scope` can serve as a shared context in the coroutine hierarchy,
+a coroutine's **local context** is a personal data store strictly tied to the coroutine's lifetime.
 The local context allows associating data slots that are automatically freed once the coroutine completes.
 
-The local coroutine context is accessible via the `Async\coroutineContext()` function, 
-which returns an `Async\Context` object. 
+The local coroutine context is accessible via the `Async\coroutineContext()` function,
+which returns an `Async\Context` object.
 The `Async\Context` class provides the same methods for working with slots as the `Scope` class:
 
 ```php
@@ -2121,8 +2204,8 @@ function task(): void
 }
 ```
 
-Using a coroutine's local context can be useful for associating objects 
-with a coroutine that **MUST** be unique to each coroutine.  
+Using a coroutine's local context can be useful for associating objects
+with a coroutine that **MUST** be unique to each coroutine.
 
 For example, a database connection:
 
@@ -2213,7 +2296,7 @@ spawn printUser(1);
 spawn printUser(2);
 ```
 
-This code relies on the fact that an instance of the `ConnectionProxy` 
+This code relies on the fact that an instance of the `ConnectionProxy`
 class will be destroyed as soon as the coroutine completes.  
 The destructor will be called, and the connection will automatically return to the pool.
 
@@ -2221,19 +2304,19 @@ The destructor will be called, and the connection will automatically return to t
 
 An uncaught exception in a coroutine follows this flow:
 
-1. If the coroutine is awaited using the `await` keyword, 
-the exception is propagated to the awaiting points. 
-If multiple points are awaiting, each will receive the same exception
-(**Each await point will receive the exact same exception object, not cloned**).
+1. If the coroutine is awaited using the `await` keyword,
+   the exception is propagated to the awaiting points.
+   If multiple points are awaiting, each will receive the same exception
+   (**Each await point will receive the exact same exception object, not cloned**).
 2. The exception is passed to the `Scope`.
 3. If the `Scope` has an exception handler defined, it will be invoked.
-4. If the `Scope` does not have an exception handler, the `cancel()` method is called, 
-canceling all coroutines in this scope from top to bottom in the hierarchy, including all child scopes.
-5. If the `Scope` has responsibility points, i.e., the construction `await $scope`, 
-all responsibility points receive the exception.
+4. If the `Scope` does not have an exception handler, the `cancel()` method is called,
+   canceling all coroutines in this scope from top to bottom in the hierarchy, including all child scopes.
+5. If the `Scope` has responsibility points, i.e., the construction `await $scope`,
+   all responsibility points receive the exception.
 6. Otherwise, the exception is passed to the parent scope if it is defined.
-7. If there is no parent scope, the exception falls into `globalScope`, 
-where the same rules apply as for a regular scope.
+7. If there is no parent scope, the exception falls into `globalScope`,
+   where the same rules apply as for a regular scope.
 
 ```puml
 @startuml
@@ -2305,7 +2388,7 @@ await $scope2->directTasks();
 echo $exception1 === $exception2 ? "The same exception\n" : "Different exceptions\n";
 ```
 
-If an exception reaches `globalScope` and is not handled in any way, 
+If an exception reaches `globalScope` and is not handled in any way,
 it triggers **Graceful Shutdown Mode**, which will terminate the entire application.
 
 The `Scope` class allows defining an exception handler that can prevent exception propagation.
@@ -2329,12 +2412,12 @@ $scope->spawn(function() {
 Async\await($scope);
 ```
 
-Using these handlers, 
-you can implement the **Supervisor** pattern, i.e., 
+Using these handlers,
+you can implement the **Supervisor** pattern, i.e.,
 a **Scope** that will not be canceled when an exception occurs in coroutines.
 
-The **`setChildScopeExceptionHandler`** method allows handling exceptions only from **child Scopes**, 
-which can be useful for implementing an algorithm where the **main Scope** runs core tasks, 
+The **`setChildScopeExceptionHandler`** method allows handling exceptions only from **child Scopes**,
+which can be useful for implementing an algorithm where the **main Scope** runs core tasks,
 while **child Scopes** handle additional ones.
 
 For example:
@@ -2381,8 +2464,8 @@ final class Service
 Canceling `$this->scope` means shutting down the entire service.
 
 Each new connection is handled in a separate **Scope**, which is inherited from `$this->scope`.  
-If an exception occurs in a coroutine created within a **child Scope**, 
-it will be passed to the `setChildScopeExceptionHandler` handler and will not affect 
+If an exception occurs in a coroutine created within a **child Scope**,
+it will be passed to the `setChildScopeExceptionHandler` handler and will not affect
 the operation of the service as a whole.
 
 ```puml
@@ -2430,7 +2513,7 @@ try {
 }      
 ```
 
-A **responsibility point** has a chance to receive 
+A **responsibility point** has a chance to receive
 not only the result of the coroutine execution but also an unhandled exception.
 
 #### Exception Handling
@@ -2452,7 +2535,7 @@ await $scope;
 ```
 
 An exception handler has the right to suppress the exception.  
-However, if the exception handler throws another exception, 
+However, if the exception handler throws another exception,
 the exception propagation algorithm will continue.
 
 #### onCompletion
@@ -2490,7 +2573,7 @@ $coroutine->onCompletion(function () {
 
 ```
 
-The `onCompletion` semantics are most commonly used to release resources, 
+The `onCompletion` semantics are most commonly used to release resources,
 serving as a shorter alternative to `try-finally` blocks:
 
 ```php
@@ -2507,7 +2590,7 @@ spawn task();
 
 ### Cancellation
 
-The cancellation operation is available for coroutines and scopes 
+The cancellation operation is available for coroutines and scopes
 using the `cancel()` method:
 
 ```php
@@ -2527,7 +2610,7 @@ The cancellation operation is implemented as follows:
 
 The `CancellationException`, if unhandled within a coroutine, is automatically suppressed after the coroutine completes.
 
-> ⚠️ **Warning:** You should not attempt to suppress `CancellationException` exception, 
+> ⚠️ **Warning:** You should not attempt to suppress `CancellationException` exception,
 > as it may cause application malfunctions.
 
 ```php
@@ -2541,11 +2624,11 @@ spawn with $scope {
 $scope->cancel(new Async\CancellationException('Task was cancelled'));
 ```
 
-Canceling a `Scope` triggers the cancellation of all coroutines 
+Canceling a `Scope` triggers the cancellation of all coroutines
 within that `Scope` and all child `Scopes` in hierarchical order.
 
 >
-> **Note:** `CancellationException` can be extended by the user 
+> **Note:** `CancellationException` can be extended by the user
 > to add metadata that can be used for debugging purposes.
 >
 
@@ -2553,8 +2636,8 @@ within that `Scope` and all child `Scopes` in hierarchical order.
 
 In the context of coroutines, it is not recommended to use `catch \Throwable` or `catch CancellationException`.
 
-Since `CancellationException` does not extend the `\Exception` class, 
-using `catch \Exception` is a safe way to handle exceptions, 
+Since `CancellationException` does not extend the `\Exception` class,
+using `catch \Exception` is a safe way to handle exceptions,
 and the `finally` block is the recommended way to execute finalizing code.
 
 ```php
@@ -2617,23 +2700,23 @@ The end
 
 #### CancellationException propagation
 
-The `CancellationException` affects PHP standard library functions differently. 
-If it is thrown inside one of these functions that previously did not throw exceptions, 
+The `CancellationException` affects PHP standard library functions differently.
+If it is thrown inside one of these functions that previously did not throw exceptions,
 the PHP function will terminate with an error.
 
-In other words, the `cancel()` mechanism does not alter the existing function contract. 
+In other words, the `cancel()` mechanism does not alter the existing function contract.
 PHP standard library functions behave as if the operation had failed.
 
-Additionally, the `CancellationException` will not appear in `get_last_error()`, 
-but it may trigger an `E_WARNING` to maintain compatibility with expected behavior 
+Additionally, the `CancellationException` will not appear in `get_last_error()`,
+but it may trigger an `E_WARNING` to maintain compatibility with expected behavior
 for functions like `fwrite` (if such behavior is specified in the documentation).
 
 #### withoutCancellation function
 
-Sometimes it's necessary to execute a critical section of code that must not be cancelled via `CancellationException`. 
+Sometimes it's necessary to execute a critical section of code that must not be cancelled via `CancellationException`.
 For example, this could be a sequence of write operations or a transaction.
 
-For this purpose, the `Async\withoutCancellation` function is used, 
+For this purpose, the `Async\withoutCancellation` function is used,
 which allows executing a closure in a non-cancellable (silent) mode.
 
 ```php
@@ -2656,13 +2739,13 @@ Unlike the `cancel()` operation, they do not allow for proper resource cleanup.
 ### Graceful Shutdown
 
 When an **unhandled exception** occurs in a **Coroutine**
-the **Graceful Shutdown** mode is initiated. 
+the **Graceful Shutdown** mode is initiated.
 Its goal is to safely terminate the application.
 
-**Graceful Shutdown** cancels all coroutines in `globalScope`, 
+**Graceful Shutdown** cancels all coroutines in `globalScope`,
 then continues execution without restrictions, allowing the application to shut down naturally.  
-**Graceful Shutdown** does not prevent the creation of new coroutines or close connection descriptors. 
-However, if another unhandled exception is thrown during the **Graceful Shutdown** process, 
+**Graceful Shutdown** does not prevent the creation of new coroutines or close connection descriptors.
+However, if another unhandled exception is thrown during the **Graceful Shutdown** process,
 the second phase is triggered.
 
 **Second Phase of Graceful Shutdown**
@@ -2670,7 +2753,7 @@ the second phase is triggered.
 - All **timers** are destroyed.
 - Any remaining coroutines that were not yet canceled will be **forcibly canceled**.
 
-The further shutdown logic may depend on the specific implementation of the **Scheduler** component, 
+The further shutdown logic may depend on the specific implementation of the **Scheduler** component,
 which can be an external system and is beyond the scope of this **RFC**.
 
 The **Graceful Shutdown** mode can also be triggered using the function:
@@ -2683,12 +2766,12 @@ from anywhere in the application.
 
 ### Deadlocks
 
-A situation may arise where there are no active **Coroutines** in the execution queue 
-and no active handlers in the event loop. 
+A situation may arise where there are no active **Coroutines** in the execution queue
+and no active handlers in the event loop.
 This condition is called a **Deadlock**, and it represents a serious logical error.
 
-When a **Deadlock** is detected, the application enters **Graceful Shutdown** mode 
-and generates warnings containing information about which **Coroutines** are in a waiting state 
+When a **Deadlock** is detected, the application enters **Graceful Shutdown** mode
+and generates warnings containing information about which **Coroutines** are in a waiting state
 and the exact lines of code where they were suspended.
 
 ### Tools
@@ -2705,7 +2788,7 @@ The `Coroutine` class implements methods for inspecting the state of a coroutine
 | **`isCancelled():bool`**               | Returns `true` if the coroutine has been cancelled, otherwise `false`.                                                                                                                                 |
 | **`getTrace():array`**                 | Returns the stack trace of the coroutine.                                                                                                                                                              |
 
-The `Coroutine::getAwaitingInfo()` method returns an array with debugging information 
+The `Coroutine::getAwaitingInfo()` method returns an array with debugging information
 about what the coroutine is waiting for, if it is in a waiting state.
 
 The format of this array depends on the implementation of the **Scheduler** and the **Reactor**.

@@ -269,7 +269,7 @@ final class EditorServer
             
             socket_close($this->server);
             
-            $this->documentScope->awaitAll(true);
+            $this->documentScope->awaitAllIgnoringErrors(true);
         }
     }
     
