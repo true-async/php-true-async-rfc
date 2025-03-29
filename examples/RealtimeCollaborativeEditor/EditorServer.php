@@ -69,7 +69,7 @@ final class EditorServer
             ];
             
             // Handle client in a separate coroutine
-            spawn with $clientScope $this->handleClient($clientId, $client, $clientScope);
+            spawn with $clientScope $this->handleClient($clientId, $client);
         }
     }
     
@@ -79,14 +79,8 @@ final class EditorServer
             foreach ($this->documents as $docId => $document) {
                 if ($document['dirty']) {
                     echo "Auto-saving document $docId\n";
-                    
-                    try {
-                        $this->documents[$docId]['blocked'] = true;
-                        $this->saveDocument($docId, $document['content']);
-                        $this->documents[$docId]['dirty'] = false;
-                    } finally {
-                        $this->documents[$docId]['blocked'] = false;
-                    }
+                    $this->documents[$docId]['dirty'] = false;
+                    $this->saveDocument($docId, $document['content']);
                 }
             }
         };
@@ -102,7 +96,7 @@ final class EditorServer
         }
     }
     
-    private function handleClient(string $clientId, \Socket $client, Scope $clientScope): void
+    private function handleClient(string $clientId, \Socket $client): void
     {
         try {
             // Send a welcome message
@@ -195,6 +189,20 @@ final class EditorServer
         ]);
     }
     
+    private function broadcastEvent(string $fromClientId, array $clients, array $message): void
+    {
+        foreach ($clients as $client) {
+            
+            if ($client['clientId'] === $fromClientId) {
+                continue; // Skip the sender
+            }
+            
+            $message['fromClientId'] = $fromClientId;
+            
+            spawn $this->sendToClient($client['socket'], $message);
+        }
+    }
+    
     private function handleEdit(string $clientId, array $message): void
     {
         $documentId = $this->clients[$clientId]['documentId'];
@@ -202,17 +210,7 @@ final class EditorServer
         if (isset($this->documents[$documentId])) {
             $this->documents[$documentId]['content'] = $message['content'];
             $this->documents[$documentId]['dirty'] = true;
-            
-            // Broadcast the edit to other clients
-            foreach ($this->documentClients[$documentId] as $otherClient) {
-                if ($otherClient['clientId'] !== $clientId) {
-                    spawn $this->sendToClient($otherClient['socket'], [
-                        'type' => 'edit',
-                        'content' => $message['content'],
-                        'clientId' => $clientId,
-                    ]);
-                }
-            }
+            $this->broadcastEvent($clientId, $this->documents[$documentId], $message);
         }
     }
     
@@ -221,16 +219,10 @@ final class EditorServer
         $documentId = $this->clients[$clientId]['documentId'];
         
         if (isset($this->documentClients[$documentId])) {
-            // Broadcast the cursor move to other clients
-            foreach ($this->documentClients[$documentId] as $otherClient) {
-                if ($otherClient['clientId'] !== $clientId) {
-                    spawn $this->sendToClient($otherClient['socket'], [
-                        'type' => 'cursor_move',
-                        'position' => $message['position'],
-                        'clientId' => $clientId,
-                    ]);
-                }
-            }
+            $this->broadcastEvent($clientId, $this->documentClients[$documentId], [
+                'type' => 'cursor_move',
+                'position' => $message['position'],
+            ]);
         }
     }
     
@@ -269,7 +261,7 @@ final class EditorServer
             
             socket_close($this->server);
             
-            $this->documentScope->awaitAllIgnoringErrors(true);
+            $this->documentScope->awaitAllIgnoringErrors();
         }
     }
     
