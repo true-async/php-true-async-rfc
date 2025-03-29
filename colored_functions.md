@@ -182,3 +182,55 @@ Thus, we can conclude:
 2. They should ONLY be used as coroutines, not as regular functions.
 3. Using colored functions within the framework of structured concurrency
 is a natural way to explicitly describe the structure.
+
+## Syntax
+
+The syntax for colored functions is as follows:
+
+```php
+async [public|protected|private] [static] function <functionName>(<parameters>): [<returnType>]
+{
+    <functionBody>
+}
+```
+
+The `async` keyword marks the function as a coroutine.
+A function with the `async` attribute can only be called using the `spawn` expression. 
+Attempting to call the function directly will result in a fatal error.
+
+An async function automatically defines a unique `Scope` that is inherited from the current one, 
+and all coroutines launched within it become child coroutines.
+
+The behavior of an async function is similar to that of an async block.
+
+```php
+async function fetchUserData(string $userId): array
+{
+    spawn fetchUserProfile($userId);
+    spawn fetchUserSettings($userId);
+        
+    [$userProfile, $userSettings] = await Async\directTasks();
+
+    $userProfile['settings']  = $userSettings;
+    
+    return $userProfile;
+}
+```
+
+equivalent to:
+
+```php
+function fetchUserData(string $userId): array
+{
+    $scope = Scope::inherit();
+    
+    spawn with $scope fetchUserProfile($userId);
+    spawn with $scope fetchUserSettings($userId);
+        
+    [$userProfile, $userSettings] = await $scope->directTasks();
+
+    $userProfile['settings']  = $userSettings;
+    
+    return $userProfile;
+}
+```
