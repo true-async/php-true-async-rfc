@@ -9,7 +9,26 @@ This approach offers several advantages:
 2. Simplified coroutine lifecycle management
 3. Asynchronous nature explicitly indicated in function signatures
 
-### The async Keyword
+### Syntax
+
+```php
+async [final static public protected private] function function_name([parameters])[: return_type] {
+    // function body
+}
+
+// Calling from another async function
+async function another_function(): void {
+    spawn function_name();
+    function_name(); // Direct call is not allowed, must be spawned
+}
+
+// Calling from a regular function
+function regular_function(): void {
+    spawn function_name(); // Via spawn
+}
+```
+
+Example:
 
 ```php
 async function fetchData(string $url): array
@@ -19,10 +38,10 @@ async function fetchData(string $url): array
 
 async function getUserProfile(string $userId): array
 {
-    fetchData("api/users/$userId");       // Automatically becomes a child coroutine
-    fetchUserSettings($userId);           // Also a child coroutine
+    spawn fetchData("api/users/$userId");       // Automatically becomes a child coroutine
+    spawn fetchUserSettings($userId);           // Also a child coroutine
     
-    [$userData, $settings] = await children;    // Wait for all child coroutines to complete
+    [$userData, $settings] = await tasks;       // Wait for direct children to complete
 
     return ['data' => $userData, 'settings' => $settings];
 }
@@ -32,6 +51,29 @@ function handleRequest(string $userId): void
 {
     spawn getUserProfile($userId);
 }
+```
+
+### Hierarchy
+
+Coroutines form a hierarchy that matches the call stack of functions:
+
+```php
+
+function task(string $userId): void
+{
+    spawn subtask($userId); // Automatically becomes a child coroutine
+}
+
+function subtask(string $userId): void
+{
+    spawn subSubtask($userId); // Automatically becomes a child coroutine
+}
+
+function subSubtask(): void 
+{
+    // ...
+}
+
 ```
 
 ### Structured Concurrency
@@ -47,13 +89,13 @@ async function fetchData(string $url): array
 async function fetchUserSettings(string $userId): array
 {
     // Simulate fetching user settings
-    return await fetchData("api/users/$userId/settings");
+    return await spawn fetchData("api/users/$userId/settings");
 }
 
 async function fetchUserProfile(string $userId): array
 {
     // called asynchronously
-    fetchUserSettings($userId); // Automatically becomes a child coroutine    
+    spawn fetchUserSettings($userId); // Automatically becomes a child coroutine    
     
     return await fetchData("api/users/$userId");
     
@@ -134,24 +176,6 @@ async function processUser(string $userId): array
 
 1. Transition to colored functions requires codebase changes
 2. Mixing synchronous and asynchronous code becomes more explicit
-
-### Syntax
-
-```php
-async function function_name([parameters])[: return_type] {
-    // function body
-}
-
-// Calling from another async function
-async function another_function(): void {
-    function_name(); // Direct call
-}
-
-// Calling from a regular function
-function regular_function(): void {
-    spawn function_name(); // Via spawn
-}
-```
 
 # Comparative Table of PHP Asynchronous Approaches
 
