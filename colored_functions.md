@@ -1,3 +1,5 @@
+# Colored Functions
+
 Consider the following code:
 
 ```php
@@ -145,7 +147,38 @@ suspend fun fetchUserData(userId: String): Result { // suspend marks the functio
 ```
 
 Explicit marking (`suspend`, `async`, `CoroutineScope`) makes the control flow predictable.
-The coroutine hierarchy automatically solves leakage problems (unlike in Go, where goroutines are "invisible").
-
 Thus, colored functions help better describe structured concurrency, 
 but they also eliminate the ability to use adapter functions.
+
+The article *"What Color is Your Function?"* states that colored functions require refactoring 
+of the code that wants to call them. In other words, if `fetchUserData` needs to be called not as a coroutine 
+but as a regular function, the code must be modified. 
+
+Specifically, lines related to `$scope = Scope::inherit()` need to be removed 
+and moved to another function, such as `someFunction2`.
+
+Is this really a problem?
+
+Suppose that `someFunction2` is an adapter that performs some dirty work before calling `fetchUserData`. 
+There are several ways to use `someFunction2` without modifying `fetchUserData`:
+
+- You can call `someFunction2` as a regular function and then call `fetchUserData` as a coroutine.
+- You can make `someFunction2` a coroutine that then calls `fetchUserData`.
+- You can use `someFunction2` as a filter that is invoked inside `fetchUserData`.
+
+However, if `someFunction2` has greater responsibility, these approaches won’t work. 
+In that case, the only option is to make `someFunction2` a coroutine and `fetchUserData` a regular function, 
+effectively changing the areas of responsibility.
+
+In other words, we conclude that 
+if `fetchUserData` needs to be reused as a regular function due to changes in usage logic, code changes are unavoidable.
+
+This nullifies the argument of the article *"What Color is Your Function?"* because 
+there is no real difference in which code is modified—whether 
+it’s adding a new attribute to a function or removing lines related to `$scope`.
+
+Thus, we can conclude:
+1. If coroutines use **structured concurrency**, i.e., they are required to monitor their child coroutines.
+2. They should ONLY be used as coroutines, not as regular functions.
+3. Using colored functions within the framework of structured concurrency
+is a natural way to explicitly describe the structure.
