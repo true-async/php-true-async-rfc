@@ -1,4 +1,4 @@
-# Colored Functions
+# How colored functions help implement structured concurrency
 
 Consider the following code:
 

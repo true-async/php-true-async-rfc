@@ -1035,6 +1035,9 @@ Its main purpose is to provide a space for resource control that affects all cor
 
 Resource control at the top level is a useful tool for organizing applications, frameworks, and libraries.
 
+> Thus, the desire to abandon colored functions is the main motivation for implementing `Scope`. 
+> **Colored functions** allow Scope to be avoided altogether, as each coroutine would act as a `Scope` for its children.
+
 #### Point of Responsibility
 
 The `spawn <callable>` expression allows you to create coroutines,
