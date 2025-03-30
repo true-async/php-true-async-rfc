@@ -28,17 +28,17 @@ Next line
 
 #### Non-blocking versions of built-in PHP functions:
 ```php
-   spawn {
-        $result = file_get_contents("file.txt");
-        
-        if($result === false) {
-            echo "Error reading file.txt\n";
-        }
-        
-        echo "File content: $result\n";
-   };
+spawn {
+    $result = file_get_contents("file.txt");
+    
+    if($result === false) {
+        echo "Error reading file.txt\n";
+    }
+    
+    echo "File content: $result\n";
+};
 
-   echo "Next line\n";
+echo "Next line\n";
 ```
 
 Output:
