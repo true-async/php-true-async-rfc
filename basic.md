@@ -1498,14 +1498,6 @@ $scope->cancel();
 ```
 ```
 
-#### Scope Cancellation Order
-
-If a `Scope` has child `Scopes`, the coroutines in the child `Scopes` will be canceled first,
-followed by those in the parent — from the bottom up in the hierarchy.
-This approach increases the likelihood that resources will be released correctly.
-However, it does not guarantee this,
-since the exact order of coroutines in the execution queue cannot be determined with 100% certainty.
-
 #### Scope disposal
 
 **Coroutine Scope** has several resource cleanup strategies 
@@ -1655,6 +1647,22 @@ Task 1
 Warning: Coroutine is zombie at ... in Scope disposed at ...
 Task 2
 ```
+
+#### Scope cancellation/disposal order
+
+If a `Scope` has child `Scopes`, the coroutines in the child `Scopes` will be canceled or disposed first,
+followed by those in the parent — from the bottom up in the hierarchy.
+This approach increases the likelihood that resources will be released correctly.
+However, it does not guarantee this,
+since the exact order of coroutines in the execution queue cannot be determined with 100% certainty.
+
+During the release of child `Scopes`, 
+the same cleanup strategy is used that was applied to the parent `Scope`.
+
+If the `disposeSafely` method is called, the child Scopes will also be released using the `disposeSafely` strategy.  
+If the `dispose` method is used, the child Scopes will use the same method for cleanup.
+
+The `disposeAfterTimeout` method will delay the execution of `dispose` for the specified time.
 
 #### Spawn with disposed scope
 
