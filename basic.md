@@ -7,11 +7,11 @@
 This **RFC** is quite complex due to the number of logical connections. 
 Please use the diagrams from the table to simplify understanding.
 
-| Diagram Name                                                             | Description                                                                                  |
-|--------------------------------------------------------------------------|----------------------------------------------------------------------------------------------|
-| [mind-map.puml](diagrams/mind-map.puml)                                  | A mind map showing the relationship between key features and problems solved by the **RFC**. |
-| [feature-to-requirement.puml](diagrams/feature-to-requirement.puml)      | Maps features to the requirements that generated them.                                       |
-| [decision-tree.puml](diagrams/decision-tree.puml)                        | A decision tree that guides developers on which API to use depending on the situation.       |
+| Diagram Name                                                  | Description                                                                                  |
+|---------------------------------------------------------------|----------------------------------------------------------------------------------------------|
+| [mind-map](diagrams/mind-map.svg)                             | A mind map showing the relationship between key features and problems solved by the **RFC**. |
+| [feature-to-requirement](diagrams/feature-to-requirement.svg) | Maps features to the requirements that generated them.                                       |
+| [decision-tree](diagrams/decision-tree.svg)                   | A decision tree that guides developers on which API to use depending on the situation.       |
 
 ### Overview
 
