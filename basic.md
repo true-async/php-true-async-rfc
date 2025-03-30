@@ -2896,6 +2896,24 @@ The `Async\getCoroutines()` method returns an array of all coroutines in the app
 | **Java (Loom)**   | Virtual threads (experimental), classic `Thread`/`Future`                | **Under development** (drafting `StructuredTaskScope`)                          | **No** (virtual threads are “just calls”)        | `Thread.interrupt()` or `Future.cancel()`, details evolving | Standard try/catch + Executor; Loom may introduce structured concurrency, still experimental                                                                                        | **Medium** (familiar threads, but Loom is new/experimental)                  | Could greatly simplify concurrency while remaining compatible with existing Java code                                                                                                                  |
 | **Erlang/Elixir** | Actor model (lightweight processes) + message passing, “let it crash”    | **Yes.** Supervisor trees                                                       | **No**                                           | Kill the process from outside, or it crashes & restarts     | Powerful supervision system: if a process crashes, the supervisor restarts it. Very fault-tolerant.                                                                                 | **Medium** (actor model is straightforward but requires a shift)             | Renowned for high fault tolerance. “Supervisor trees” provide robust structured concurrency and auto-restart. Different paradigm from `await`/tasks — message-based and “let it crash” philosophy.     |
 
+#### Parallels with Java Loom
+
+This **RFC** unintentionally contains many parallels with the Java Loom StructuredTaskScope API, 
+which is very similar to this **RFC**.
+
+| **Feature**             | **PHP True Async (Scope)**                                                                        | **Java Loom (StructuredTaskScope)**                                                                             |
+|-------------------------|---------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------|
+| **Creation**            | `new Scope()` or `Scope::inherit()` to group coroutines.                                          | `new StructuredTaskScope<>()` or specialized subtypes to manage forked threads.                                 |
+| **Task Launch**         | `spawn with $scope someTask()` or `async $scope { … }`.                                           | `scope.fork(() -> someTask())` inside the StructuredTaskScope block.                                            |
+| **Hierarchy**           | Scopes can form a tree (child scopes). Canceling a parent scope cancels its children.             | `StructuredTaskScope` can nest calls (`fork()` in sub-scopes). Canceling/closing can stop child tasks.          |
+| **Awaiting**            | `await $scope->directTasks()` or `await $scope->allTasks()`.                                      | `scope.join()` to wait for all forked tasks.                                                                    |
+| **Bounded Execution**   | `async bounded $scope { ... }` forcibly cancels child tasks when the main block finishes.         | The structured concurrency block ends when the main thread completes; sub-tasks are then joined or canceled.    |
+| **Cancellation**        | `scope->cancel()` raises `CancellationException` in all subtasks.                                 | `scope.shutdown()` or `scope.close()` (interrupt the tasks).                                                    |
+| **Exception Handling**  | Exceptions bubble up. You can use `Scope::setExceptionHandler()` or `try/catch` around `await`.   | Exceptions in subtasks can be aggregated. `scope.join()` may throw or you can call `scope.throwIfFailed()`.     |
+| **Automatic Cleanup**   | `dispose()`, `disposeSafely()`, or `disposeAfterTimeout()` forcibly or safely clean up children.  | `try (var scope = new StructuredTaskScope<>()) { ... }` auto-closes tasks on exiting the try-with-resources.    |
+| **Context Inheritance** | Each `Scope` has a `Context`. Child scopes inherit from the parent.                               | Typically uses `ScopedValues` or thread-locals. There’s no official “Context” object with inheritance built-in. |
+| **Goals**               | Transparent coroutines, grouped for structured concurrency, safe cancellation, no function color. | Virtual threads for structured concurrency and easy parallelism, building on Java’s thread model.               |
+
 
 ## Backward Incompatible Changes
 
