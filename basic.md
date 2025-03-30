@@ -281,7 +281,7 @@ However, it cannot be stopped externally.
 > It is permissible to stop a coroutine’s execution externally for two reasons:
 > * To implement multitasking.
 > * To enforce an active execution time limit.
-> Please see [Maximum activity interval](#maximum-activity-interval) for more information.
+    > Please see [Maximum activity interval](#maximum-activity-interval) for more information.
 
 A suspended coroutine can be resumed at any time.
 The `Scheduler` component is responsible for the coroutine resumption algorithm.
@@ -966,11 +966,11 @@ main()                          ← defines a $scope
 
 The expression `spawn in $scope` makes two important changes:
 1. Creates a coroutine that is attached to `$scope`, which is **considered** the parent.
-2. Another **childScope** is created from the specified $scope, 
+2. Another **childScope** is created from the specified $scope,
    which will store descendants of the second and subsequent levels.
 
-When a child coroutine is created in `task1()` without specifying a Scope, 
-it is automatically linked to `childScope` and thus becomes a coroutine 
+When a child coroutine is created in `task1()` without specifying a Scope,
+it is automatically linked to `childScope` and thus becomes a coroutine
 of the child coroutine space relative to $scope:
 
 ```
@@ -986,14 +986,14 @@ $scope = new Scope();
 
 This leads to two important consequences:
 1. The direct descendants of `$scope` are only those tasks that were explicitly attached to the `Scope`.
-2. All child coroutines deeper than the first level explicitly belong to the `childScope` 
+2. All child coroutines deeper than the first level explicitly belong to the `childScope`
    (Unless another one was specified during their creation).
 
-This approach ensures that no "accidental tasks" are added to the `$scope`. 
+This approach ensures that no "accidental tasks" are added to the `$scope`.
 Such tasks will be **explicit direct tasks**.  
 All other tasks created using `spawn` without specifying a scope will be considered **implicit tasks**.
 
-The distinction between explicit and implicit tasks is important in the context of resource cleanup 
+The distinction between explicit and implicit tasks is important in the context of resource cleanup
 (see a section [Scope disposal](#scope-disposal)).
 
 #### Motivation
@@ -1500,8 +1500,8 @@ $scope->cancel();
 
 #### Scope disposal
 
-**Coroutine Scope** has several resource cleanup strategies 
-that can be triggered either explicitly, on demand, 
+**Coroutine Scope** has several resource cleanup strategies
+that can be triggered either explicitly, on demand,
 or implicitly when the `Scope` object loses its last reference.
 
 There are three available strategies for `Scope` termination:
@@ -1513,12 +1513,12 @@ There are three available strategies for `Scope` termination:
 | `disposeAfterTimeout` | Cancels after a delay        | Issues a warning, then cancels after a delay      |
 
 
-The main goal of all three methods is to terminate the execution of coroutines 
-that belong to the `Scope` or its child Scopes. 
+The main goal of all three methods is to terminate the execution of coroutines
+that belong to the `Scope` or its child Scopes.
 However, each method approaches this task slightly differently.
 
-The `disposeSafely` method is used by default in the destructor of the `Async\Scope` class. 
-Its key feature is transitioning "implicitly created child coroutines" into a **zombie coroutine** state. 
+The `disposeSafely` method is used by default in the destructor of the `Async\Scope` class.
+Its key feature is transitioning "implicitly created child coroutines" into a **zombie coroutine** state.
 A **zombie coroutine** continues execution but is tracked by the system differently than regular coroutines.
 (See section: [Zombie coroutine policy](#zombie-coroutine-policy)).
 
@@ -1558,13 +1558,13 @@ Task 1
 Task 2
 ```
 
-The `$scope` variable is released immediately after the coroutine `Root task` completes execution, 
-so the child coroutine `Task 1` does not have time to execute 
+The `$scope` variable is released immediately after the coroutine `Root task` completes execution,
+so the child coroutine `Task 1` does not have time to execute
 before the `disposeSafely` method is called.
 
 `disposeSafely` detects this and signals it with a warning but allows the coroutine to complete.
 
-The `Scope::dispose` method differs from `Scope::disposeSafely` in that it does not leave **zombie coroutines**. 
+The `Scope::dispose` method differs from `Scope::disposeSafely` in that it does not leave **zombie coroutines**.
 It cancels **all coroutines**.
 When **Implicitly Created Child Coroutines** are detected as unfinished, a warning is issued.
 
@@ -1656,7 +1656,7 @@ This approach increases the likelihood that resources will be released correctly
 However, it does not guarantee this,
 since the exact order of coroutines in the execution queue cannot be determined with 100% certainty.
 
-During the release of child `Scopes`, 
+During the release of child `Scopes`,
 the same cleanup strategy is used that was applied to the parent `Scope`.
 
 If the `disposeSafely` method is called, the child Scopes will also be released using the `disposeSafely` strategy.  
