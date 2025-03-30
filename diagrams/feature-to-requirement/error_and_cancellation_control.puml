@@ -1,0 +1,17 @@
+@startuml
+    package "PHP True Async RFC" {
+        package "R4: Error and Cancellation Control" {
+            F6 : Cancellation API
+            F8 : Error Propagation and Handling
+            F9 : Graceful Shutdown
+        }
+
+        package "Architectural Changes" {
+            A6 : Error Handler / Supervision
+        }
+    }
+
+    F6 --> A6 : Propagate CancellationException
+    F8 --> A6 : Handle uncaught exceptions
+    F9 --> A6 : Graceful shutdown on fatal error
+    @enduml

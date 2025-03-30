@@ -1,0 +1,16 @@
+@startuml
+    package "PHP True Async RFC" {
+        package "R3: Transparent Coroutines" {
+            F1 : spawn
+            F3 : suspend
+        }
+
+        package "Architectural Changes" {
+            A1 : Scheduler API
+            A3 : Coroutine Management
+        }
+    }
+
+    F1 --> A1 : Launch coroutines via Scheduler
+    F3 --> A3 : Suspend control in coroutine
+    @enduml

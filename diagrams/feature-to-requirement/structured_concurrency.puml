@@ -1,0 +1,15 @@
+@startuml
+    package "PHP True Async RFC" {
+        package "R2: Structured Concurrency" {
+            F4 : Scope
+            F12 : async block
+        }
+
+        package "Architectural Changes" {
+            A4 : Scope Hierarchy
+        }
+    }
+
+    F4 --> A4 : Control Scope Hierarchy
+    F12 --> A4 : Structured concurrency with async block
+    @enduml

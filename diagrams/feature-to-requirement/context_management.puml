@@ -1,0 +1,13 @@
+@startuml
+    package "PHP True Async RFC" {
+        package "R5: Context Management" {
+            F5 : Context
+        }
+
+        package "Architectural Changes" {
+            A5 : Context Inheritance
+        }
+    }
+
+    F5 --> A5 : Context propagation across scopes
+    @enduml

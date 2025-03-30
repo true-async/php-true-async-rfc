@@ -1,0 +1,43 @@
+@startmindmap
+
+* PHP True Async RFC
+** Creating Coroutines
+*** spawn
+** Structured Concurrency
+*** Problem: Grouping tasks with structured concurrency
+**** Solution: async block
+** Waiting for Results
+*** await
+*** Problem: Waiting for multiple tasks
+**** Solution: await all()
+*** Problem: Waiting for all child tasks
+**** Solution: Scope::allTasks()
+*** Problem: Waiting for direct child tasks
+**** Solution: Scope::directTasks()
+** Handling Exceptions
+*** Problem: Handling exceptions inside coroutine
+**** Solution: try-catch with await
+*** Problem: Handling exceptions in grouped tasks
+**** Solution: Scope Exception Handler
+** Task Grouping and Scope
+*** Problem: Grouping tasks with shared lifetime
+**** Solution: Scope
+*** Problem: Linking PHP object with coroutines
+**** Solution: Scope
+** Task Cancellation
+*** Problem: Cancel a running coroutine
+**** Solution: cancel()
+*** Problem: Cancel all child tasks in scope
+**** Solution: dispose()
+** Context Management
+*** Problem: Passing data across coroutine boundaries
+**** Solution: Context
+*** Problem: Inheriting context across scopes
+**** Solution: Context Inheritance
+** Managing Implicit Coroutines
+*** Problem: Managing implicit coroutines
+**** Solution: Explicit/Implicit Coroutines
+*** Problem: Preventing resource leaks
+**** Solution: Zombie Coroutine Policy
+
+@endmindmap

@@ -1,0 +1,72 @@
+@startuml
+
+skinparam linetype polyline
+
+' Define the main packages
+package "PHP True Async RFC" {
+    package "Requirements" {
+        R1 : Non-blocking I/O Support
+        R2 : Structured Concurrency
+        R3 : Transparent Coroutines
+        R4 : Error and Cancellation Control
+        R5 : Context Management
+        R6 : Task Grouping and Scope
+        R7 : Control Coroutines Without Scope
+    }
+
+    package "Features" {
+        F1 : spawn
+        F2 : await
+        F3 : suspend
+        F4 : Scope
+        F5 : Context
+        F6 : Cancellation API
+        F7 : Structured Concurrency Support
+        F8 : Error Propagation and Handling
+        F9 : Graceful Shutdown
+        F10 : Explicit/Implicit Coroutines
+        F11 : Zombie Coroutines
+        F12 : async block
+    }
+
+    package "Architectural Changes" {
+        A1 : Scheduler API
+        A2 : Reactor / Event Loop
+        A3 : Coroutine Management
+        A4 : Scope Hierarchy
+        A5 : Context Inheritance
+        A6 : Error Handler / Supervision
+        A7 : Zombie Coroutine Policy
+    }
+}
+
+' Define relationships from Requirements to Features
+R1 --> F1 : Enable non-blocking I/O
+R1 --> F2 : Wait for coroutine results
+R2 --> F4 : Manage coroutine lifetime
+R2 --> F12 : Group tasks with async block
+R3 --> F1 : Launch functions as coroutines
+R3 --> F3 : Suspend/resume control
+R4 --> F6 : Cancel running tasks
+R4 --> F8 : Handle exceptions
+R5 --> F5 : Associate data with scope
+R6 --> F7 : Group tasks into scopes
+R7 --> F10 : Define explicit/implicit coroutines
+R7 --> F11 : Introduce zombie coroutine logic
+
+' Define relationships from Features to Architectural Changes
+F1 --> A1 : Launch coroutines via Scheduler
+F1 --> A2 : Non-blocking I/O via Reactor
+F2 --> A1 : Await coroutine completion
+F3 --> A3 : Suspend control in coroutine
+F4 --> A4 : Control Scope Hierarchy
+F5 --> A5 : Context propagation across scopes
+F6 --> A6 : Propagate CancellationException
+F8 --> A6 : Handle uncaught exceptions
+F7 --> A4 : Structured concurrency through Scope
+F12 --> A4 : Structured concurrency with async block
+F9 --> A6 : Graceful shutdown on fatal error
+F10 --> A3 : Define coroutine management policy
+F11 --> A7 : Implement zombie coroutine handling
+
+@enduml

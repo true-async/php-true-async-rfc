@@ -1,0 +1,17 @@
+@startuml
+    package "PHP True Async RFC" {
+        package "R1: Non-blocking I/O Support" {
+            F1 : spawn
+            F2 : await
+        }
+
+        package "Architectural Changes" {
+            A1 : Scheduler API
+            A2 : Reactor / Event Loop
+        }
+    }
+
+    F1 --> A1 : Launch coroutines via Scheduler
+    F1 --> A2 : Non-blocking I/O via Reactor
+    F2 --> A1 : Await coroutine completion
+    @enduml

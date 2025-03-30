@@ -1,0 +1,16 @@
+@startuml
+    package "PHP True Async RFC" {
+        package "R7: Control Coroutines Without Scope" {
+            F10 : Explicit/Implicit Coroutines
+            F11 : Zombie Coroutines
+        }
+
+        package "Architectural Changes" {
+            A3 : Coroutine Management
+            A7 : Zombie Coroutine Policy
+        }
+    }
+
+    F10 --> A3 : Define coroutine management policy
+    F11 --> A7 : Implement zombie coroutine handling
+    @enduml
