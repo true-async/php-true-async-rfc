@@ -164,8 +164,8 @@ loadDashboardData()  ← async $dashboardScope
 │   ├── spawn fetchUserData()
 │   └── spawn fetchUserSettings()
 │       ├── throw new Exception(...) ← ❗can stop all tasks in the hierarchy
-├── spawn getUserOrders()
-└── spawn getRecommendations()
+├── spawn fetchUserNotifications()
+└── spawn fetchRecentActivity()
 ```
 
 #### Await all child tasks.
@@ -243,18 +243,18 @@ specifically designed shared memory objects, through a separate API that is not 
 
 #### Preemptive Multitasking
 
-**PHP** allows for the implementation of forced coroutine suspension, 
-which can be used in a preemptive multitasking algorithm. 
+**PHP** allows for the implementation of forced coroutine suspension,
+which can be used in a preemptive multitasking algorithm.
 
-This capability is particularly implemented in **Swoole**. 
-However, the current **RFC** rejects **preemptive multitasking** due to the unpredictable behavior 
-of code during context switches. 
+This capability is particularly implemented in **Swoole**.
+However, the current **RFC** rejects **preemptive multitasking** due to the unpredictable behavior
+of code during context switches.
 
-A coroutine can lose control literally at any PHP opcode, 
-which can significantly affect the outcome and contradict the programmer's expectations. 
+A coroutine can lose control literally at any PHP opcode,
+which can significantly affect the outcome and contradict the programmer's expectations.
 Writing code that can lose control at any moment is a complex domain where PHP does not seem like an adequate tool.
 
-This **RFC** considers a scenario where a coroutine is abruptly stopped only in one case: 
+This **RFC** considers a scenario where a coroutine is abruptly stopped only in one case:
 if the **Scheduler** implements a runtime control mechanism similar to `max_execution_time`.
 
 Please see [Maximum activity interval](#maximum-activity-interval) for more information.
@@ -277,7 +277,7 @@ Any function can be executed as a coroutine without any changes to the code.
 A coroutine can stop itself bypassing control to the `Scheduler`.
 However, it cannot be stopped externally.
 
-> ⚠️ **Warning:** 
+> ⚠️ **Warning:**
 > It is permissible to stop a coroutine’s execution externally for two reasons:
 > * To implement multitasking.
 > * To enforce an active execution time limit.
@@ -664,7 +664,6 @@ and is intended for objects implemented as PHP extensions, such as:
 The following classes from this **RFC** also implement this interface:
 
 - `Coroutine`
-- `Scope`
 
 ### Await
 
@@ -838,7 +837,7 @@ The `until` keyword allows using coroutines as a `CancellationToken`.
 If an exception occurs in a coroutine that participates in `until`,
 that exception will be thrown at the point where the `await` expression is called.
 
-Example:
+**Example:**
 
 ```php
 function cancellationToken(): void {
@@ -896,15 +895,15 @@ function mainTask(): void { // <- global scope
 spawn mainTask(); // <- global scope
 ```
 
-If an application never creates custom Scopes, its behavior is similar to coroutines in Go:
+If an application never creates **custom Scopes**, its behavior is similar to coroutines in `Go`:
 * Coroutines are not explicitly linked to each other.
 * The lifetime of coroutines is not limited.
 
 To manage the lifetime of coroutines and wait for their results, it's convenient to organize them into groups.
 `Coroutine Scope` is a basic primitive
-that helps associate coroutines with other PHP objects and track their execution at the group level.
+that helps associate coroutines with other `PHP` objects and track their execution at the group level.
 
-`Coroutine Scope` is especially useful when you need to bind coroutines to a PHP object
+`Coroutine Scope` is especially useful when you need to bind coroutines to a `PHP` object
 and ensure their execution is terminated as soon as a destructor or a special method is called.
 
 `Coroutine Scope` can be used to implement the **structural concurrency** pattern
@@ -967,15 +966,19 @@ main()                          ← defines a $scope
 
 The expression `spawn in $scope` makes two important changes:
 1. Creates a coroutine that is attached to `$scope`, which is **considered** the parent.
-2. When another coroutine is created inside the new coroutine, it is linked to a child `Scope`,
-   which is specifically created for all child coroutines.
+2. Another **childScope** is created from the specified $scope, 
+   which will store descendants of the second and subsequent levels.
+
+When a child coroutine is created in `task1()` without specifying a Scope, 
+it is automatically linked to `childScope` and thus becomes a coroutine 
+of the child coroutine space relative to $scope:
 
 ```
 $scope = new Scope();
 ├── task1()
 ├── task2()
 │
-├── $childScope
+├── childScope
 │   └── subtask1()
 │   └── subtask2()
     └── subtask3()
@@ -983,10 +986,11 @@ $scope = new Scope();
 
 This leads to two important consequences:
 1. The direct descendants of `$scope` are only those tasks that were explicitly attached to the `Scope`.
-2. All other tasks belong either to child `Scopes`, which were created explicitly or implicitly, or to other `Scopes`.
+2. All child coroutines deeper than the first level explicitly belong to the `childScope` 
+   (Unless another one was specified during their creation).
 
 This approach ensures that no "accidental tasks" are added to the `$scope`.  
-All other tasks created via `spawn` will be explicit child coroutines.
+All other tasks created via `spawn` will be **explicit child coroutines**.
 
 If the `$scope` object is destroyed (i.e., its destructor is called),
 the coroutines that did not have time to complete will be marked as **zombie coroutine**.
@@ -1309,9 +1313,9 @@ to suspend the coroutine until the tasks within `$scope` have completed executio
 
 Sometimes it's necessary to wait for all tasks to complete before exiting a function permanently.
 
-For example, in a web server scenario, when a user presses **CTRL-C**, 
-the program should stop executing: 
-* First, the `cancel()` method is called, which cancels all child tasks. But that's not the end yet. 
+For example, in a web server scenario, when a user presses **CTRL-C**,
+the program should stop executing:
+* First, the `cancel()` method is called, which cancels all child tasks. But that's not the end yet.
 * The tasks are still running. Therefore, it's essential to explicitly wait for them to finish.
 
 ```php
@@ -1333,7 +1337,7 @@ the program should stop executing:
     }
 ```
 
-The `Scope::awaitAllIgnoringErrors` method allows waiting for the complete termination of a `Scope`, 
+The `Scope::awaitAllIgnoringErrors` method allows waiting for the complete termination of a `Scope`,
 ignoring exceptions. If an `$errorHandler` is defined, it can additionally output error information.
 
 Please see also the [Scope::setExceptionHandler method](#error-handling).
@@ -2812,22 +2816,22 @@ and the exact lines of code where they were suspended.
 
 > This RFC does not require the implementation of this tool but describes its potential use.
 
-The **Scheduler** can implement a limit on the continuous execution time of a coroutine 
+The **Scheduler** can implement a limit on the continuous execution time of a coroutine
 to regain control from tasks that may have "hung" due to a programmer's error.
 
-The criterion is calculated as the maximum interval of active coroutine execution 
+The criterion is calculated as the maximum interval of active coroutine execution
 during which the coroutine does not yield control.
 
 It is reasonable to set the maximum interval to short time periods: 3–5 seconds for applications that handle requests.  
-If the maximum interval is exceeded, the **Scheduler** must generate a warning 
+If the maximum interval is exceeded, the **Scheduler** must generate a warning
 with precise information about which coroutine and on which line the situation occurred.
 
-If this interval is exceeded, 
-the **Scheduler** can interrupt the coroutine’s execution at any point, 
+If this interval is exceeded,
+the **Scheduler** can interrupt the coroutine’s execution at any point,
 on any line, not just at suspension points or I/O function calls.
 
-The **Scheduler** can cancel a coroutine using `cancel()`, 
-which will throw an exception at the suspension point, 
+The **Scheduler** can cancel a coroutine using `cancel()`,
+which will throw an exception at the suspension point,
 or it can terminate it without the possibility of resumption (depending on the implementation).
 
 ### Tools
