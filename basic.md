@@ -1036,7 +1036,7 @@ Its main purpose is to provide a space for resource control that affects all cor
 Resource control at the top level is a useful tool for organizing applications, frameworks, and libraries.
 
 > Thus, the desire to abandon colored functions is the main motivation for implementing `Scope`. 
-> **Colored functions** allow Scope to be avoided altogether, as each coroutine would act as a `Scope` for its children.
+> **Colored functions** allow `Scope` to be avoided, as each coroutine would act as a `Scope` for its children.
 
 #### Point of Responsibility
 
@@ -1047,10 +1047,7 @@ This can become a source of errors, as resources are allocated without explicit 
 Scope helps solve this problem by implementing responsibility for coroutine ownership.
 
 ```php
-
-function subtask() {
-    
-}
+function subtask(): void {}
 
 function task(): void
 {
@@ -1183,8 +1180,6 @@ When the `await $scope->directTasks()` has completed,
 the coroutine created by `processUser` will not stop its execution.
 
 The `finally` block calls `$scope->dispose()`, which cancels all coroutines that were created within the `Scope`.
-Calling `dispose()` explicitly cancels all zombie coroutines with a warning message.
-
 You can also use the `disposeAfterTimeout` and `disposeSafely` methods
 as alternative scenarios for cleaning up a `Scope`, see [Scope disposal](#scope-disposal).
 
@@ -1358,7 +1353,7 @@ function connectionChecker($socket, callable $cancelToken): void
             return;
         }                               
         
-        Async\delay(1000);
+        Async\delay(1000); // throw CancellationException if canceled
     }
 }
 
@@ -1374,7 +1369,7 @@ function connectionHandler($socket): void
 
     spawn with $scope use($socket, $scope) {
     
-        $limiterScope = Scope::inherit();
+        $limiterScope = Scope::inherit(); // child scope for connectionLimiter and connectionChecker
 
         $cancelToken = fn(string $message) => $scope->cancel(new CancellationException($message));        
 
@@ -1728,6 +1723,10 @@ The `async` block does the following:
 
 The `async` block allows for describing groups of coroutines in a clearer
 and safer way than manually using `Async\Scope`.
+
+> The `async` block is similar to the `async` function in **JavaScript**, `suspended` in **Kotlin**, and **Python**.
+> You can think of an `async` block as a direct analog of **colored functions**.
+> This also means that if an RFC introducing colored functions is created, async blocks will no longer be needed.
 
 * **Advantages**: Using `async` blocks improves code readability and makes it easier to analyze with static analyzers.
 * **Drawback**: an `async` block is useless if `Scope` is used as an object property.
