@@ -989,75 +989,12 @@ This leads to two important consequences:
 2. All child coroutines deeper than the first level explicitly belong to the `childScope` 
    (Unless another one was specified during their creation).
 
-This approach ensures that no "accidental tasks" are added to the `$scope`.  
-All other tasks created via `spawn` will be **explicit child coroutines**.
+This approach ensures that no "accidental tasks" are added to the `$scope`. 
+Such tasks will be **explicit direct tasks**.  
+All other tasks created using `spawn` without specifying a scope will be considered **implicit tasks**.
 
-All tasks created without specifying a `Scope` and placed in `childScope` are marked as **implicitly created**.
-
-| **Task Type**           | **Description**                       | **Creation Method**     | **Behavior on scope::dispose()** |
-|-------------------------|---------------------------------------|-------------------------|----------------------------------|
-| Explicitly Created      | Direct descendants of `$scope`        | `spawn` with `$scope`   | Cancelled without errors         |
-| Implicitly Created      | Descendants of the child `childScope` | `spawn`                 | Cancelled with errors            |
-
-
-If the `$scope` object is destroyed (i.e., its destructor is called),
-the coroutines that did not have time to complete will be marked as **zombie coroutine**.
-
-**Zombie coroutines** are considered a result of a programming error and are handled specially  
-(See section: [Zombie coroutine policy](#zombie-coroutine-policy)).
-
-```php
-use Async\Scope;
-
-$scope = new Scope();
-
-spawn with $scope {
-    spawn {
-        echo "Child of Task 1\n";
-    };
-    
-    echo "Task 1\n";    
-};
-
-unset($scope);
-```
-
-**Expected output:**
-
-```
-Warning: Coroutine is zombie at ...
-Task 1
-Child of Task 1
-```
-
-This happens because the `Scope` object loses its last reference,
-triggering the destructor, which monitors the execution progress of all child coroutines.
-
-This makes `Scope` objects a good (though not the best) tool for managing the lifetime of coroutines.  
-For example, you can assign the `$scope` object to another object and explicitly control its lifetime:
-
-```php
-use Async\Scope;
-
-class Service 
-{
-    private Scope $scope;
-    
-    public function __construct() {
-        $this->scope = new Scope();
-    }
-    
-    public function __destruct() {
-        $this->scope->disposeAfterTimeout(5000);
-    }
-    
-    public function run(): void {
-        spawn with $this->scope {
-            echo "Task 1\n";
-        };
-    }    
-}
-```
+The distinction between explicit and implicit tasks is important in the context of resource cleanup 
+(see a section [Scope disposal](#scope-disposal)).
 
 #### Motivation
 
@@ -1065,7 +1002,7 @@ The Coroutine Scope in this **RFC**,
 although inspired by the similarly named pattern from Kotlin,
 is not an analog and has no equivalents in other languages.
 
-The competitor to Coroutine Scope is the coroutine hierarchy,
+The competitor to **Coroutine Scope** is the coroutine hierarchy,
 where each coroutine started within another automatically becomes a child.
 
 The main reason why a simple coroutine hierarchy was rejected is that the following code creates ambiguity:
@@ -1083,7 +1020,8 @@ spawn task();
 task();
 ```
 
-The main reason why a simple coroutine hierarchy was rejected is the absence of colored functions.  
+Read more about [how colored functions help implement structured concurrency](./colored_functions.md).
+
 The following code demonstrates how the hierarchy rule behaves ambiguously
 when the same function can be called both as a coroutine and as a regular function.
 
@@ -1092,7 +1030,7 @@ If a programmer writes `subtask` assuming it will be called using `spawn`,
 they can easily break the behavior if the previous function
 (which they may not even be aware of) is called without `spawn`.
 
-Scope requires the programmer to create an explicit hierarchy.  
+`Scope` requires the programmer to create an **explicit hierarchy**.  
 Its main purpose is to provide a space for resource control that affects all coroutines created within the Scope.
 
 Resource control at the top level is a useful tool for organizing applications, frameworks, and libraries.
@@ -1141,10 +1079,12 @@ Without Coroutine Scope, implementing such control at the application level is e
 #### Scope waiting
 
 `Scope` can be useful both for waiting on coroutines and for limiting their lifetime.  
-It works especially well when the waiting logic is used together with a `try`–`finally` block:
+It works especially well when the waiting logic is used together with a `try`–`finally` block.
+
+**Example:**
 
 ```
-main()                          ← defines a request Scope and run handleRequest()
+main()                          ← defines a **request Scope** and run handleRequest()
 └── handleRequest()
     └── processUser()
         └── fetchProfile()      ← creates coroutine
@@ -1568,30 +1508,38 @@ since the exact order of coroutines in the execution queue cannot be determined 
 
 #### Scope disposal
 
-The `Async\Scope` class implements several methods for resource cleanup:
+**Coroutine Scope** has several resource cleanup strategies 
+that can be triggered either explicitly, on demand, 
+or implicitly when the `Scope` object loses its last reference.
 
-- `dispose` – cleans up resources and cancels coroutines, possibly with errors.
-- `disposeSafely` – cleans up resources while preserving zombie coroutines.
-- `disposeAfterTimeout` – cleans up resources and cancels coroutines after a timeout.
+There are three available strategies for `Scope` termination:
 
-The `Scope::dispose*` methods terminates the execution of a `Scope` differently than `cancel()`.
+| **Method**            | **Direct Child Coroutines**  | **Implicitly Created Child Coroutines**           |
+|-----------------------|------------------------------|---------------------------------------------------|
+| `disposeSafely`       | Cancels coroutines execution | Marks as zombie coroutines, does not cancel       |
+| `dispose`             | Same as `disposeSafely`      | Cancels with a warning                            |
+| `disposeAfterTimeout` | Cancels after a delay        | Issues a warning, then cancels after a delay      |
 
-It goes through all child coroutines that were explicitly defined using a `spawn with` expression and cancels them.
-All implicit coroutines that have not completed execution are marked as **Zombie**.
 
-When a **Zombie** coroutine is detected, PHP generates a warning indicating the location where the coroutine was started.
-The later behavior depends on the selected strategy:
+The main goal of all three methods is to terminate the execution of coroutines 
+that belong to the `Scope` or its child Scopes. 
+However, each method approaches this task slightly differently.
 
-- `dispose` – immediately cancels the coroutine.
-- `disposeAfterTimeout` – delays the cancellation for a specified duration.
-- `disposeSafely` – runs the coroutine under the **Zombie** policy.
+The `disposeSafely` method is used by default in the destructor of the `Async\Scope` class. 
+Its key feature is transitioning "implicitly created child coroutines" into a **zombie coroutine** state. 
+A **zombie coroutine** continues execution but is tracked by the system differently than regular coroutines.
+(See section: [Zombie coroutine policy](#zombie-coroutine-policy)).
+
+A warning is issued when a **zombie coroutine** is detected.
+
+Coroutines that were explicitly defined in `$scope` are canceled without warnings:
 
 ```php
 use function Async\Scope\delay;
 
 $scope = new Scope();
 
-spawn in $scope {
+await spawn in $scope {
     spawn {
         delay(1000);
         echo "Task 1\n";
@@ -1611,15 +1559,24 @@ $scope->disposeSafely();
 **Expected output:**
 
 ```
-Warning: Coroutine is zombie at ...
-Warning: Coroutine is zombie at ...
-Warning: Coroutine is zombie at ...
 Root task
+Warning: Coroutine is zombie at ... in Scope disposed at ...
+Warning: Coroutine is zombie at ... in Scope disposed at ...
 Task 1
 Task 2
 ```
 
-Compare this to the `dispose` method:
+The `$scope` variable is released immediately after the coroutine `Root task` completes execution, 
+so the child coroutine `Task 1` does not have time to execute 
+before the `disposeSafely` method is called.
+
+`disposeSafely` detects this and signals it with a warning but allows the coroutine to complete.
+
+The `Scope::dispose` method differs from `Scope::disposeSafely` in that it does not leave **zombie coroutines**. 
+It cancels **all coroutines**.
+When **Implicitly Created Child Coroutines** are detected as unfinished, a warning is issued.
+
+**Example:**
 
 ```php
 
@@ -1627,7 +1584,7 @@ use function Async\Scope\delay;
 
 $scope = new Scope();
 
-spawn in $scope {
+await spawn in $scope {
     spawn {
         delay(1000);
         echo "Task 1\n";
@@ -1647,9 +1604,56 @@ $scope->dispose();
 **Expected output:**
 
 ```
-Warning: Coroutine is zombie at ...
-Warning: Coroutine is zombie at ...
-Warning: Coroutine is zombie at ...
+Warning: Coroutine is zombie at ... in Scope disposed at ...
+Warning: Coroutine is zombie at ... in Scope disposed at ...
+```
+
+The `disposeAfterTimeout` method is a delayed version of the `dispose` method.
+The `$timeout` parameter must be greater than zero but less than 10 minutes.
+
+```php
+use Async\Scope;
+
+class Service 
+{
+    private Scope $scope;
+    
+    public function __construct() {
+        $this->scope = new Scope();
+    }
+    
+    public function __destruct() {
+        $this->scope->disposeAfterTimeout(5000);
+    }
+    
+    public function run(): void {
+        spawn with $this->scope {
+            
+            spawn {
+                delay(1000);
+                echo "Task 2\n";
+                delay(5000);
+                echo "Task 2 next line never executed\n";
+            };
+            
+            echo "Task 1\n";
+        };
+    }    
+}
+
+$service = new Service();
+$service->run();
+
+sleep(1);
+unset($service);
+```
+
+**Expected output:**
+
+```
+Task 1
+Warning: Coroutine is zombie at ... in Scope disposed at ...
+Task 2
 ```
 
 #### Spawn with disposed scope
