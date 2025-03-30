@@ -1,0 +1,53 @@
+@startuml
+
+@startmindmap
+* PHP True Async Decision Tree
+** Do you want to create a coroutine?
+*** Use spawn
+*** Do you want to use structured concurrency?
+**** Use async block
+** Do you want to wait for a result?
+*** Use await
+*** Are you waiting for multiple tasks?
+**** Use await all()
+*** Are you waiting for all child tasks?
+**** Use Scope::allTasks()
+*** Are you waiting for direct child tasks?
+**** Use Scope::directTasks()
+** Do you need to cancel tasks?
+*** Do you want to cancel a single coroutine?
+**** Use cancel()
+*** Do you want to cancel all child tasks in scope?
+**** Use dispose()
+**** Do you need a timeout before disposal?
+***** Use disposeAfterTimeout()
+**** Do you need a safe disposal method?
+***** Use disposeSafely()
+** Do you need structured concurrency?
+*** Use async block
+** Do you want to group tasks with a shared lifetime?
+*** Use Scope
+** Do you need error handling?
+*** Do you want to handle coroutine exceptions?
+**** Use try-catch with await
+**** Do you need to handle all scope exceptions?
+***** Use Scope::setExceptionHandler()
+** Do you need graceful shutdown?
+*** Use gracefulShutdown()
+** Do you want to protect critical sections?
+*** Use protect()
+** Do you want to execute logic on completion?
+*** Use onCompletion()
+*** Do you need a fallback?
+**** Use finally block
+** Do you need to pass data across coroutine boundaries?
+*** Use Context
+** Do you need context inheritance?
+*** Use Context Inheritance
+** Are you managing implicit coroutines?
+*** Do you want to handle zombie coroutines?
+**** Use Scope::disposeSafely()
+**** Use Scope::disposeAfterTimeout()
+@endmindmap
+
+@enduml
