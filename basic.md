@@ -992,6 +992,14 @@ This leads to two important consequences:
 This approach ensures that no "accidental tasks" are added to the `$scope`.  
 All other tasks created via `spawn` will be **explicit child coroutines**.
 
+All tasks created without specifying a `Scope` and placed in `childScope` are marked as **implicitly created**.
+
+| **Task Type**           | **Description**                       | **Creation Method**     | **Behavior on scope::dispose()** |
+|-------------------------|---------------------------------------|-------------------------|----------------------------------|
+| Explicitly Created      | Direct descendants of `$scope`        | `spawn` with `$scope`   | Cancelled without errors         |
+| Implicitly Created      | Descendants of the child `childScope` | `spawn`                 | Cancelled with errors            |
+
+
 If the `$scope` object is destroyed (i.e., its destructor is called),
 the coroutines that did not have time to complete will be marked as **zombie coroutine**.
 
