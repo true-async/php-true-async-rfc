@@ -7,7 +7,7 @@ namespace Async;
 /**
  * Execute the provided closure in non-cancellable mode.
  */
-function withoutCancellation(\Closure $closure): void {}
+function protect(\Closure $closure): void {}
 
 function any(iterable $futures, ?Awaitable $cancellation = null): Awaitable {}
 

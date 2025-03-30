@@ -51,13 +51,23 @@ File content: ...
 #### Waiting for coroutine results
 
 ```php
-echo await spawn file_get_contents("file.txt");
+function fetchData(string $file): string
+{
+    $result = file_get_contents($file);
+    
+    if($result === false) {
+        throw new Exception("Error reading $file");
+    }
+    
+    return $result;    
+}
+echo await spawn fetchData("file.txt");
 ```
 
 #### Awaiting a result with cancellation
 
 ```php
-echo await spawn file_get_contents("https://php.net/") until spawn sleep(2);
+echo await spawn fetchData("https://php.net/") until spawn sleep(2);
 ```
 
 #### Suspend keyword
@@ -101,7 +111,7 @@ function mergeFiles(string ...$files): string
 #### Structured concurrency
 
 ```php
-function loadDashboardData(string $userId): array 
+function loadDashboardData(string $userId): array
 {
     async $dashboardScope {
     
@@ -231,6 +241,24 @@ or separate extensions but does not describe this capability.
 This **RFC** also assumes functionality expansion using **SharedMemory**,
 specifically designed shared memory objects, through a separate API that is not part of this **RFC**.
 
+#### Preemptive Multitasking
+
+**PHP** allows for the implementation of forced coroutine suspension, 
+which can be used in a preemptive multitasking algorithm. 
+
+This capability is particularly implemented in **Swoole**. 
+However, the current **RFC** rejects **preemptive multitasking** due to the unpredictable behavior 
+of code during context switches. 
+
+A coroutine can lose control literally at any PHP opcode, 
+which can significantly affect the outcome and contradict the programmer's expectations. 
+Writing code that can lose control at any moment is a complex domain where PHP does not seem like an adequate tool.
+
+This **RFC** considers a scenario where a coroutine is abruptly stopped only in one case: 
+if the **Scheduler** implements a runtime control mechanism similar to `max_execution_time`.
+
+Please see [Maximum activity interval](#maximum-activity-interval) for more information.
+
 ### Namespace
 
 All functions, classes, and constants defined in this **RFC** are located in the `Async` namespace.
@@ -248,6 +276,12 @@ Any function can be executed as a coroutine without any changes to the code.
 
 A coroutine can stop itself bypassing control to the `Scheduler`.
 However, it cannot be stopped externally.
+
+> ⚠️ **Warning:** 
+> It is permissible to stop a coroutine’s execution externally for two reasons:
+> * To implement multitasking.
+> * To enforce an active execution time limit.
+> Please see [Maximum activity interval](#maximum-activity-interval) for more information.
 
 A suspended coroutine can be resumed at any time.
 The `Scheduler` component is responsible for the coroutine resumption algorithm.
@@ -2711,25 +2745,25 @@ Additionally, the `CancellationException` will not appear in `get_last_error()`,
 but it may trigger an `E_WARNING` to maintain compatibility with expected behavior
 for functions like `fwrite` (if such behavior is specified in the documentation).
 
-#### withoutCancellation function
+#### protect function
 
 Sometimes it's necessary to execute a critical section of code that must not be cancelled via `CancellationException`.
 For example, this could be a sequence of write operations or a transaction.
 
-For this purpose, the `Async\withoutCancellation` function is used,
+For this purpose, the `Async\protect` function is used,
 which allows executing a closure in a non-cancellable (silent) mode.
 
 ```php
 function task(): void 
 {
-    Async\withoutCancellation(fn() => fwrite($file, "Critical data\n"));
+    Async\protect(fn() => fwrite($file, "Critical data\n"));
 }
 
 spawn task();
 ```
 
-If a `CancellationException` was sent to a coroutine during withoutCancellation,
-the exception will be thrown immediately after the execution of withoutCancellation completes.
+If a `CancellationException` was sent to a coroutine during `protect()`,
+the exception will be thrown immediately after the execution of `protect()` completes.
 
 #### exit and die keywords
 
@@ -2773,6 +2807,28 @@ This condition is called a **Deadlock**, and it represents a serious logical err
 When a **Deadlock** is detected, the application enters **Graceful Shutdown** mode
 and generates warnings containing information about which **Coroutines** are in a waiting state
 and the exact lines of code where they were suspended.
+
+### Maximum activity interval
+
+> This RFC does not require the implementation of this tool but describes its potential use.
+
+The **Scheduler** can implement a limit on the continuous execution time of a coroutine 
+to regain control from tasks that may have "hung" due to a programmer's error.
+
+The criterion is calculated as the maximum interval of active coroutine execution 
+during which the coroutine does not yield control.
+
+It is reasonable to set the maximum interval to short time periods: 3–5 seconds for applications that handle requests.  
+If the maximum interval is exceeded, the **Scheduler** must generate a warning 
+with precise information about which coroutine and on which line the situation occurred.
+
+If this interval is exceeded, 
+the **Scheduler** can interrupt the coroutine’s execution at any point, 
+on any line, not just at suspension points or I/O function calls.
+
+The **Scheduler** can cancel a coroutine using `cancel()`, 
+which will throw an exception at the suspension point, 
+or it can terminate it without the possibility of resumption (depending on the implementation).
 
 ### Tools
 
