@@ -1,7 +1,7 @@
 @startuml
 
 @startmindmap
-* PHP True Async Decision Tree
+* Decision Tree
 ** Do you want to create a coroutine?
 *** Use spawn
 *** Do you want to use structured concurrency?
@@ -9,7 +9,7 @@
 ** Do you want to wait for a result?
 *** Use await
 *** Are you waiting for multiple tasks?
-**** Use await all()
+**** Use await Async\all()
 *** Are you waiting for all child tasks?
 **** Use Scope::allTasks()
 *** Are you waiting for direct child tasks?

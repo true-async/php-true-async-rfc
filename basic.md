@@ -2,6 +2,17 @@
 
 ## Proposal
 
+### 📚 Diagrams Overview
+
+This **RFC** is quite complex due to the number of logical connections. 
+Please use the diagrams from the table to simplify understanding.
+
+| Diagram Name                                                             | Description                                                                                  |
+|--------------------------------------------------------------------------|----------------------------------------------------------------------------------------------|
+| [mind-map.puml](diagrams/mind-map.puml)                                  | A mind map showing the relationship between key features and problems solved by the **RFC**. |
+| [feature-to-requirement.puml](diagrams/feature-to-requirement.puml)      | Maps features to the requirements that generated them.                                       |
+| [decision-tree.puml](diagrams/decision-tree.puml)                        | A decision tree that guides developers on which API to use depending on the situation.       |
+
 ### Overview
 
 This **RFC** describes the **API** and **new syntax** for writing concurrent code in PHP, which includes:
