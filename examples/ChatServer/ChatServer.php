@@ -22,42 +22,40 @@ function startChatServer(string $host, int $port): void
                 $clients[$id] = $client;
                 
                 // Handle each client in a separate coroutine and child scope
-                spawn use($client, $id, &$clients) {
-                    async inherit $clientScope {
-                        try {
-                            // Send welcome message
-                            socket_write($client, "Welcome to the chat room!\n");
+                spawn with Scope::inherit() use($client, $id, &$clients) {
+                    try {
+                        // Send welcome message
+                        socket_write($client, "Welcome to the chat room!\n");
+                        
+                        // Read messages from this client and broadcast them
+                        while (true) {
+                            $message = socket_read($client, 1024);
                             
-                            // Read messages from this client and broadcast them
-                            while (true) {
-                                $message = socket_read($client, 1024);
-                                
-                                if ($message === false || $message === '') {
-                                    break; // Client disconnected
-                                }
-                                
-                                $broadcastMsg = "Client $id: $message";
-                                echo $broadcastMsg;
-                                
-                                // Broadcast to all other clients
-                                foreach ($clients as $cid => $c) {
-                                    if ($cid !== $id) {
-                                        spawn socket_write($c, $broadcastMsg);
-                                    }
+                            if ($message === false || $message === '') {
+                                break; // Client disconnected
+                            }
+                            
+                            $broadcastMsg = "Client $id: $message";
+                            echo $broadcastMsg;
+                            
+                            // Broadcast to all other clients
+                            foreach ($clients as $cid => $c) {
+                                if ($cid !== $id) {
+                                    spawn socket_write($c, $broadcastMsg);
                                 }
                             }
-                        } catch (Exception $e) {
-                            echo "Error handling client $id: " . $e->getMessage() . "\n";
+                        }
+                    } catch (Exception $e) {
+                        echo "Error handling client $id: " . $e->getMessage() . "\n";
+                    } finally {
+                        // Gracefully handle connection cancellation
+                        try {
+                            await $clientScope->allTask() until Async\timeout(2000);
                         } finally {
-                            // Gracefully handle connection cancellation
-                            try {
-                                await $clientScope->allTask() until Async\timeout(2000);
-                            } finally {
-                                // Clean up when client disconnects
-                                socket_close($client);
-                                unset($clients[$id]);
-                                echo "Client $id disconnected\n";
-                            }
+                            // Clean up when client disconnects
+                            socket_close($client);
+                            unset($clients[$id]);
+                            echo "Client $id disconnected\n";
                         }
                     }
                 };
