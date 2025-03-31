@@ -1093,9 +1093,11 @@ It is possible to discard the `spawn` expression without specifying
 a `Scope` or always create a coroutine in the global scope,
 as **Java Loom** and **Kotlin** do.
 
-However, this approach would lose the ability to create zones of responsibility,
-where the framework code controls the user code, hiding implementation details.
-While this division is not perfect, it feels natural for the **Web-Server** pattern,
+However, explicit task creation in the global scope is prohibited by the rules of this RFC, 
+as it is considered an **antipattern** that is well-studied.
+
+The ability to control the default `Scope` for `spawn` allows frameworks to manage user code by enforcing common rules.  
+While this division is not perfect, it feels natural for the **Web-Server** pattern,  
 where the framework controls request handling, and the user code implements business logic.
 
 **Pros and Cons**:
