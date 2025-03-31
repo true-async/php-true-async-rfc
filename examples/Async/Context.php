@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Async;
 
-class Context
+final class Context
 {
     public function find(string|object $key): mixed {}
     public function get(string|object $key): mixed {}

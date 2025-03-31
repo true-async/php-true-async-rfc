@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Async;
 
-class Scope
+final class Scope
 {
     public readonly Context $context;
     
