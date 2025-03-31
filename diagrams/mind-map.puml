@@ -26,7 +26,7 @@ async inherit $scope {
 ***[#lightgreen] Scope::allTasks()
 **[#FFD700] Waiting for direct child tasks
 ***[#lightgreen] Scope::directTasks()
-**[#FFD700] Waiting for first direct child tasks (race condition)
+**[#FFD700] Waiting for first direct child tasks (race)
 ***[#lightgreen] Scope::anyDirectTasks()
 **[#FFD700] Waiting with cancellation
 ***[#lightgreen]: await + until

@@ -877,6 +877,36 @@ Caught exception: Error
 > ⚠️ **Warning:** Note that completing the coroutine's await
 > does not affect the lifetime of the coroutine used with `until`.
 
+#### Task Race
+
+Sometimes it's necessary to get the result of the fastest task from a set.  
+The **`Scope::anyDirectTasks`** method returns a trigger 
+that fires as soon as at least one of the direct tasks in the **Scope** is completed.
+
+**Example:**
+
+```php
+function fetchDataFromApi(string ...$apiHosts): string
+{
+    async bounded $scope {
+        
+        foreach($apiHosts as $host) {
+            spawn file_get_contents('https://'.$host.'/?request=1');
+        }
+    
+        // Get the result of the fastest task
+        // and cancel all other tasks
+        return await $scope->anyDirectTasks();
+    };
+}
+
+echo fetchDataFromApi([
+    'api1.com',
+    'api2.com',
+    'api3.com',
+]);
+```
+
 ### Edge Behavior
 
 The use of `spawn`/`await`/`suspend` is allowed in almost any part of a PHP program.
