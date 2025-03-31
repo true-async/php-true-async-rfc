@@ -12,7 +12,8 @@ function orchestrateDistributedProcess(array $nodes, array $taskConfig): array
         $activeTasks = [];
         
         // Health check phase
-        echo "Performing health checks on {count($nodes)} nodes...\n";
+        $countNodes = count($nodes);
+        echo "Performing health checks on {$countNodes} nodes...\n";
         
         async inherited $healthCheckScope {
             foreach ($nodes as $nodeId => $nodeConfig) {
@@ -31,7 +32,8 @@ function orchestrateDistributedProcess(array $nodes, array $taskConfig): array
                 };
             }
             
-            $healthCheckScope->awaitAll();
+            // Wait for all health checks to complete
+            $healthCheckScope->awaitAllIgnoringErrors();
         }
         
         // Filter out unhealthy nodes
@@ -88,7 +90,7 @@ function orchestrateDistributedProcess(array $nodes, array $taskConfig): array
                 };
             }
             
-            $distributionScope->awaitAll();
+            $distributionScope->awaitAllIgnoringErrors();
         }
         
         // Process and merge results
