@@ -1289,13 +1289,13 @@ After that, it waits for their completion again.
 
 #### directTasks and allTasks
 
-The `Scope::directTasks` and `Scope::allTasks` methods return a notifier object,
+The `Scope::directTasks` and `Scope::allTasks` methods return a trigger object,
 which can be used in combination with `await`
 to suspend the coroutine until the tasks within `$scope` have completed execution.
 
 | Feature                          | `Scope::directTasks`                                  | `Scope::allTasks`                                       |
 |----------------------------------|-------------------------------------------------------|---------------------------------------------------------|
-| **Returns**                      | `Awaitable` (notifier object)                         | `Awaitable` (notifier object)                           |
+| **Returns**                      | `Awaitable` (trigger object)                          | `Awaitable` (trigger object)                            |
 | **What it waits for**            | Only direct child tasks of `$scope`                   | All tasks within `$scope`, including in child scopes    |
 | **Includes nested scopes**       | No                                                    | Yes                                                     |
 | **Used for**                     | Waiting for explicitly spawned tasks in current scope | Waiting for complete task tree under `$scope`           |
