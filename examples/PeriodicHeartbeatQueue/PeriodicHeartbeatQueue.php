@@ -17,7 +17,7 @@ final class PeriodicHeartbeatQueue
     private array $clients = [];
     private Scope $scope;
     private int   $heartbeatPeriod;
-    private int            $queuedPingLimit;
+    private int   $queuedPingLimit;
     
     public function __construct(int $heartbeatPeriod = 60, int $queuedPingLimit = 2)
     {
@@ -43,7 +43,7 @@ final class PeriodicHeartbeatQueue
     
     private function startHeartbeat(): void
     {
-        spawn in $this->scope {
+        spawn with $this->scope {
             while (true) {
                 foreach ($this->clients as $id => $weakRef) {
                     
