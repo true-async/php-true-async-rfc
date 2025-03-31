@@ -1,43 +1,78 @@
+@startuml
+
 @startmindmap
+*[#lightblue] Creating Coroutines
+**[#lightgreen] spawn
+*[#lightblue] Switching to Scheduler
+**[#lightgreen] suspend
+*[#lightblue] Structured Concurrency
+**[#FFD700] Grouping tasks
+***[#lightgreen]: async block + await Scope::allTasks
 
-* PHP True Async RFC
-** Creating Coroutines
-*** spawn
-** Structured Concurrency
-*** Problem: Grouping tasks with structured concurrency
-**** Solution: async block
-** Waiting for Results
-*** await
-*** Problem: Waiting for multiple tasks
-**** Solution: await all()
-*** Problem: Waiting for all child tasks
-**** Solution: Scope::allTasks()
-*** Problem: Waiting for direct child tasks
-**** Solution: Scope::directTasks()
-** Handling Exceptions
-*** Problem: Handling exceptions inside coroutine
-**** Solution: try-catch with await
-*** Problem: Handling exceptions in grouped tasks
-**** Solution: Scope Exception Handler
-** Task Grouping and Scope
-*** Problem: Grouping tasks with shared lifetime
-**** Solution: Scope
-*** Problem: Linking PHP object with coroutines
-**** Solution: Scope
-** Task Cancellation
-*** Problem: Cancel a running coroutine
-**** Solution: cancel()
-*** Problem: Cancel all child tasks in scope
-**** Solution: dispose()
-** Context Management
-*** Problem: Passing data across coroutine boundaries
-**** Solution: Context
-*** Problem: Inheriting context across scopes
-**** Solution: Context Inheritance
-** Managing Implicit Coroutines
-*** Problem: Managing implicit coroutines
-**** Solution: Explicit/Implicit Coroutines
-*** Problem: Preventing resource leaks
-**** Solution: Zombie Coroutine Policy
+async $scope {
+		await $scope->allTasks()
+};
+**[#FFD700] Creating a hierarchy
+***[#lightgreen]: async inherit block
 
+async inherit $scope {
+		await $scope->allTasks()
+};
+*[#lightblue] Waiting for Results
+**[#lightgreen] await <Async\Awaitable>
+**[#FFD700] Waiting for multiple tasks
+***[#lightgreen] await Async\all()
+**[#FFD700] Waiting for all child tasks
+***[#lightgreen] Scope::allTasks()
+**[#FFD700] Waiting for direct child tasks
+***[#lightgreen] Scope::directTasks()
+**[#FFD700] Waiting with cancellation
+***[#lightgreen]: await + until
+
+await $coroutine until $cancellation;
+*[#lightblue] Handling Exceptions
+**[#FFD700] Handling exceptions inside coroutine
+***[#lightgreen] try-catch with await
+**[#FFD700] Handling exceptions in grouped tasks
+***[#lightgreen] Scope Exception Handler
+**[#FFD700] Handling exceptions as a supervisor
+***[#lightgreen] Child Scope Exception Handler
+*[#lightblue] Task Grouping
+**[#FFD700] Grouping tasks with shared lifetime
+***[#lightgreen] Scope
+**[#FFD700] Linking PHP object with coroutines
+***[#lightgreen]: Scope
+
+class Some {
+	public function __construct() {
+		$this->scope = new Scope()
+	}
+
+	public function __destruct() {
+		$this->scope->dispose()
+	}
+};
+*[#lightblue] Task Cancellation
+**[#FFD700] Cancel a running coroutine
+***[#lightgreen] Coroutine::cancel()
+**[#FFD700] Cancel all child tasks in scope
+***[#lightgreen] Scope::cancel()
+**[#FFD700] Cancel all child tasks with warning
+***[#lightgreen] Scope::dispose()
+**[#FFD700] Cancel all child tasks with zombie coroutine
+***[#lightgreen] Scope::disposeSafely()
+*[#lightblue] Context Management
+**[#FFD700] Passing data across coroutine boundaries
+***[#lightgreen] Async\Context
+**[#FFD700] Inheriting context across scopes
+***[#lightgreen] Scope Inheritance
+*[#lightblue] Managing Implicit Coroutines
+**[#FFD700] Creating implicit coroutines
+***[#lightgreen] spawn without Scope
+**[#FFD700] Managing implicit coroutines
+***[#lightgreen] Create Scope + Scope::disposeSafely()
+**[#FFD700] Preventing resource leaks
+***[#lightgreen] Zombie Coroutine Policy or Task cancellation
 @endmindmap
+
+@enduml
