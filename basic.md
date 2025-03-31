@@ -226,9 +226,15 @@ function mergeFiles(string ...$files): string
 
 ### Scheduler and Reactor
 
-The **Scheduler** and **Reactor** components are part of the low-level implementation of this **RFC**.
+**Scheduler** and **Reactor** must be implemented as `PHP` extensions that implement low-level interfaces. 
 
-The **Scheduler** is a component responsible for managing the execution order of coroutines.
+The **Scheduler** and **Reactor** interfaces are part of the implementation of this **RFC**.
+
+The behavior of **Scheduler** and **Reactor** must not contradict the logic of the **RFC**.
+Components cannot override the logic of expressions such as spawn, async, suspend, and so on. 
+However, this **RFC** does not impose any restrictions on extending functionality.
+
+It is allowed to use the **Async** namespace for new functions or objects in **Scheduler** and **Reactor**.
 
 > ⚠️ **Warning:** Users should not make assumptions about the execution order of coroutines unless
 > this is a specific goal of a particular **Scheduler** implementation.
