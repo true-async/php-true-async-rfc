@@ -1082,8 +1082,25 @@ Its main purpose is to provide a space for resource control that affects all cor
 
 Resource control at the top level is a useful tool for organizing applications, frameworks, and libraries.
 
-> Thus, the desire to abandon colored functions is the main motivation for implementing `Scope`. 
-> **Colored functions** allow `Scope` to be avoided, as each coroutine would act as a `Scope` for its children.
+##### Explicit and Implicit Tasks
+
+The division of coroutines into explicit and implicit tasks is unique to this **RFC** 
+and does not exist in any other language.
+
+The **Java Loom** project, for example, requires that the `Scope` is always explicitly specified.
+
+It is possible to discard the `spawn` expression without specifying
+a `Scope` or always create a coroutine in the global scope,
+as **Java Loom** and **Kotlin** do.
+
+However, this approach would lose the ability to create zones of responsibility,
+where the framework code controls the user code, hiding implementation details.
+While this division is not perfect, it feels natural for the **Web-Server** pattern,
+where the framework controls request handling, and the user code implements business logic.
+
+**Pros and Cons**:
+- **Cons:** Complex API, requiring consideration of two different types of coroutines.
+- **Pros:** Creation of `points of responsibility` and distribution of complexity.
 
 #### Point of Responsibility
 
