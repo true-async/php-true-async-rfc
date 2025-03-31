@@ -26,6 +26,8 @@ class Scope
     
     public function directTasks(): Awaitable {}
     
+    public function anyDirectTasks(): Awaitable {}
+    
     public function allTasks(): Awaitable {}
     
     public function awaitAllIgnoringErrors(?callable $errorHandler = null, ?Awaitable $cancellation = null): void {}
