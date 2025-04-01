@@ -52,8 +52,8 @@ final class RabbitMQListener
     
     public function await(): void
     {
-        await($this->scope);
-        await($this->consumeScope);
+        await $this->scope;
+        await $this->consumeScope;
     }
     
     private function handleMessage(AMQPMessage $msg, string $queue): void
