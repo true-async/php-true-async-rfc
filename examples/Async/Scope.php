@@ -54,4 +54,6 @@ final class Scope
     public function disposeSafely(): void {}
     
     public function disposeAfterTimeout(int $timeout): void {}
+    
+    public function getChildScopes(): array {}
 }

@@ -3020,6 +3020,8 @@ about what the coroutine is waiting for, if it is in a waiting state.
 
 The format of this array depends on the implementation of the **Scheduler** and the **Reactor**.
 
+The `Async\Scope::getChildScopes()` method returns an array of all child scopes of the current scope.
+
 The `Async\getCoroutines()` method returns an array of all coroutines in the application.
 
 ### Prototypes
