@@ -298,7 +298,7 @@ However, it cannot be stopped externally.
 > It is permissible to stop a coroutine’s execution externally for two reasons:
 > * To implement multitasking.
 > * To enforce an active execution time limit.
-    > Please see [Maximum activity interval](#maximum-activity-interval) for more information.
+> Please see [Maximum activity interval](#maximum-activity-interval) for more information.
 
 A suspended coroutine can be resumed at any time.
 The `Scheduler` component is responsible for the coroutine resumption algorithm.
@@ -511,14 +511,14 @@ function defineTargetIpV4(string $host): string {
     return gethostbyname($host);
 }
 
-spawn with $scope test($host);
+spawn with $scope defineTargetIpV4($host);
 ```
 
 The `scope` expression can be:
 - A variable:
 
 ```php
-spawn with $scope function:void {
+spawn with $scope use():void {
     echo gethostbyname('php.net').PHP_EOL;
 };
 ```
@@ -728,8 +728,8 @@ Inside each coroutine,
 there is an illusion that all actions are executed sequentially,
 while in reality, operations occur asynchronously.
 
-This **RFC** proposes support for core PHP functions that require non-blocking input/output,
-as well as support for CURL, Socket, and other extensions based on the **PHP Stream API**.
+This **RFC** proposes support for core `PHP` functions that require non-blocking input/output,
+as well as support for `cURL`, `Socket`, and other extensions based on the **PHP Stream API**.
 Please see Unaffected PHP Functionality.
 
 ### Awaitable interface
@@ -1369,6 +1369,17 @@ First, the code waits for the main tasks to complete.
 Then, it waits for any remaining tasks. If there are any, a `CancellationException` is thrown,  
 and the code logs information about which coroutines were not properly completed.  
 After that, it waits for their completion again.
+
+#### Scope Ownership
+
+The following expressions do not affect the reference count of the `$scope` object:
+* `spawn with $scope`
+* `Scope::inherit($scope)` does **not** increase the reference count of either the parent or the child `$scope`.
+
+The following statements are true:
+1. The lifetime of a child `Scope` cannot exceed that of its parent. 
+   If the parent is destroyed, the child `Scope` will be closed.
+2. If the child `Scope` is released, the parent will automatically lose its connection to it.
 
 #### directTasks and allTasks
 
