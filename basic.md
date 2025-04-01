@@ -944,7 +944,7 @@ Caught exception: Error
 #### Task Race
 
 Sometimes it's necessary to get the result of the fastest task from a set.  
-The **`Scope::anyDirectTasks`** method returns a trigger 
+The **`Scope::firstDirectTask`** method returns a trigger 
 that fires as soon as at least one of the direct tasks in the **Scope** is completed.
 
 **Example:**
@@ -960,7 +960,7 @@ function fetchDataFromApi(string ...$apiHosts): string
     
         // Get the result of the fastest task
         // and cancel all other tasks
-        return await $scope->anyDirectTasks();
+        return await $scope->firstDirectTask();
     };
 }
 

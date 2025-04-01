@@ -26,7 +26,7 @@ final class Scope
     
     public function directTasks(): Awaitable {}
     
-    public function anyDirectTasks(): Awaitable {}
+    public function firstDirectTask(): Awaitable {}
     
     public function allTasks(): Awaitable {}
     

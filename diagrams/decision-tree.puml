@@ -22,7 +22,7 @@ spawn use($some): void {
 **[#87CEEB] You want to wait with cancellation?
 ***[#lightgreen] Use await until: await $coroutine until $cancellation
 **[#87CEEB] Do you want to wait for at least one task (race)?
-***[#lightgreen] Use await + Scope::anyDirectTasks()
+***[#lightgreen] Use await + Scope::firstDirectTask()
 *[#lightblue] Do you need to cancel tasks?
 **[#87CEEB] Do you want to cancel a single coroutine?
 ***[#lightgreen] Use Coroutine::cancel()
