@@ -4,7 +4,7 @@
 
 ### 📚 Diagrams Overview
 
-This **RFC** is quite complex due to the number of logical connections. 
+This **RFC** is quite complex due to the number of logical connections.
 Please use the diagrams from the table to simplify understanding.
 
 | Diagram Name                                                  | Description                                                                                  |
@@ -226,12 +226,12 @@ function mergeFiles(string ...$files): string
 
 ### Scheduler and Reactor
 
-**Scheduler** and **Reactor** must be implemented as `PHP` extensions that implement low-level interfaces. 
+**Scheduler** and **Reactor** must be implemented as `PHP` extensions that implement low-level interfaces.
 
 The **Scheduler** and **Reactor** interfaces are part of the implementation of this **RFC**.
 
 The behavior of **Scheduler** and **Reactor** must not contradict the logic of the **RFC**.
-Components cannot override the logic of expressions such as spawn, async, suspend, and so on. 
+Components cannot override the logic of expressions such as spawn, async, suspend, and so on.
 However, this **RFC** does not impose any restrictions on extending functionality.
 
 It is allowed to use the **Async** namespace for new functions or objects in **Scheduler** and **Reactor**.
@@ -298,7 +298,7 @@ However, it cannot be stopped externally.
 > It is permissible to stop a coroutine’s execution externally for two reasons:
 > * To implement multitasking.
 > * To enforce an active execution time limit.
-> Please see [Maximum activity interval](#maximum-activity-interval) for more information.
+    > Please see [Maximum activity interval](#maximum-activity-interval) for more information.
 
 A suspended coroutine can be resumed at any time.
 The `Scheduler` component is responsible for the coroutine resumption algorithm.
@@ -944,7 +944,7 @@ Caught exception: Error
 #### Task Race
 
 Sometimes it's necessary to get the result of the fastest task from a set.  
-The **`Scope::firstDirectTask`** method returns a trigger 
+The **`Scope::firstDirectTask`** method returns a trigger
 that fires as soon as at least one of the direct tasks in the **Scope** is completed.
 
 **Example:**
@@ -1148,7 +1148,7 @@ Resource control at the top level is a useful tool for organizing applications, 
 
 ##### Explicit and Implicit Tasks
 
-The division of coroutines into explicit and implicit tasks is unique to this **RFC** 
+The division of coroutines into explicit and implicit tasks is unique to this **RFC**
 and does not exist in any other language.
 
 The **Java Loom** project, for example, requires that the `Scope` is always explicitly specified.
@@ -1157,7 +1157,7 @@ It is possible to discard the `spawn` expression without specifying
 a `Scope` or always create a coroutine in the global scope,
 as **Java Loom** and **Kotlin** do.
 
-However, explicit task creation in the global scope is prohibited by the rules of this RFC, 
+However, explicit task creation in the global scope is prohibited by the rules of this RFC,
 as it is considered an **antipattern** that is well-studied.
 
 The ability to control the default `Scope` for `spawn` allows frameworks to manage user code by enforcing common rules.  
@@ -1377,7 +1377,7 @@ The following expressions do not affect the reference count of the `$scope` obje
 * `Scope::inherit($scope)` does **not** increase the reference count of either the parent or the child `$scope`.
 
 The following statements are true:
-1. The lifetime of a child `Scope` cannot exceed that of its parent. 
+1. The lifetime of a child `Scope` cannot exceed that of its parent.
    If the parent is destroyed, the child `Scope` will be closed.
 2. If the child `Scope` is released, the parent will automatically lose its connection to it.
 
@@ -1477,10 +1477,7 @@ A new child `Scope` can be created using a special constructor:
 It returns a new `Scope` object that acts as a child.  
 A coroutine created within the child `Scope` can also be considered a child relative to the coroutines in the parent `Scope`.
 
-The advantage of a child `Scope` is that it’s not “detached” — it’s attached to its parent.
-The code that owns the parent `Scope` can control the entire hierarchy of coroutines at once.
-
-Let’s look at an example.
+**An example:**
 
 ```php
 use Async\Scope;
@@ -1571,7 +1568,7 @@ function socketServer(): void
 ```
 Let's examine how this example works.
 
-1. `socketServer` creates a new Scope for coroutines that will handle all connections.
+1. `socketServer` creates a new `Scope` for coroutines that will handle all connections.
 2. Each new connection is processed using `connectionHandler()` in a separate `Scope`,
    which is inherited from the main one.
 3. `connectionHandler` creates a new `Scope` for the `connectionLimiter` and `connectionChecker` coroutines.
@@ -2075,7 +2072,7 @@ The following scenarios are considered potentially erroneous:
 1. A coroutine belongs to a global scope and is not awaited by anyone (a **zombie coroutine**).
 2. The root scope has been destroyed (its destructor was called), but no one awaited
    it or ensured that its resources were explicitly cleaned up (e.g., by calling `$scope->cancel()` or `$scope->dispose()`).
-3. Tasks were not cancelled using the `cancel()` method, but through a call to `dispose()`.  
+3. **Implicit Tasks** were not cancelled using the `cancel()` method, but through a call to `dispose()`.  
    This indicates that the programmer did not intend to cancel the execution of the coroutine,  
    yet it happened because the scope was destroyed.
 4. Deadlocks caused by circular dependencies between coroutines.
@@ -3046,7 +3043,7 @@ The `Async\getCoroutines()` method returns an array of all coroutines in the app
 
 #### Parallels with Java Loom
 
-This **RFC** unintentionally contains many parallels with the Java Loom StructuredTaskScope API, 
+This **RFC** unintentionally contains many parallels with the Java Loom StructuredTaskScope API,
 which is very similar to this **RFC**.
 
 | **Feature**             | **PHP True Async (Scope)**                                                                        | **Java Loom (StructuredTaskScope)**                                                                             |
