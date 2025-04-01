@@ -8,7 +8,6 @@ use Async\Scope;
 final class RequestHandler
 {
     private Scope $scope;
-    private Scope $connectionScope;
     
     public function __construct()
     {
@@ -25,7 +24,7 @@ final class RequestHandler
         spawn with $this->scope use($server) {
             try {
                 while (($client = stream_socket_accept($server)) !== false) {
-                    spawn with $this->connectionScope $this->handleConnection($client);
+                    spawn with child $this->scope $this->handleConnection($client);
                 }
             } finally {
                 fclose($server);
@@ -36,14 +35,12 @@ final class RequestHandler
     
     private function handleConnection($client): void
     {
-        async inherit bounded $scope {
-            try {
-                $request = fread($client, 1024);
-                $response = "HTTP/1.1 200 OK\r\nContent-Length: 12\r\n\r\nHello World!";
-                fwrite($client, $response);
-            } finally {
-                fclose($client);
-            }
+        try {
+            $request = fread($client, 1024);
+            $response = "HTTP/1.1 200 OK\r\nContent-Length: 12\r\n\r\nHello World!";
+            fwrite($client, $response);
+        } finally {
+            fclose($client);
         }
     }
 }

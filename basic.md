@@ -339,10 +339,10 @@ The `spawn` construct is available in two variations:
 
 ```php
 // Executing a known function
-spawn [with <scope>] <function_call>;
+spawn [with [child] <scope>] <function_call>;
 
 // Closure form
-spawn [with <scope>] [static] [use(<parameters>)][: <returnType>] {
+spawn [with [child] <scope>] [static] [use(<parameters>)][: <returnType>] {
     <codeBlock>
 };
 ```
@@ -444,7 +444,7 @@ spawn (fn() => sleep(1))();
 Allows creating a coroutine from a closure directly when using `spawn`:
 
 ```php
-spawn [with <scope>] [static] [use(<parameters>)[: <returnType>]] {
+spawn [with [child] <scope>] [static] [use(<parameters>)[: <returnType>]] {
     <codeBlock>
 };
 ```
@@ -528,6 +528,70 @@ spawn with $scope function:void {
 ```php
 spawn with $this->scope $this->method();
 spawn with $this->getScope() $this->method();
+```
+
+#### Spawn with child expression
+
+The `spawn with` expression allows you to create siblings relative to the specified scope.  
+However, it can be useful to create a coroutine in a child scope to establish a clear hierarchy.
+
+```php
+use Async\Scope;
+
+$scope = new Scope();
+
+spawn with $scope wathcher();
+
+spawn with $scope use($scope): void {
+    foreach ($hosts as $host) {
+        $child = Scope::inherit($scope);
+        
+        $coroutine = spawn with $scope {
+            echo gethostbyname('php.net').PHP_EOL;
+        };
+        
+        $coroutine->onComplete(fn() => $child->disposeSafely());
+    }      
+};
+
+$scope->awaitAllIgnoringErrors();
+```
+
+**Structure:**
+
+```
+$scope = new Scope();
+├── watcher()                   ← runs in the $scope
+├── foreach($hosts)             ← runs in the $scope
+├── $child = Scope::inherit($scope)
+│   └── subtask1()              ← runs in the childScope
+├── $child = Scope::inherit($scope)
+│   └── subtask2()              ← runs in the childScope
+├── $child = Scope::inherit($scope)
+│   └── subtask3()              ← runs in the childScope
+```
+
+This structure separates main tasks belonging to the `$scope` and child tasks that are launched in child scopes.  
+Each child task can be cancelled independently of the others, since it belongs to a separate scope (Supervisor pattern).
+
+The `child` keyword is used to create a child scope from the specified scope.
+
+```php
+use Async\Scope;
+
+$scope = new Scope();
+
+spawn with $scope wathcher();
+
+spawn with $scope use($scope): void {
+    foreach ($hosts as $host) {
+        spawn with child $scope {
+            echo gethostbyname('php.net').PHP_EOL;
+        };
+    }      
+};
+
+$scope->awaitAllIgnoringErrors();
 ```
 
 ### Suspension
@@ -2580,7 +2644,14 @@ final class Service
     private function run(): void
     {
         while (($socket = $this->service->receive()) !== null) {
-            spawn with Scope::inherit($this->scope) $this->handleRequest($socket);
+            
+            $scope = Scope::inherit($this->scope);
+            
+            (spawn with $scope $this->handleRequest($socket))->onCompletion(
+                static function () use ($scope) {
+                    $scope->disposeSafely();
+                }
+            );
         }
     }
 }
