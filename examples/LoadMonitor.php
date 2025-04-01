@@ -37,7 +37,7 @@ function loadMonitor(\Async\Coroutine $task, float $threshold = 1.00, int $check
             return;
         }
         
-        sleep($checkInterval);
+        Async\timeout($checkInterval * 1000);
         unset($output);
     }
 }

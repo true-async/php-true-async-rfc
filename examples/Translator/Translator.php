@@ -19,10 +19,12 @@ use LongPoll;
 final class Translator
 {
     private Scope $scope;
+    private Scope $connectionScope;
     
     public function __construct(private LongPoll $longPoll, private \TranslatorHttpClient $translatorClient)
     {
         $this->scope = new Scope();
+        $this->connectionScope = Scope::inherit($this->scope);
         
         // Define an exception handle for all child scopes
         // Handling exceptions from child **Scopes** ensures that errors in child coroutines do not propagate
@@ -40,19 +42,21 @@ final class Translator
     private function run(): void
     {
         while (($socket = $this->longPoll->receive()) !== null) {
-            spawn with Scope::inherit($this->scope) $this->handleRequest($socket);
+            spawn with $this->connectionScope $this->handleRequest($socket);
         }
     }
     
     private function handleRequest(\Socket $socket): void
     {
-        try {
-            $this->handleLines($socket);
-        } catch (\Throwable $exception) {
-            $response = json_encode(['error' => $exception->getMessage(), 'code' => $exception->getCode()]);
-            socket_write($socket, $response);
-        } finally {
-            socket_close($socket);
+        async inherit bounded $scope {
+            try {
+                $this->handleLines($socket);
+            } catch (\Throwable $exception) {
+                $response = json_encode(['error' => $exception->getMessage(), 'code' => $exception->getCode()]);
+                socket_write($socket, $response);
+            } finally {
+                socket_close($socket);
+            }
         }
     }
     
