@@ -1235,7 +1235,8 @@ WebServer
 A new child `Scope` can be created using a special constructor:  
 `Scope::inherit()`.  
 It returns a new `Scope` object that acts as a child.  
-A coroutine created within the child `Scope` can also be considered a child relative to the coroutines in the parent `Scope`.
+A coroutine created within the child `Scope` can also be considered
+a child relative to the coroutines in the parent `Scope`.
 
 **An example:**
 
@@ -1316,7 +1317,7 @@ function socketServer(): void
         // Graceful exit
         try {
             $scope->cancel();
-            await $scope->allTasks() until Async\timeout(5);
+            await $scope until Async\timeout(5);
             echo "Server stopped\n";
         } catch (\Throwable $exception) {
             // Force exit
