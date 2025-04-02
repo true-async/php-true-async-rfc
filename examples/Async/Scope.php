@@ -24,7 +24,7 @@ final class Scope implements Awaitable
     
     public function cancel(?CancellationException $cancellationException = null): void {}
     
-    public function awaitAllIgnoringErrors(?callable $errorHandler = null, ?Awaitable $cancellation = null): void {}
+    public function awaitIgnoringErrors(?callable $errorHandler = null, ?Awaitable $cancellation = null): void {}
     
     public function isFinished(): bool {}
     

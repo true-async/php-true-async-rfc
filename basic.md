@@ -541,7 +541,7 @@ spawn with $scope use($scope): void {
     }      
 };
 
-$scope->awaitAllIgnoringErrors();
+$scope->awaitIgnoringErrors();
 ```
 
 **Structure:**
@@ -578,7 +578,7 @@ spawn with $scope use($scope): void {
     }      
 };
 
-$scope->awaitAllIgnoringErrors();
+$scope->awaitIgnoringErrors();
 ```
 
 ### Suspension
@@ -1156,7 +1156,7 @@ try {
 Error
 ```
 
-#### awaitAllIgnoringErrors
+#### awaitIgnoringErrors
 
 Sometimes it's necessary to wait for all tasks to complete before exiting a function permanently.
 
@@ -1175,7 +1175,7 @@ the program should stop executing:
        echo "Shutting down server...\n";
        
        try {
-           $serverScope->awaitAllIgnoringErrors(errorHandler: function (Async\Scope $scope, Async\Coroutine $coroutine, Throwable $e) {
+           $serverScope->awaitIgnoringErrors(errorHandler: function (Async\Scope $scope, Async\Coroutine $coroutine, Throwable $e) {
                 echo "Caught exception: {$e->getMessage()}\n in coroutine: {$coroutine->getSpawnLocation()}\n";
            }, cancellation: \Async\timeout(5000));
        } finally {
@@ -1184,7 +1184,7 @@ the program should stop executing:
     }
 ```
 
-The `Scope::awaitAllIgnoringErrors` method allows waiting for the complete termination of a `Scope`,
+The `Scope::awaitIgnoringErrors` method allows waiting for the complete termination of a `Scope`,
 ignoring exceptions. If an `$errorHandler` is defined, it can additionally output error information.
 
 Please see also the [Scope::setExceptionHandler method](#error-handling).
