@@ -1002,6 +1002,8 @@ If an application never creates **custom Scopes**, its behavior is similar to co
 The expression `spawn with $scope` creates a **new coroutine** bound to the specified scope. 
 Coroutines created during the execution of this **new coroutine** will become **sibling tasks**.
 
+> ℹ️ Coroutines created after `spawn with <expression>` inherit the specified `$scope`.
+
 ```php
 use Async\Scope;
 
@@ -1128,6 +1130,11 @@ until all tasks within `$scope` are completed, including tasks in child `Scope` 
 This condition directly aligns with the concept of **structured concurrency**,  
 where a parent task must wait for the completion of all its child tasks.
 
+The expression `await $scope`, unlike `await $coroutine`, 
+does not capture the result of coroutine execution and always returns `NULL`.
+
+> ℹ️ **Note:** If you need to retrieve the result of a group of tasks, use the `Async\TaskGroup` class.
+
 Awaiting the `$scope` object also allows handling exceptions from coroutines within the `$scope`:
 
 ```php
@@ -1155,39 +1162,6 @@ try {
 ```
 Error
 ```
-
-#### awaitIgnoringErrors
-
-Sometimes it's necessary to wait for all tasks to complete before exiting a function permanently.
-
-For example, in a web server scenario, when a user presses **CTRL-C**,
-the program should stop executing:
-* First, the `cancel()` method is called, which cancels all child tasks. But that's not the end yet.
-* The tasks are still running. Therefore, it's essential to explicitly wait for them to finish.
-
-```php
-    // Wait for Ctrl+C
-    try {
-       await Async\signal(SIGINT);
-    } finally {
-       $serverScope->cancel(new Async\CancellationException("Server shutting down"));
-       
-       echo "Shutting down server...\n";
-       
-       try {
-           $serverScope->awaitIgnoringErrors(errorHandler: function (Async\Scope $scope, Async\Coroutine $coroutine, Throwable $e) {
-                echo "Caught exception: {$e->getMessage()}\n in coroutine: {$coroutine->getSpawnLocation()}\n";
-           }, cancellation: \Async\timeout(5000));
-       } finally {
-           // Cleanup code
-       }
-    }
-```
-
-The `Scope::awaitIgnoringErrors` method allows waiting for the complete termination of a `Scope`,
-ignoring exceptions. If an `$errorHandler` is defined, it can additionally output error information.
-
-Please see also the [Scope::setExceptionHandler method](#error-handling).
 
 #### Scope Hierarchy
 
@@ -1557,7 +1531,7 @@ the same cleanup strategy is used that was applied to the parent `Scope`.
 If the `disposeSafely` method is called, the child Scopes will also be released using the `disposeSafely` strategy.  
 If the `dispose` method is used, the child Scopes will use the same method for cleanup.
 
-The `disposeAfterTimeout` method will delay the execution of `dispose` for the specified time.
+The `disposeAfterTimeout` method will delay the execution of `disposeSafely` for the specified time.
 
 #### Spawn with disposed scope
 
@@ -1808,7 +1782,7 @@ try {
             echo "Copy complete.\n";
         };
 
-        await $scope->allTasks();
+        await $scope;
     };
 } finally {
     fclose($source);
@@ -1831,7 +1805,7 @@ The following scenarios are considered potentially erroneous:
 1. A coroutine belongs to a global scope and is not awaited by anyone (a **zombie coroutine**).
 2. The root scope has been destroyed (its destructor was called), but no one awaited
    it or ensured that its resources were explicitly cleaned up (e.g., by calling `$scope->cancel()` or `$scope->dispose()`).
-3. **Implicit Tasks** were not cancelled using the `cancel()` method, but through a call to `dispose()`.  
+3. Tasks were not cancelled using the `cancel()` method, but through a call to `dispose()`.  
    This indicates that the programmer did not intend to cancel the execution of the coroutine,  
    yet it happened because the scope was destroyed.
 4. Deadlocks caused by circular dependencies between coroutines.
@@ -1875,12 +1849,15 @@ To avoid accidentally hanging coroutines whose lifetimes were not correctly limi
 namespace ProcessPool;
 
 use Async\Scope;
+use Async\TaskGroup;
 
 final class ProcessPool
 {
     private Scope $watcherScope;
     private Scope $poolScope;
     private Scope $jobsScope;
+    private TaskGroup $taskGroup;
+    
     /**
      * List of pipes for each process.
      * @var array
@@ -1899,6 +1876,7 @@ final class ProcessPool
         $this->poolScope = new Scope();
         $this->watcherScope = new Scope();
         $this->jobsScope = new Scope();
+        $this->taskGroup = new TaskGroup(captureResults: false);
     }
     
     public function __destruct()
@@ -1910,10 +1888,10 @@ final class ProcessPool
     
     public function start(): void
     {
-        spawn with $this->watcherScope $this->processWatcher();
+        spawn with $this->watcherScope $this->processWatcher();        
         
         for ($i = 0; $i < $this->min; $i++) {
-            spawn with $this->poolScope $this->startProcess();
+            $taskGroup->add(spawn with $this->poolScope $this->startProcess());
         }
     }
     
@@ -1928,12 +1906,12 @@ final class ProcessPool
     {
         while (true) {            
             try {
-                await $this->poolScope->directTasks();
+                await $this->taskGroup;
             } catch (StopProcessException $exception)  {
                 echo "Process was stopped with message: {$exception->getMessage()}\n";
                 
                 if($exception->getCode() !== 0 || count($this->descriptors) < $this->min) {
-                    spawn with $this->poolScope $this->startProcess();
+                    $this->taskGroup->add(spawn with $this->poolScope $this->startProcess());
                 }
             }
         }

@@ -9,11 +9,15 @@ namespace Async;
  */
 function protect(\Closure $closure): void {}
 
-function any(iterable $futures, ?Awaitable $cancellation = null): Awaitable {}
+function any(iterable $futures): Awaitable {}
 
-function all(iterable $futures, ?Awaitable $cancellation = null): Awaitable {}
+function all(iterable $futures): Awaitable {}
 
-function anyOf(int $limit, iterable $futures, ?Awaitable $cancellation = null): Awaitable {}
+function anyOf(int $limit, iterable $futures): Awaitable {}
+
+function ignoreErrors(Awaitable $awaitable): Awaitable {}
+
+function withErrors(Awaitable $awaitable): Awaitable {}
 
 function delay(int $ms): void {}
 
