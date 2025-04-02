@@ -109,7 +109,7 @@ Goodbye, World
 ```php
 function mergeFiles(string ...$files): string
 {
-    $taskGroup = new Async\TaskGroup();
+    $taskGroup = new Async\TaskGroup(captureResults: true);
     
     foreach ($files as $file) {
        $taskGroup->spawn(file_get_contents(...), $file);
@@ -126,7 +126,7 @@ function loadDashboardData(string $userId): array
 {
     async $dashboardScope {
     
-        $taskGroup = new Async\TaskGroup($dashboardScope);        
+        $taskGroup = new Async\TaskGroup($dashboardScope, captureResults: true);
     
         $taskGroup->add(spawn fetchUserProfile($userId));
         $taskGroup->add(spawn fetchUserNotifications($userId));
@@ -1951,6 +1951,129 @@ a constant in the `ini` file: `async.zombie_coroutine_timeout`, which is set to 
 
 If a coroutine is created within a user-defined `Scope`, the programmer
 can set a custom timeout for that specific `Scope` using the `Scope::disposeAfterTimeout(int $ms)` method.
+
+### TaskGroup
+
+> `Async\TaskGroup` is a container for controlling a group of coroutines.
+
+```php
+function mergeFiles(string ...$files): string
+{
+    $taskGroup = new Async\TaskGroup(captureResults: true);
+    
+    foreach ($files as $file) {
+       $taskGroup->add(spawn file_get_contents($file));
+    }
+    
+    return array_merge("\n", await $taskGroup);
+}
+
+echo await spawn mergeFiles(['file1.txt', 'file2.txt', 'file3.txt']);
+```
+
+#### Motivation
+
+Using the `Scope` class and the `spawn` expression, you can create groups of coroutines. 
+However, the code that creates `$scope` and/or awaits it might not be aware of which coroutines will be added. 
+Moreover, the wait strategy of `$scope` can lead to resource leaks 
+if a programmer mistakenly uses the `spawn <callable>` expression 
+and adds a coroutine to the `Scope` that lives indefinitely.
+
+In server applications, using `await $scope` is not a good idea and can be considered an antipattern.
+
+The `TaskGroup` class is an explicit pattern for managing a group of coroutines. 
+Unlike `Scope`, tasks cannot be added to it "accidentally". 
+`TaskGroup` cannot be part of a `spawn` expression and is not a replacement for `Scope`.
+
+Unlike `Scope`, `TaskGroup` can capture the results of tasks, which makes it convenient for awaiting results.
+
+#### Await TaskGroup
+
+The `TaskGroup` class implements the `Awaitable` interface,
+so it can be used with the `await` expression.
+The `await $taskGroup` expression captures both the results of execution
+and any exceptions that occur in the tasks.
+In this regard, its behavior is no different from `await $scope`.
+
+If the constructor option `captureResults: true` is specified, 
+then the `await $taskGroup` expression will return the results of all tasks that were added to the group. 
+If the results are no longer needed, the `TaskGroup::disposeResults()` method should be used to discard them.
+
+```php
+function processInBatches(array $files, int $limit): array
+{
+    $allResults = [];
+    $taskGroup  = new Async\TaskGroup(captureResults: true);
+    $count      = 0;
+
+    foreach ($files as $file) {
+        $taskGroup->add(spawn file_get_contents($file));
+        
+        if (++$count >= $limit) {
+            $allResults = [...$allResults, ...await $taskGroup];
+            $taskGroup->disposeResults();            
+            $count = 0;
+        }
+    }
+
+    $allResults = [...$allResults, ...await $taskGroup];
+    return $allResults;
+}
+
+$results = await spawn processInBatches(['file1.txt', 'file2.txt', 'file3.txt', 'file4.txt'], limit: 2);
+echo implode("\n", $results);
+```    
+
+#### TaskGroup `dispose`
+
+When a `TaskGroup` is disposed, 
+all tasks belonging to it will be cancelled using `cancel`, 
+without issuing any warnings. No tasks will turn into **zombie coroutines**.
+
+This behavior is consistent with `Scope::dispose()`.
+
+The reason for this behavior lies in the fact that `TaskGroup` only keeps track of explicitly added tasks. 
+If a task group is being disposed, it means the user clearly understands 
+that all coroutines launched within it should also be terminated.
+
+`TaskGroup` is convenient to use in combination with `Scope`, provided that 
+the `$scope` object belongs exclusively to the `TaskGroup`. 
+In that case, when the `TaskGroup` goes out of scope, 
+the `Scope` object and all associated tasks will be destroyed together.
+
+#### TaskGroup Race
+
+The `TaskGroup` class allows you to wait for the first task to complete using the `race()` method.
+
+```php
+use Async\TaskGroup;
+
+function fetchFirstSuccessful(string ...$apiHosts): string
+{
+    $taskGroup = new Async\TaskGroup(scope: new Async\Scope(), captureResults: false);
+
+    foreach ($apiHosts as $host) {
+        $taskGroup->spawn(function() use ($host) {
+            $response = file_get_contents($host);
+            
+            if($response === false) {
+                throw new Exception("Failed to fetch data from $host");
+            }
+            
+            return $response;
+        });
+    }
+
+    return await $taskGroup->race(ignoreErrors: true);
+}
+
+```
+
+
+        
+#### TaskGroup cancellation
+
+The `TaskGroup` class allows you to cancel all tasks in the group using the `cancel()` method.
 
 ### Context
 
