@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Async;
 
-final class Scope
+final class Scope implements Awaitable
 {
     public readonly Context $context;
     
@@ -23,12 +23,6 @@ final class Scope
     public function spawn(\Closure $callable, ...$params): Coroutine {}
     
     public function cancel(?CancellationException $cancellationException = null): void {}
-    
-    public function directTasks(): Awaitable {}
-    
-    public function firstDirectTask(): Awaitable {}
-    
-    public function allTasks(): Awaitable {}
     
     public function awaitAllIgnoringErrors(?callable $errorHandler = null, ?Awaitable $cancellation = null): void {}
     

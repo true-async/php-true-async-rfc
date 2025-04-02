@@ -109,13 +109,13 @@ Goodbye, World
 ```php
 function mergeFiles(string ...$files): string
 {
-   async $tasks {
-       foreach ($files as $file) {
-           spawn file_get_contents($file);
-       }
-       
-       return array_merge("\n", await $tasks->directTasks());
-   }
+    $taskGroup = new Async\TaskGroup();
+    
+    foreach ($files as $file) {
+       $taskGroup->spawn(file_get_contents(...), $file);
+    }
+    
+    return array_merge("\n", await $taskGroup);
 }
 ```
 
@@ -126,12 +126,16 @@ function loadDashboardData(string $userId): array
 {
     async $dashboardScope {
     
-        spawn fetchUserProfile($userId);
-        spawn fetchUserNotifications($userId);
-        spawn fetchRecentActivity($userId);
+        $taskGroup = new Async\TaskGroup($dashboardScope);        
+    
+        $taskGroup->add(spawn fetchUserProfile($userId));
+        $taskGroup->add(spawn fetchUserNotifications($userId));
+        $taskGroup->add(spawn fetchRecentActivity($userId));
         
         try {
-            [$profile, $notifications, $activity] = await $dashboardScope->allTasks();
+            await $dashboardScope;
+            
+            [$profile, $notifications, $activity] = await $taskGroup->getResults();
             
             return [
                 'profile' => $profile,
@@ -154,11 +158,16 @@ function fetchUserSettings(string $userId): array
 
 function fetchUserProfile(string $userId): array 
 {
-    async inherit $userDataScope {        
-        spawn fetchUserData();
-        spawn fetchUserSettings($userId);              
+    async inherit $userDataScope {
+    
+        $taskGroup = new Async\TaskGroup($userDataScope);
+    
+        $taskGroup->add(spawn fetchUserData());
+        $taskGroup->add(spawn fetchUserSettings($userId));
         
-        [$userData, $settings] = await $dashboardScope->allTasks();
+        await $userDataScope;
+        
+        [$userData, $settings] = $taskGroup->getResults();
         
         $userData['settings'] = $settings ?? [];
        
@@ -191,7 +200,7 @@ function processBackgroundJobs(string ...$jobs): array
     }
     
     // Waiting for all child tasks throughout the entire depth of the hierarchy.
-    await $scope->allTasks();
+    await $scope;
 }
 
 function processJob(mixed $job): void {
@@ -199,28 +208,6 @@ function processJob(mixed $job): void {
        spawn task1($job);
        spawn task2($job);    
     }
-}
-```
-
-#### Await only direct child tasks.
-
-```php
-function mergeFiles(string ...$files): string
-{
-   async $tasks {
-       foreach ($files as $file) {
-           spawn file_get_contents($file); // <- direct child task
-       }
-       
-       try {
-          $results = await $tasks->directTasks();
-       } finally {
-          // cancel all remaining tasks
-          $scope->disposeAfterTimeout(5000);
-       }
-       
-       return array_merge("\n", $results);
-   }
 }
 ```
 
@@ -298,7 +285,7 @@ However, it cannot be stopped externally.
 > It is permissible to stop a coroutine’s execution externally for two reasons:
 > * To implement multitasking.
 > * To enforce an active execution time limit.
-    > Please see [Maximum activity interval](#maximum-activity-interval) for more information.
+> Please see [Maximum activity interval](#maximum-activity-interval) for more information.
 
 A suspended coroutine can be resumed at any time.
 The `Scheduler` component is responsible for the coroutine resumption algorithm.
@@ -339,10 +326,10 @@ The `spawn` construct is available in two variations:
 
 ```php
 // Executing a known function
-spawn [with [child] <scope>] <function_call>;
+spawn [child] [with <scope>] <function_call>;
 
 // Closure form
-spawn [with [child] <scope>] [static] [use(<parameters>)][: <returnType>] {
+spawn [child] [with <scope>] [static] [use(<parameters>)][: <returnType>] {
     <codeBlock>
 };
 ```
@@ -444,7 +431,7 @@ spawn (fn() => sleep(1))();
 Allows creating a coroutine from a closure directly when using `spawn`:
 
 ```php
-spawn [with [child] <scope>] [static] [use(<parameters>)[: <returnType>]] {
+spawn [child] [with <scope>] [static] [use(<parameters>)[: <returnType>]] {
     <codeBlock>
 };
 ```
@@ -585,7 +572,7 @@ spawn with $scope wathcher();
 
 spawn with $scope use($scope): void {
     foreach ($hosts as $host) {
-        spawn with child $scope {
+        spawn child {
             echo gethostbyname('php.net').PHP_EOL;
         };
     }      
@@ -745,6 +732,8 @@ and is intended for objects implemented as PHP extensions, such as:
 The following classes from this **RFC** also implement this interface:
 
 - `Coroutine`
+- `Scope`
+- `TaskGroup`
 
 ### Await
 
@@ -1010,165 +999,59 @@ If an application never creates **custom Scopes**, its behavior is similar to co
 * Coroutines are not explicitly linked to each other.
 * The lifetime of coroutines is not limited.
 
-To manage the lifetime of coroutines and wait for their results, it's convenient to organize them into groups.
-`Coroutine Scope` is a basic primitive
-that helps associate coroutines with other `PHP` objects and track their execution at the group level.
-
-`Coroutine Scope` is especially useful when you need to bind coroutines to a `PHP` object
-and ensure their execution is terminated as soon as a destructor or a special method is called.
-
-`Coroutine Scope` can be used to implement the **structural concurrency** pattern
-(see [structured concurrency](#structured-concurrency)).
-
-`Coroutine Scope` helps organize a hierarchy of coroutine groups
-and implement all possible scenarios for waiting and management, taking the hierarchy into account.
-
-Let’s look at an example:
+The expression `spawn with $scope` creates a **new coroutine** bound to the specified scope. 
+Coroutines created during the execution of this **new coroutine** will become **sibling tasks**.
 
 ```php
-
 use Async\Scope;
 
 $scope = new Scope();
 
-spawn with $scope { // <- Task1 will be executed in the $scope context
-    spawn { // <- Subtask executed in the ChildScope context  
-        echo "Child1 of Task 1\n";
+spawn with $scope {
+
+    echo "Sibling task 1\n";
+    
+    spawn { 
+        echo "Sibling task 2\n";
         
-        spawn { // <- Subtask executed in the ChildScope context
-            echo "Child2 of Task 1\n";
+        spawn {
+            echo "Sibling task 3\n";
         };        
-    };
-    
-    echo "Task 1\n";
+    };   
 };
 
-spawn with $scope { // <- Task2 will be executed in the $scope context
-    echo "Task 2\n";
-    
-    spawn { // <- Subtask executed in the ChildScope context
-        echo "Child1 of Task 2\n"; 
-    };
-};
-
-await $scope->allTasks();
+await $scope;
 ```
 
 **Expected output:**
 
 ```
-Task 1
-Task 2
-Child1 of Task 1
-Child1 of Task 2
-Child2 of Task 1
+Sibling task 1
+Sibling task 2
+Sibling task 3
 ```
 
-Structure:
+**Structure:**
 
 ```
 main()                          ← defines a $scope
-├── task1()                     ← runs in the $scope
-│   └── subtask1()              ← runs in the childScope
-│   └── subtask2()              ← runs in the childScope
-└── task2()                     ← runs in the $scope
-    └── subtask3()              ← runs in the childScope
+└── $scope = new Scope()
+    ├── task1()                 ← runs in the $scope
+    ├── task2()                 ← runs in the $scope
+    ├── task3()                 ← runs in the $scope
 ```
-
-The expression `spawn in $scope` makes two important changes:
-1. Creates a coroutine that is attached to `$scope`, which is **considered** the parent.
-2. Another **childScope** is created from the specified $scope,
-   which will store descendants of the second and subsequent levels.
-
-When a child coroutine is created in `task1()` without specifying a Scope,
-it is automatically linked to `childScope` and thus becomes a coroutine
-of the child coroutine space relative to $scope:
-
-```
-$scope = new Scope();
-├── task1()
-├── task2()
-│
-├── childScope
-│   └── subtask1()
-│   └── subtask2()
-    └── subtask3()
-```
-
-This leads to two important consequences:
-1. The direct descendants of `$scope` are only those tasks that were explicitly attached to the `Scope`.
-2. All child coroutines deeper than the first level explicitly belong to the `childScope`
-   (Unless another one was specified during their creation).
-
-This approach ensures that no "accidental tasks" are added to the `$scope`.
-Such tasks will be **explicit direct tasks**.  
-All other tasks created using `spawn` without specifying a scope will be considered **implicit tasks**.
-
-The distinction between explicit and implicit tasks is important in the context of resource cleanup
-(see a section [Scope disposal](#scope-disposal)).
 
 #### Motivation
 
-The Coroutine Scope in this **RFC**,
-although inspired by the similarly named pattern from Kotlin,
-is not an analog and has no equivalents in other languages.
-
-The competitor to **Coroutine Scope** is the coroutine hierarchy,
-where each coroutine started within another automatically becomes a child.
-
-The main reason why a simple coroutine hierarchy was rejected is that the following code creates ambiguity:
-
-```php
-function subtask() {
-    echo "Subtask\n";
-}
-
-function task() {
-    spawn subtask();
-}
-
-spawn task();
-task();
-```
-
+The **Coroutine Scope** pattern was inspired by the **Kotlin**, 
+serving as a primitive for organizing structured concurrency in situations 
+where other methods are unavailable (such as the absence of **colored functions**).
 Read more about [how colored functions help implement structured concurrency](./colored_functions.md).
 
-The following code demonstrates how the hierarchy rule behaves ambiguously
-when the same function can be called both as a coroutine and as a regular function.
-
-In the example above, the `task()` function may or may not be a child coroutine.  
-If a programmer writes `subtask` assuming it will be called using `spawn`,
-they can easily break the behavior if the previous function
-(which they may not even be aware of) is called without `spawn`.
-
-`Scope` requires the programmer to create an **explicit hierarchy**.  
-Its main purpose is to provide a space for resource control that affects all coroutines created within the Scope.
-
-Resource control at the top level is a useful tool for organizing applications, frameworks, and libraries.
-
-##### Explicit and Implicit Tasks
-
-The division of coroutines into explicit and implicit tasks is unique to this **RFC**
-and does not exist in any other language.
-
-The **Java Loom** project, for example, requires that the `Scope` is always explicitly specified.
-
-It is possible to discard the `spawn` expression without specifying
-a `Scope` or always create a coroutine in the global scope,
-as **Java Loom** and **Kotlin** do.
-
-However, explicit task creation in the global scope is prohibited by the rules of this RFC,
-as it is considered an **antipattern** that is well-studied.
-
-The ability to control the default `Scope` for `spawn` allows frameworks to manage user code by enforcing common rules.  
-While this division is not perfect, it feels natural for the **Web-Server** pattern,  
-where the framework controls request handling, and the user code implements business logic.
-
-**Pros and Cons**:
-- **Cons:** Complex API, requiring consideration of two different types of coroutines.
-- **Pros:** Creation of `points of responsibility` and distribution of complexity.
-
-#### Point of Responsibility
+In addition to structured concurrency, `Scope` also helps organize the separation of responsibilities between 
+the calling code and the called code (Point of responsibility).
+In other words, the top-level code gains the ability to control the lifetime of coroutines 
+created by the code that resides lower in the call hierarchy.
 
 The `spawn <callable>` expression allows you to create coroutines,
 but it says nothing about who "owns" the coroutines.
@@ -1208,193 +1091,70 @@ Without Coroutine Scope, implementing such control at the application level is e
 
 #### Scope waiting
 
-`Scope` can be useful both for waiting on coroutines and for limiting their lifetime.  
-It works especially well when the waiting logic is used together with a `try`–`finally` block.
-
-**Example:**
-
-```
-main()                          ← defines a **request Scope** and run handleRequest()
-└── handleRequest()
-    └── processUser()
-        └── fetchProfile()      ← creates coroutine
-        └── fetchSettings()     ← creates coroutine
-```
-
-Code that creates a `Scope` typically intends to control only the tasks it has **explicitly** defined,  
-because it knows nothing about the coroutines created deeper in the call stack.
-
-Let's say we have a function that creates an array of tasks performing some background work:
+The `Scope` object implements the `Awaitable` interface, which means it can be used with the `await` expression:
 
 ```php
-function fetchProfile(string $user): array
-{
-    spawn { // <- a zombie coroutine
-        sleep(100);       
-    };
-}
+use Async\Scope;
 
-function processUser(string $user): array
-{
-    $tasks = [];
-    
-    $tasks[] = spawn fetchProfile($user);
-    $tasks[] = spawn fetchSettings($user);
-    
-    return await all($tasks);
-}
+$scope = new Scope();
 
-function processAllUsers(string ...$users): array
-{
-    $coroutines = [];
+spawn with $scope {
+
+    echo "Sibling task 1\n";
     
-    foreach ($users as $user) {
-        $coroutines[] = spawn processUser($user);
-    }
-    
-    return await all($coroutines);
-}
+    spawn { 
+        echo "Sibling task 2\n";
+        
+        spawn {
+            echo "Sibling task 3\n";
+        };        
+    };   
+};
+
+await $scope;
 ```
 
-The code `return await all($coroutines)` waits for the completion of all tasks
-that were explicitly started within this function.
-However, if the `processUser` function created other coroutines that,
-for some reason, continue to run after `processUser` has finished,  
-there is a risk of a resource leak.
+**Expected output:**
 
-This problem has three solutions:
+```
+Sibling task 1
+Sibling task 2
+Sibling task 3
+```
 
-1. You can wait for **all coroutines** that were created within a single `Scope`.  
-   In this case, there is a higher chance that all nested calls will eventually complete properly.  
-   However, there's also a higher risk that more tasks will remain in a waiting state,
-   which means more memory consumption.
+The expression `await $scope` suspends the execution of the current coroutine  
+until all tasks within `$scope` are completed, including tasks in child `Scope` instances.
 
-2. You can wait only for the coroutines that are explicitly needed,  
-   and cancel all others that were implicitly created in the current `Scope` with an error.  
-   In this case, there will be no resource leaks.  
-   However, there's a risk that an important coroutine might be mistakenly cancelled.
+This condition directly aligns with the concept of **structured concurrency**,  
+where a parent task must wait for the completion of all its child tasks.
 
-3. You can create a **point of responsibility**,
-   a special place in the code where resource leak control will be performed.
-
-Scope helps implement any of these strategies.
+Awaiting the `$scope` object also allows handling exceptions from coroutines within the `$scope`:
 
 ```php
-function processAllUsers(string ...$users): array
-{
-    $scope = new Scope();
-    
-    foreach ($users as $user) {
-        spawn with $scope processUser($user);
-    }
-    
-    try {
-        return await $scope->directTasks();    
-    } finally {
-        $scope->dispose();
-    }
+use Async\Scope;
+
+$scope = new Scope();
+
+spawn with $scope {
+    spawn { 
+        spawn {
+            throw new Exception("Error occurred");
+        };        
+    };   
+};
+
+try {
+    await $scope;
+} catch (Exception $exception) {
+    echo $exception->getMessage()."\n";
 }
 ```
 
-In this example, the `processAllUsers` function must return the computation results of `processUser` for each user.  
-`processAllUsers` has no knowledge of how `processUser` is implemented.
+**Expected output:**
 
-Using `await $scope->directTasks()`, `processAllUsers` waits for the results of all coroutines created
-inside the `foreach ($users as $user)` loop.
-
-The `directTasks` method returns an `Awaitable` object
-that completes as soon as all direct child tasks of `$scope` have finished.  
-Only tasks that were explicitly added via `spawn with` can be direct children of `$scope`.
-
-When the `await $scope->directTasks()` has completed,  
-the coroutine created by `processUser` will not stop its execution.
-
-The `finally` block calls `$scope->dispose()`, which cancels all coroutines that were created within the `Scope`.
-You can also use the `disposeAfterTimeout` and `disposeSafely` methods
-as alternative scenarios for cleaning up a `Scope`, see [Scope disposal](#scope-disposal).
-
-**Another scenario:**
-
-* There is a **Job Manager** that launches various tasks.
-* It has no idea what exactly each task might do.
-* However, it must guarantee that no more than **N** tasks are running at the same time.
-
-To achieve this, it needs to wait until all tasks have completed — regardless of whether some coroutines
-were mistakenly created or not — because for the Job Manager,
-**waiting is more important than forcefully destroying data**.
-
-```php
-function processBackgroundJobs(string ...$jobs): array
-{
-    $scope = new Scope();
-    
-    foreach ($jobs as $job) {
-        spawn with $scope processJob($users);
-    }
-    
-    await $scope->allTasks();
-}
 ```
-
-The `allTasks()` method returns an `Awaitable` object that completes when all tasks of `$scope`,
-including those within child scopes, have finished.
-
-You can use an additional constraint like `until timeout(int $value)` to limit the waiting time,  
-or you can approach the problem a bit differently:
-
-```php
-function processBackgroundJobs(string ...$jobs): array
-{
-    $scope = new Scope();
-    
-    foreach ($jobs as $job) {
-        spawn with $scope processJob($users);
-    }
-    
-    await $scope->directTasks();
-    
-    try {
-        await $scope->allTasks() until timeout(1);
-    } catch (CancellationException) {
-       logWrongTasks($scope);
-    }
-    
-    await $scope->allTasks() until timeout(10000);
-    $scope->dispose();
-}
+Error
 ```
-
-This demonstrates a soft cancellation strategy.  
-First, the code waits for the main tasks to complete.  
-Then, it waits for any remaining tasks. If there are any, a `CancellationException` is thrown,  
-and the code logs information about which coroutines were not properly completed.  
-After that, it waits for their completion again.
-
-#### Scope Ownership
-
-The following expressions do not affect the reference count of the `$scope` object:
-* `spawn with $scope`
-* `Scope::inherit($scope)` does **not** increase the reference count of either the parent or the child `$scope`.
-
-The following statements are true:
-1. The lifetime of a child `Scope` cannot exceed that of its parent.
-   If the parent is destroyed, the child `Scope` will be closed.
-2. If the child `Scope` is released, the parent will automatically lose its connection to it.
-
-#### directTasks and allTasks
-
-The `Scope::directTasks` and `Scope::allTasks` methods return a trigger object,
-which can be used in combination with `await`
-to suspend the coroutine until the tasks within `$scope` have completed execution.
-
-| Feature                          | `Scope::directTasks`                                  | `Scope::allTasks`                                       |
-|----------------------------------|-------------------------------------------------------|---------------------------------------------------------|
-| **Returns**                      | `Awaitable` (trigger object)                          | `Awaitable` (trigger object)                            |
-| **What it waits for**            | Only direct child tasks of `$scope`                   | All tasks within `$scope`, including in child scopes    |
-| **Includes nested scopes**       | No                                                    | Yes                                                     |
-| **Used for**                     | Waiting for explicitly spawned tasks in current scope | Waiting for complete task tree under `$scope`           |
-| **Common use case**              | Fine-grained control over immediate child tasks       | Ensuring total completion of all tasks in the hierarchy |
-
 
 #### awaitAllIgnoringErrors
 
