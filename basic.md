@@ -3022,7 +3022,71 @@ The format of this array depends on the implementation of the **Scheduler** and 
 
 The `Async\Scope::getChildScopes()` method returns an array of all child scopes of the current scope.
 
+The method `Async\Scope::getCoroutines()` returns a list of coroutines that are registered within the specified `Scope`.
+
 The `Async\getCoroutines()` method returns an array of all coroutines in the application.
+
+### Ways to Reduce Complexity
+
+The current **RFC** has a high level of complexity, 
+which is caused by the set of requirements it satisfies. 
+The analysis provided below helps to understand which requirements lead to which complications, 
+and what would happen if certain requirements were to be dropped.
+
+Let's examine the requirements that have the greatest impact on the architectural complexity:
+
+* **Capturing coroutines using `spawn`**. 
+   This leads to a more complex algorithm for the `Scope` structure, 
+   and to the introduction of methods like `directTasks()` and `allTasks()`. 
+   It also results in a distinction between explicit and implicit tasks, and necessitates the implementation of a zombie policy.
+
+* **Absence of colored functions**: this requires the use of `Scope` instead of a coroutine hierarchy, 
+  which complicates not only the code but also the mental model.
+
+#### Rejecting coroutine capturing (scope implicit inheritance)
+
+Rejecting coroutine capturing can be implemented using two approaches:
+* If no `Scope` is specified, always use `globalScope`.
+* Disallow the use of `spawn` without explicitly specifying a `Scope`.
+
+Similar models are used in Java Loom, Kotlin, and Go. These approaches significantly simplify the API. However:
+
+1. Using `globalScope` is considered an antipattern that leads to bugs.
+2. Explicitly passing a `Scope` can significantly complicate the programmer's code.
+3. Explicitly passing a `Scope` removes the ability to create points of responsibility: 
+to delegate control between high-level and low-level code.
+
+Thus, simplifying the API shifts the complexity of control onto the programmer. 
+At the same time, it is difficult to assess whether the overall 
+level of complexity is actually reduced or, on the contrary, increased.
+
+#### Using Colored Functions
+
+Colored functions make it possible to create a coroutine hierarchy by explicitly marking certain functions as coroutines. 
+Such functions cannot be called outside a `spawn` expression. 
+This reduces code flexibility, on one hand, but on the other hand, it provides a simple and understandable model:
+
+* The call hierarchy equals the coroutine hierarchy.
+* A coroutine and an async block are the same thing.
+
+This model simplifies the **API** logic 
+and makes the behavior of `spawn` predictable and straightforward, 
+since `spawn` always creates a child coroutine. In contrast, in the current RFC, `spawn` creates sibling coroutines.
+
+The model does not require `Scope`; coroutines themselves act as scopes. 
+There are no explicit or implicit tasks.
+
+Since colored functions cannot be called like regular functions, 
+this creates limitations for refactoring and for using patterns like Adapter, 
+where an intermediate function needs to be called before the target function.
+
+#### Summary
+
+| **Remove (simplify) aspect**                       | **Advantages**                                                                          | **Disadvantages**                                                                                                              |
+|----------------------------------------------------|-----------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------|
+| **Coroutines capturing (scope inheritance)**       | Simplifies the API. Less logic in `Scope`                                               | Using `globalScope` can lead to hard-to-catch bugs. Explicitly passing a `Scope` makes the code more detailed and complex      |
+| **Using colored functions**                        | Clear hierarchy: call = coroutine. Simplifies `spawn` usage (always a child coroutine)  | Harder to refactor (colored functions cannot be freely called). Reduced flexibility (code is strictly divided into sync/async) |
+
 
 ### Prototypes
 
