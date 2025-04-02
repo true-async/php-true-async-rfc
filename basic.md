@@ -1403,25 +1403,22 @@ or implicitly when the `Scope` object loses its last reference.
 
 There are three available strategies for `Scope` termination:
 
-| **Method**            | **Direct Child Coroutines**  | **Implicitly Created Child Coroutines**           |
-|-----------------------|------------------------------|---------------------------------------------------|
-| `disposeSafely`       | Cancels coroutines execution | Marks as zombie coroutines, does not cancel       |
-| `dispose`             | Same as `disposeSafely`      | Cancels with a warning                            |
-| `disposeAfterTimeout` | Cancels after a delay        | Issues a warning, then cancels after a delay      |
-
+| **Method**            |                                              |
+|-----------------------|----------------------------------------------|
+| `disposeSafely`       | Marks as zombie coroutines, does not cancel  |
+| `dispose`             | Cancels with a warning                       |
+| `disposeAfterTimeout` | Issues a warning, then cancels after a delay |
 
 The main goal of all three methods is to terminate the execution of coroutines
 that belong to the `Scope` or its child Scopes.
 However, each method approaches this task slightly differently.
 
 The `disposeSafely` method is used by default in the destructor of the `Async\Scope` class.
-Its key feature is transitioning "implicitly created child coroutines" into a **zombie coroutine** state.
+Its key feature is transitioning coroutines into a **zombie coroutine** state.
 A **zombie coroutine** continues execution but is tracked by the system differently than regular coroutines.
 (See section: [Zombie coroutine policy](#zombie-coroutine-policy)).
 
 A warning is issued when a **zombie coroutine** is detected.
-
-Coroutines that were explicitly defined in `$scope` are canceled without warnings:
 
 ```php
 use function Async\Scope\delay;
@@ -1463,7 +1460,7 @@ before the `disposeSafely` method is called.
 
 The `Scope::dispose` method differs from `Scope::disposeSafely` in that it does not leave **zombie coroutines**.
 It cancels **all coroutines**.
-When **Implicitly Created Child Coroutines** are detected as unfinished, a warning is issued.
+When coroutines are detected as unfinished, a warning is issued.
 
 **Example:**
 
@@ -1495,9 +1492,10 @@ $scope->dispose();
 ```
 Warning: Coroutine is zombie at ... in Scope disposed at ...
 Warning: Coroutine is zombie at ... in Scope disposed at ...
+Warning: Coroutine is zombie at ... in Scope disposed at ...
 ```
 
-The `disposeAfterTimeout` method is a delayed version of the `dispose` method.
+The `disposeAfterTimeout` method is a delayed version of the `disposeSafely` method.
 The `$timeout` parameter must be greater than zero but less than 10 minutes.
 
 ```php
