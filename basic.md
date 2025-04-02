@@ -2036,9 +2036,9 @@ The reason for this behavior lies in the fact that `TaskGroup` only keeps track 
 If a task group is being disposed, it means the user clearly understands 
 that all coroutines launched within it should also be terminated.
 
-`TaskGroup` is convenient to use in combination with `Scope`, provided that 
+`TaskGroup` is convenient to use in combination with `Scope`, if 
 the `$scope` object belongs exclusively to the `TaskGroup`. 
-In that case, when the `TaskGroup` goes out of scope, 
+In that case, when the `TaskGroup` goes out of scope,
 the `Scope` object and all associated tasks will be destroyed together.
 
 #### TaskGroup Race
