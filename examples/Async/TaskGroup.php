@@ -17,7 +17,9 @@ final class TaskGroup implements Awaitable
     public function getResults(): array {}
     public function getErrors(): array {}
     
-    public function add(Coroutine $coroutine): self {}
+    public function add(Coroutine ...$coroutines): self {}
+    
+    public function spawn(\Closure $closure, mixed ...$args): Coroutine {}
     
     /**
      * Cancel a task group.
