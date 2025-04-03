@@ -735,6 +735,25 @@ The following classes from this **RFC** also implement this interface:
 - `Scope`
 - `TaskGroup`
 
+Unlike `Future`, the `Awaitable` interface does not impose limitations on the number of state changes, 
+which is why the `Future` contract is considered a special case of the `Awaitable` contract.
+
+In the general case, objects implementing the `Awaitable` interface can act as triggers — that is, 
+they can change their state an unlimited number of times. 
+This means that multiple calls to `await <Awaitable>` may produce different results. 
+
+In contrast, `Coroutine`, `Future` and `Cancellation` objects change their state only once, 
+so using them multiple times in an `await` expression will always yield the same result.
+
+**Comparison of Different Awaitable Classes:**
+
+|                                    | Coroutine | Scope | TaskGroup | Future | Cancellation |
+|------------------------------------|-----------|-------|-----------|--------|--------------|
+| Supports multiple state changes    | No        | Yes   | Yes       | No     | No           |
+| Multiple await returns same result | Yes       | No    | No        | Yes    | Yes          |
+| Can capture result                 | Yes       | No    | Yes       | Yes    | No           |
+| Can capture exception              | Yes       | Yes   | Yes       | Yes    | No           |
+
 ### Await
 
 The `await` keyword is used to wait for the completion of another coroutine
@@ -2022,7 +2041,11 @@ function processInBatches(array $files, int $limit): array
 
 $results = await spawn processInBatches(['file1.txt', 'file2.txt', 'file3.txt', 'file4.txt'], limit: 2);
 echo implode("\n", $results);
-```    
+```
+
+The `$taskGroup` object can be used in an `await` expression multiple times. 
+If the `captureResults` mode is not enabled, the `await` expression will always return `NULL`, 
+just like the equivalent `await $scope` expression.
 
 #### TaskGroup `dispose`
 
@@ -2036,10 +2059,66 @@ The reason for this behavior lies in the fact that `TaskGroup` only keeps track 
 If a task group is being disposed, it means the user clearly understands 
 that all coroutines launched within it should also be terminated.
 
+#### Combining TaskGroup and Scope
+
 `TaskGroup` is convenient to use in combination with `Scope`, if 
 the `$scope` object belongs exclusively to the `TaskGroup`. 
 In that case, when the `TaskGroup` goes out of scope,
 the `Scope` object and all associated tasks will be destroyed together.
+
+```php
+$scope = new Async\Scope();
+$taskGroup = new Async\TaskGroup(scope: $scope, captureResults: false); // <- Scope reference equals two.
+$taskGroup->add(spawn with $scope {
+    Async\delay(5000);
+    echo "This line will be executed\n";
+});
+unset($scope); // <- $scope reference equals one.
+sleep(1);
+$taskGroup->dispose(); // <- $scope reference equals zero.
+```
+
+**Expected output:**
+
+```
+```
+
+There are no warnings about **zombie coroutines** in the output 
+because the task was canceled using `$taskGroup->dispose()`, after which the `scope` was also destroyed.
+
+However, if the `Scope` contains other coroutines that were created outside the `TaskGroup`, 
+they will follow the general rules. In the case of the `Scope::disposeSafely()` strategy, 
+a warning will be issued if unfinished tasks are detected, as they would become **zombie coroutines**.
+
+If you are certain that all tasks should be canceled, use the `bounded: true` option in the `TaskGroup` constructor. 
+In this case, the `Scope` will be terminated using the `Scope::dispose()` strategy.
+
+```php
+use Async\TaskGroup;
+use Async\Scope;
+use function Async\delay;
+
+$scope = new Scope();
+$taskGroup = new TaskGroup(scope: , captureResults: false, bounded: true);
+
+spawn with $scope { // <- it's a zombie coroutine, but it will be canceled because of the bounded task group
+    delay(5000);
+    echo "This line will be executed1\n";
+};
+
+$taskGroup->spawn(function() {
+    delay(5000);
+    echo "This line will be executed2\n";
+});
+
+sleep(1);
+$scope->dispose();
+```
+
+**Expected output:**
+
+```
+```
 
 #### TaskGroup Race
 
@@ -2050,7 +2129,7 @@ use Async\TaskGroup;
 
 function fetchFirstSuccessful(string ...$apiHosts): string
 {
-    $taskGroup = new Async\TaskGroup(scope: new Async\Scope(), captureResults: false);
+    $taskGroup = new Async\TaskGroup(scope: new Async\Scope(), captureResults: false, bounded: true);
 
     foreach ($apiHosts as $host) {
         $taskGroup->spawn(function() use ($host) {
@@ -2066,10 +2145,21 @@ function fetchFirstSuccessful(string ...$apiHosts): string
 
     return await $taskGroup->race(ignoreErrors: true);
 }
-
 ```
 
+The `race()` method returns an `Awaitable` trigger 
+that can be used multiple times to obtain the first completed task.
 
+If you need to get the first available result, use the `firstResult()` method.
+The `firstResult()` trigger returns the first available result. 
+Even if it is called repeatedly, the result 
+will remain the same until the `disposeResults()` method cancels the previous values.
+
+The `ignoreErrors` parameter specifies the error ignoring mode. 
+If it is set to `true`, exceptions from tasks will be ignored, and the `race()`/`firstResult()` 
+triggers will return the first successful task.
+
+The `getErrors()` method will return an array of exceptions.
         
 #### TaskGroup cancellation
 
