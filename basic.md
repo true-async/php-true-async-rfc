@@ -135,7 +135,7 @@ function loadDashboardData(string $userId): array
         try {
             await $dashboardScope;
             
-            [$profile, $notifications, $activity] = await $taskGroup->getResults();
+            [$profile, $notifications, $activity] = $taskGroup->getResults();
             
             return [
                 'profile' => $profile,
