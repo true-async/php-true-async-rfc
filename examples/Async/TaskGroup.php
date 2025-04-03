@@ -19,6 +19,11 @@ final class TaskGroup implements Awaitable
     
     public function add(Coroutine $coroutine): self {}
     
+    /**
+     * Cancel a task group.
+     */
+    public function cancel(CancellationException $cancellationException): void {}
+    
     public function disposeResults(): void {}
     
     public function dispose(): void {}

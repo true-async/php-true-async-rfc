@@ -2531,7 +2531,7 @@ spawn with $scope2 use($scope, &$exception2) {
     }
 };
 
-await $scope2->directTasks();
+await $scope2;
 
 echo $exception1 === $exception2 ? "The same exception\n" : "Different exceptions\n";
 ```
@@ -2557,7 +2557,7 @@ $scope->spawn(function() {
     throw new Exception("Task 1");
 });
 
-Async\await($scope);
+await $scope;
 ```
 
 Using these handlers,
