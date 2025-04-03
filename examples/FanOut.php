@@ -13,17 +13,24 @@ function fetchUrl(string $url): string {
 function fetchAllUrls(array $urls): array
 {
     async bounded $scope {
+        
+        $tasks = new \Async\TaskGroup();
+        
         foreach ($urls as $url) {
-            spawn fetchUrl($url);
+            $tasks->add(spawn fetchUrl($url));
         }
 
         $results = [];
         
-        foreach (await $scope->directTasks() as $url => $future) {
-            $results[$url] = $future->getResult();
-        }
+        try {
+            foreach (await $tasks as $url => $future) {
+                $results[$url] = $future->getResult();
+            }
         
-        return $results;
+            return $results;
+        } finally {
+            $tasks->dispose();
+        }
     }
 }
 

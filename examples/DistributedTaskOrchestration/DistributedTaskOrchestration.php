@@ -1,5 +1,7 @@
 <?php
 
+use function Async\currentContext;
+
 function orchestrateDistributedProcess(array $nodes, array $taskConfig): array
 {
     async $orchestratorScope {

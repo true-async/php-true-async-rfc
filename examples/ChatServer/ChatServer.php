@@ -51,7 +51,7 @@ function startChatServer(string $host, int $port): void
                         } finally {
                             // Gracefully handle connection cancellation
                             try {
-                                await $clientScope->allTask() until Async\timeout(2000);
+                                await $clientScope until Async\timeout(2000);
                             } finally {
                                 // Clean up when client disconnects
                                 socket_close($client);

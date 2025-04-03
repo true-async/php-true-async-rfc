@@ -6,12 +6,13 @@ namespace ProcessPool;
 
 use Async\CancellationException;
 use Async\Scope;
+use Async\TaskGroup;
 
 final class ProcessPool
 {
     private Scope $watcherScope;
-    private Scope $poolScope;
-    private Scope $jobsScope;
+    private TaskGroup $poolTasks;
+    private TaskGroup $jobsTasks;
     /**
      * List of pipes for each process.
      * @var array
@@ -27,16 +28,16 @@ final class ProcessPool
     public function __construct(readonly public string $entryPoint, readonly public int $max, readonly public int $min)
     {
         // Define the coroutine scopes for the pool, watcher, and jobs
-        $this->poolScope = new Scope();
+        $this->poolTasks    = new TaskGroup(new Scope());
+        $this->jobsTasks    = new TaskGroup(new Scope());
         $this->watcherScope = new Scope();
-        $this->jobsScope = new Scope();
     }
     
     public function __destruct()
     {
         $this->watcherScope->dispose();
-        $this->poolScope->dispose();
-        $this->jobsScope->dispose();
+        $this->poolTasks->dispose();
+        $this->jobsTasks->dispose();
     }
     
     public function start(): void
@@ -44,15 +45,15 @@ final class ProcessPool
         spawn with $this->watcherScope $this->processWatcher();
         
         for ($i = 0; $i < $this->min; $i++) {
-            spawn with $this->poolScope $this->startProcess();
+            $this->poolTasks->spawn($this->startProcess(...));
         }
     }
     
     public function stop(): void
     {
         $this->watcherScope->cancel();
-        $this->poolScope->cancel();
-        $this->jobsScope->cancel();
+        $this->poolTasks->dispose();
+        $this->jobsTasks->dispose();
     }
     
     /**
@@ -67,10 +68,10 @@ final class ProcessPool
         $pid = array_search(true, $this->descriptors, true);
         
         if ($pid === false && count($this->descriptors) < $this->max) {
-            spawn with $this->poolScope $this->startProcess();
+            $this->poolTasks->spawn($this->startProcess(...));
             
             // Try to find a free process again after a short delay
-            spawn with $this->jobsScope use($job, $resultHandle) {
+            $this->jobsTasks->spawn(function() use($job, $resultHandle) {
                 usleep(100);
                 
                 $pid = array_search(true, $this->descriptors, true);
@@ -80,14 +81,14 @@ final class ProcessPool
                 }
                 
                 $this->sendJobAndReceiveResult($pid, $job, $resultHandle);
-            };
+            });
             
             return;
         } elseif ($pid === false) {
             $resultHandle(new \Exception('No free process'));
         } else {
             $this->descriptors[$pid] = false;
-            spawn with $this->jobsScope $this->sendJobAndReceiveResult($pid, $job, $resultHandle);
+            $this->jobsTasks->spawn($this->sendJobAndReceiveResult(...), $pid, $job, $resultHandle);
         }
     }
     
@@ -96,12 +97,12 @@ final class ProcessPool
         while (true) {
             
             try {
-                await $this->poolScope->directTasks();
+                await $this->poolTasks;
             } catch (StopProcessException $exception)  {
                 echo "Process was stopped with message: {$exception->getMessage()}\n";
                 
                 if($exception->getCode() !== 0 || count($this->descriptors) < $this->min) {
-                    spawn with $this->poolScope $this->startProcess();
+                    $this->poolTasks->spawn($this->startProcess(...));
                 }
             }
         }

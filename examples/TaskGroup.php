@@ -6,8 +6,6 @@ use Async\Scope;
 
 function taskGroup(array $files): void
 {
-    $scope = Scope::inherit();
-    
     $fileReadTask = function (string $fileName): string {
         
         if(!is_file($fileName)) {
@@ -27,17 +25,20 @@ function taskGroup(array $files): void
         return $result;
     };
     
-    $tasks = [];
+    $scope = Scope::inherit();
+    $tasks = new \Async\TaskGroup($scope);
     
     foreach ($files as $file) {
-        $tasks[$file] = spawn in $scope $fileReadTask($file);
+        $tasks->add(spawn in $scope $fileReadTask($file));
     }
     
     try {
-        foreach (await Async\all($tasks) as $file => $result) {
-            echo "File $file: $result\n";
+        foreach (await $tasks as $result) {
+            echo "File $result\n";
         }
     } catch (Exception $e) {
         echo "Caught exception: ", $e->getMessage();
+    } finally {
+        $tasks->dispose();
     }
 }

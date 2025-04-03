@@ -5,19 +5,20 @@ declare(strict_types=1);
 namespace BackgroundLogger;
 
 use Async\Scope;
+use Async\TaskGroup;
 
 class BackgroundLogger
 {
-    private Scope $scope;
+    private TaskGroup $taskGroup;
     
     public function __construct()
     {
-        $this->scope = new Scope();
+        $this->taskGroup = new TaskGroup(new Scope());
     }
     
     public function logAsync(string $message): void
     {
-        spawn with $this->scope static use($message) {
+        $this->taskGroup->spawn(static function() use($message) {
             try {
                 file_put_contents(
                     'app.log',
@@ -27,12 +28,12 @@ class BackgroundLogger
             } catch (\Throwable $e) {
                 error_log("Async log failed: " . $e->getMessage());
             }
-        };
+        });
     }
     
     public function __destruct()
     {
-        $this->scope->dispose();
+        $this->taskGroup->dispose();
     }
 }
 

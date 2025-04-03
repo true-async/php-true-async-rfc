@@ -39,7 +39,7 @@ function scrapeWebsites(array $urls, int $concurrency = 5): array
             };
         }
         
-        $scraperScope->awaitAll();
+        await $scraperScope;
         return $results;
     }
 }

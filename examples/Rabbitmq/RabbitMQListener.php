@@ -71,8 +71,9 @@ final class RabbitMQListener
     public function stop(): void
     {
         $this->scope->cancel();
+        
         try {
-            await $this->scope->allTasks();
+            await $this->scope;
         } finally {
             $this->connection->close();
         }
