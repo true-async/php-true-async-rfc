@@ -8,18 +8,15 @@
 *[#lightblue] Structured Concurrency
 **[#FFD700] Grouping tasks
 ***[#lightgreen] new TaskGroup() + await TaskGroup
-**[#FFD700] Point of responsibility
+**[#FFD700] The parent waits for all child tasks
 ***[#lightgreen]: async block + await Scope
 
 async $scope {
 		await $scope
 };
-**[#FFD700] A hierarchy of scopes
-***[#lightgreen]: async inherit block
-
-async inherit $scope {
-		await $scope
-};
+**[#FFD700] A hierarchy
+***[#lightgreen] async inherit $scope
+***[#lightgreen] spawn child ...
 *[#lightblue] Waiting for Results
 **[#lightgreen] await <Async\Awaitable>
 **[#FFD700] Waiting for multiple tasks
