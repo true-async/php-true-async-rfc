@@ -2,73 +2,61 @@
 
 @startmindmap
 *[#lightblue] Do you want to create a coroutine?
-**[#lightgreen] Use spawn: spawn functionName()
+**[#lightgreen] Use spawn functionName(...)
 **[#87CEEB] Do you want to create a coroutine from a closure?
-***[#lightgreen]: Use spawn block:
+***[#lightgreen] Use spawn { ... }
+**[#87CEEB] Do you want structured concurrency?
+***[#lightgreen] Use async $scope { ... }
 
-spawn use($some): void {
-}
-;
-**[#87CEEB] Do you want to use structured concurrency?
-***[#lightgreen] Use async block: async $scope {}
 *[#lightblue] Do you want to wait for a result?
-**[#lightgreen] Use await: await <Async\Awaitable>
-**[#87CEEB] Are you waiting for multiple tasks?
-***[#lightgreen] Use await Async\all()
-**[#87CEEB] Are you waiting for all child tasks?
-***[#lightgreen] Use Scope::allTasks()
-**[#87CEEB] Are you waiting for direct child tasks?
-***[#lightgreen] Use Scope::directTasks()
-**[#87CEEB] You want to wait with cancellation?
-***[#lightgreen] Use await until: await $coroutine until $cancellation
-**[#87CEEB] Do you want to wait for at least one task (race)?
-***[#lightgreen] Use await + Scope::firstDirectTask()
-*[#lightblue] Do you need to cancel tasks?
-**[#87CEEB] Do you want to cancel a single coroutine?
-***[#lightgreen] Use Coroutine::cancel()
-**[#87CEEB] Do you want to cancel all child tasks in scope?
-***[#lightgreen] Use Scope::dispose()
-***[#87CEEB] Do you need a timeout before disposal?
-****[#lightgreen] Use Scope::disposeAfterTimeout(positive int $timeout)
-***[#87CEEB] Do you need a safe disposal method?
-****[#lightgreen] Use Scope::disposeSafely()
-*[#lightblue] Do you need structured concurrency?
-**[#lightgreen] Use async block: async $scope {}
-*[#lightblue] Do you want to group tasks with a shared lifetime?
-**[#lightgreen] Use Scope
-*[#lightblue] Do you need error handling?
-**[#87CEEB] Do you want to handle coroutine exceptions?
-***[#lightgreen]: Use try-catch with await
+**[#lightgreen] Use await <Async\Awaitable>
+**[#87CEEB] Do you want to wait for multiple tasks?
+***[#lightgreen] Use **TaskGroup**:
+**** TaskGroup->add(spawn ...)
+**** await $taskGroup
+**[#87CEEB] Do you want to wait for multiple tasks with results?
+***[#lightgreen] Use new Async\TaskGroup(captureResults: true)
+**[#87CEEB] Do you want to wait for the first completed task (race)?
+***[#lightgreen] Use TaskGroup->race() or TaskGroup->firstResult()
+**[#87CEEB] Do you want to wait with cancellation?
+***[#lightgreen] Use await ... until ...
 
-try {
-	await $coroutine
-} catch (\Exception $e) {
-	// Handle exception
-};
-**[#87CEEB] Do you need to handle all scope exceptions?
-***[#lightgreen] Use Scope::setExceptionHandler()
+*[#lightblue] Do you need to cancel tasks?
+**[#87CEEB] Single coroutine?
+***[#lightgreen] Use Coroutine::cancel()
+**[#87CEEB] All tasks in a scope?
+***[#lightgreen] Use Scope->cancel() or Scope->dispose()
+**[#87CEEB] All tasks in a TaskGroup?
+***[#lightgreen] Use TaskGroup->dispose() or TaskGroup->cancel()
+**[#87CEEB] Timed or safe disposal of Scope?
+***[#lightgreen] Use Scope->disposeSafely() or Scope->disposeAfterTimeout(int)
+
+*[#lightblue] Do you need error handling?
+**[#87CEEB] Handle coroutine exceptions?
+***[#lightgreen] Use try { await $coroutine } catch(...) { ... }
+**[#87CEEB] Handle all exceptions in a Scope?
+***[#lightgreen] Use Scope->setExceptionHandler()
+
 *[#lightblue] Do you need graceful shutdown?
 **[#lightgreen] Use Async\gracefulShutdown()
-*[#lightblue] Do you want to protect critical sections?
+
+*[#lightblue] Protect critical sections?
 **[#lightgreen] Use Async\protect(\Closure $criticalSection)
+
 *[#lightblue] Do you want to execute logic on completion?
 **[#lightgreen] Use Coroutine::onCompletion()
-**[#87CEEB] Do you need a fallback?
-***[#lightgreen]: Use finally block
+**[#87CEEB] Need a fallback?
+***[#lightgreen] Use a finally block
 
-try {
-	await $coroutine
-} finally {
-
-};
 *[#lightblue] Do you need to pass data across coroutine boundaries?
 **[#lightgreen] Use Async\Context, Async\currentContext()
+
 *[#lightblue] Do you need context inheritance?
-**[#lightgreen] Use Scope::inherit();
-*[#lightblue] Are you managing implicit coroutines?
-**[#87CEEB] Do you want to handle zombie coroutines?
-***[#lightgreen] Use Scope::disposeSafely()
-***[#lightgreen] Use Scope::disposeAfterTimeout()
+**[#lightgreen] Use Scope::inherit()
+
+*[#lightblue] Are you managing implicit coroutines or worried about zombie coroutines?
+**[#87CEEB] Need safe or timed disposal?
+***[#lightgreen] Use Scope::disposeSafely() or Scope::disposeAfterTimeout()
 @endmindmap
 
 @enduml
