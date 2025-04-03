@@ -7,27 +7,27 @@
 **[#lightgreen] suspend
 *[#lightblue] Structured Concurrency
 **[#FFD700] Grouping tasks
-***[#lightgreen]: async block + await Scope::allTasks
+***[#lightgreen] new TaskGroup() + await TaskGroup
+**[#FFD700] Point of responsibility
+***[#lightgreen]: async block + await Scope
 
 async $scope {
-		await $scope->allTasks()
+		await $scope
 };
-**[#FFD700] Creating a hierarchy
+**[#FFD700] A hierarchy of scopes
 ***[#lightgreen]: async inherit block
 
 async inherit $scope {
-		await $scope->allTasks()
+		await $scope
 };
 *[#lightblue] Waiting for Results
 **[#lightgreen] await <Async\Awaitable>
 **[#FFD700] Waiting for multiple tasks
-***[#lightgreen] await Async\all()
+***[#lightgreen] await TaskGroup
 **[#FFD700] Waiting for all child tasks
-***[#lightgreen] Scope::allTasks()
-**[#FFD700] Waiting for direct child tasks
-***[#lightgreen] Scope::directTasks()
-**[#FFD700] Waiting for first direct child tasks (race)
-***[#lightgreen] Scope::firstDirectTask()
+***[#lightgreen] await Scope
+**[#FFD700] Waiting for first tasks (race)
+***[#lightgreen] TaskGroup::race() or TaskGroup::firstResult()
 **[#FFD700] Waiting with cancellation
 ***[#lightgreen]: await + until
 
@@ -40,10 +40,14 @@ await $coroutine until $cancellation;
 **[#FFD700] Handling exceptions as a supervisor
 ***[#lightgreen] Child Scope Exception Handler
 *[#lightblue] Task Grouping
-**[#FFD700] Grouping tasks with shared lifetime
+**[#FFD700] Explicit task grouping
+***[#lightgreen] TaskGroup
+**[#FFD700] Shared task space for spawn expression
 ***[#lightgreen] Scope
+**[#FFD700] Binding of TaskGroup to the scope
+***[#lightgreen] new TaskGroup(new Scope())
 **[#FFD700] Linking PHP object with coroutines
-***[#lightgreen]: Scope
+***[#lightgreen]: Scope or/and TaskGroup
 
 class Some {
 	public function __construct() {
@@ -59,6 +63,8 @@ class Some {
 ***[#lightgreen] Coroutine::cancel()
 **[#FFD700] Cancel all child tasks in scope
 ***[#lightgreen] Scope::cancel()
+**[#FFD700] Cancel tasks in TaskGroup
+***[#lightgreen] TaskGroup::cancel() / TaskGroup::dispose()
 **[#FFD700] Cancel all child tasks with warning
 ***[#lightgreen] Scope::dispose()
 **[#FFD700] Cancel all child tasks with zombie coroutine
@@ -68,13 +74,8 @@ class Some {
 ***[#lightgreen] Async\Context
 **[#FFD700] Inheriting context across scopes
 ***[#lightgreen] Scope Inheritance
-*[#lightblue] Managing Implicit Coroutines
-**[#FFD700] Creating implicit coroutines
-***[#lightgreen] spawn without Scope
-**[#FFD700] Managing implicit coroutines
-***[#lightgreen] Create Scope + Scope::disposeSafely()
-**[#FFD700] Preventing resource leaks
-***[#lightgreen] Zombie Coroutine Policy or Task cancellation
+*[#lightblue] Managing Zombie Coroutines
+**[#lightgreen] Zombie Coroutine Policy or Task cancellation
 @endmindmap
 
 @enduml
