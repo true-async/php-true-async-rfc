@@ -763,12 +763,11 @@ try {
 **Await basic syntax:**
 
 ```php
-    [<resultExp> = ] await <awaitExp>;
+    await <awaitExp> [until <cancellationExp>];
 ```
 
 **where:**
 
-- `resultExp` - An expression that will receive the result of the awaited operation.
 - `awaitExp` - An expression whose result must be an object with the `Async\Awaitable` interface.
 - `cancellationExp` - An expression that limits the waiting time.
   Must be an object with the `Async\Awaitable` interface.
@@ -831,6 +830,24 @@ try {
     $result = await ($bool ? foo() : bar());
 ```
 
+The `await` expression can be used just like any other expression together with other statements:
+
+```php
+
+    $coroutine = spawn {...};
+
+    if(await $coroutine === true) {
+        echo "Success";
+    } else {
+        echo "Failure";
+    }
+
+    foreach (await spawn $coroutine as $value) {
+        echo $value;
+    }
+```
+
+
 #### Await with cancellation
 
 ##### Motivation
@@ -859,10 +876,10 @@ await all([...]) until timeout(5);
 **basic syntax:**
 
 ```php
-    [<resultExp> = ] await <awaitExp> [until <cancellationExp>];
+    await <awaitExp> [until <cancellationExp>];
 ```
 
-**where:**
+**where cancellationExp:**
 
 - A variable of the `Async\Awaitable` interface
 
