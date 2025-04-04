@@ -3097,6 +3097,13 @@ which is very similar to this **RFC**.
 | **Goals**                 | Transparent coroutines, structured concurrency, safe cancellation, no function coloring. `TaskGroup` for partial grouping. Inherits or bounds child tasks for resource safety. | Virtual threads for simpler concurrency, aiming for structured concurrency in standard Java. Loom is still evolving.        |
 
 
+## References
+
+* [Understanding Concurrency Bugs in Real-World Programs with Kotlin Coroutines](https://pure.tudelft.nl/ws/portalfiles/portal/222760871/LIPIcs.ECOOP.2024.8.pdf)
+* [Understanding Real-World Concurrency Bugs in Go](https://dl.acm.org/doi/10.1145/3297858.3304069)
+* [Speed Up Your Python Program With Concurrency](https://realpython.com/python-concurrency/)
+
+
 ## Backward Incompatible Changes
 
 Simultaneous use of the **True Async API** and the **Fiber API** is not possible.
