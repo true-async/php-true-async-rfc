@@ -1133,7 +1133,7 @@ try {
 **Expected output:**
 
 ```
-Error
+Error occurred
 ```
 
 #### Scope Hierarchy
@@ -1355,6 +1355,7 @@ There are three available strategies for `Scope` termination:
 | `disposeSafely`       | Marks as zombie coroutines, does not cancel  |
 | `dispose`             | Cancels with a warning                       |
 | `disposeAfterTimeout` | Issues a warning, then cancels after a delay |
+| `cancel`              | Cancels without warnings or zombie           |
 
 The main goal of all three methods is to terminate the execution of coroutines
 that belong to the `Scope` or its child Scopes.
@@ -1916,9 +1917,10 @@ are handled according to a separate **policy**.
 This policy aims to strike a balance between uncontrolled resource leaks and the need to abruptly
 terminate coroutines, which could lead to data integrity violations.
 
-If there are no active coroutines left in the execution queue and no events to wait for, the application is considered complete.
+If there are no active coroutines left in the execution queue and no events to wait for, 
+the application is considered complete.
 
-Zombie coroutines differ from regular ones in that they are not counted as active.
+**Zombie coroutines** differ from regular ones in that they are not counted as active.
 Once the application is considered finished,
 zombie coroutines are given a time limit within which they must complete execution.
 If this limit is exceeded, all zombie coroutines are canceled.
