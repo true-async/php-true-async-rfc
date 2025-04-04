@@ -115,7 +115,7 @@ function mergeFiles(string ...$files): string
        $taskGroup->spawn(file_get_contents(...), $file);
     }
     
-    return array_merge("\n", await $taskGroup);
+    return array_merge("\n", await $taskGroup->all());
 }
 ```
 
@@ -2169,6 +2169,83 @@ The `getErrors()` method will return an array of exceptions.
 #### TaskGroup cancellation
 
 The `TaskGroup` class allows you to cancel all tasks in the group using the `cancel()` method.
+
+This method behaves the same way as `TaskGroup::dispose`, 
+with the only difference being that it allows you to pass a specific exception.
+
+```php
+use Async\TaskGroup;
+
+$taskGroup = new Async\TaskGroup(captureResults: false);
+$taskGroup->add(spawn {
+    try {
+        suspend;
+    } catch (Throwable $throwable) {
+        echo "Task was cancelled: ", $throwable->getMessage(), "\n";
+    }
+});
+
+// pass control to the task
+suspend;
+
+$taskGroup->cancel(new \Async\CancellationException('Custom cancellation message'));
+```
+
+**Expected output:**
+
+```
+Task was cancelled: Custom cancellation message
+```
+
+#### TaskGroup error handling
+
+`TaskGroup` does not introduce additional logic for handling coroutine exceptions. 
+When a developer uses the expression `await $taskGroup`, they are capturing the exceptions 
+of all tasks contained within `$taskGroup`. 
+In other words, `await $taskGroup` is equivalent to simultaneously using `await $coroutine` for each task. 
+If no one awaits `$taskGroup`, the exception handling follows the general `Flow`, 
+and the error will propagate to the `Scope`.
+
+An additional method `TaskGroup::all(bool $ignoreErrors = false, $nullOnFail = false): Awaitable {}` provides a trigger 
+that fires when all tasks in the group have completed. 
+At the same time, it captures any errors, which can be retrieved using `TaskGroup::getErrors()`.
+
+```php
+// Returns an array of all tasks with their results ignoring errors
+return $taskGroup->all(ignoreErrors: true);
+```
+
+The trigger `TaskGroup::all()` returns an array of results with numeric indices, 
+where each index corresponds to the ordinal number of the task. 
+If a task completed with an error, its numeric index will be missing from the array.
+
+Using the option `$nullOnFail`, you can specify that the results of failed 
+tasks should be filled with `NULL` instead.
+
+```php
+$taskGroup = new Async\TaskGroup(captureResults: true);
+$taskGroup->add(spawn {return 'result 1';});
+$taskGroup->add(spawn {throw new Exception('Error')});
+
+var_dump(await $taskGroup->all(ignoreErrors: true, nullOnFail: true));
+```
+
+**Expected output:**
+
+```php
+array(2) {
+  [0]=>
+  string(8) "result 1"
+  [1]=>
+  NULL
+}
+```
+
+The method `TaskGroup::getErrors()` returns an array with numeric indices and exceptions, 
+where each index corresponds to the ordinal number of the task.
+
+> **Note:** The method `TaskGroup::disposeResults` clears all results and errors at the moment it is called. 
+> Coroutines then reset their ordinal indices starting from zero.
 
 ### Context
 
