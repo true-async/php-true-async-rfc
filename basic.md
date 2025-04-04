@@ -280,9 +280,19 @@ the developer treats it as non-critical in terms of data integrity.
 If the developer needs to manage the coroutine’s lifetime, they will use the expression `spawn with`.
 In other words, the developer must take extra steps to explicitly extend the coroutine's lifetime.
 
-The **Cancellable by design** principle works especially well for server-side applications,
-but it can conflict with the principles of **structured concurrency**.
-This **RFC** proposes a balance between both approaches.
+The **Cancellable by design** principle works especially well for server-side applications.
+
+In the context of **structural concurrency**, 
+an explicit cooperative cancellation mechanism may be used, 
+which is based on the rule:  
+
+> if the child Tasks never check for cancellation, it’s like the system doesn’t support cancellation at all
+
+(Please see: https://alejandromp.com/development/blog/the-importance-of-cooperative-cancellation/)
+
+This **RFC** is based on a hybrid cancellation principle, which is formulated as follows:
+
+> A task can be cancelled at any point where it has explicitly or implicitly yielded control via `suspend`.
 
 ### Namespace
 
