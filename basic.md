@@ -3102,6 +3102,7 @@ which is very similar to this **RFC**.
 * [Understanding Concurrency Bugs in Real-World Programs with Kotlin Coroutines](https://pure.tudelft.nl/ws/portalfiles/portal/222760871/LIPIcs.ECOOP.2024.8.pdf)
 * [Understanding Real-World Concurrency Bugs in Go](https://dl.acm.org/doi/10.1145/3297858.3304069)
 * [Speed Up Your Python Program With Concurrency](https://realpython.com/python-concurrency/)
+* [Static Analysis for Asynchronous JavaScript Programs](https://arxiv.org/abs/1901.03575)
 
 
 ## Backward Incompatible Changes
