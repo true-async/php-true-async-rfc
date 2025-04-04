@@ -29,4 +29,8 @@ final class TaskGroup implements Awaitable
     public function disposeResults(): void {}
     
     public function dispose(): void {}
+    
+    public function isFinished(): bool {}
+    
+    public function isClosed(): bool {}
 }
