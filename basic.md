@@ -288,7 +288,7 @@ which is based on the rule:
 
 > if the child Tasks never check for cancellation, it’s like the system doesn’t support cancellation at all
 
-(Please see: https://alejandromp.com/development/blog/the-importance-of-cooperative-cancellation/)
+(Please see: [Cooperative cancellation](https://alejandromp.com/development/blog/the-importance-of-cooperative-cancellation/))
 
 This **RFC** is based on a hybrid cancellation principle, which is formulated as follows:
 
@@ -546,70 +546,6 @@ spawn with $scope use():void {
 ```php
 spawn with $this->scope $this->method();
 spawn with $this->getScope() $this->method();
-```
-
-#### Spawn with child expression
-
-The `spawn with` expression allows you to create siblings relative to the specified scope.  
-However, it can be useful to create a coroutine in a child scope to establish a clear hierarchy.
-
-```php
-use Async\Scope;
-
-$scope = new Scope();
-
-spawn with $scope wathcher();
-
-spawn with $scope use($scope): void {
-    foreach ($hosts as $host) {
-        $child = Scope::inherit($scope);
-        
-        $coroutine = spawn with $scope {
-            echo gethostbyname('php.net').PHP_EOL;
-        };
-        
-        $coroutine->onComplete(fn() => $child->disposeSafely());
-    }      
-};
-
-$scope->awaitIgnoringErrors();
-```
-
-**Structure:**
-
-```
-$scope = new Scope();
-├── watcher()                   ← runs in the $scope
-├── foreach($hosts)             ← runs in the $scope
-├── $child = Scope::inherit($scope)
-│   └── subtask1()              ← runs in the childScope
-├── $child = Scope::inherit($scope)
-│   └── subtask2()              ← runs in the childScope
-├── $child = Scope::inherit($scope)
-│   └── subtask3()              ← runs in the childScope
-```
-
-This structure separates main tasks belonging to the `$scope` and child tasks that are launched in child scopes.  
-Each child task can be cancelled independently of the others, since it belongs to a separate scope (Supervisor pattern).
-
-The `child` keyword is used to create a child scope from the specified scope.
-
-```php
-use Async\Scope;
-
-$scope = new Scope();
-
-spawn with $scope wathcher();
-
-spawn with $scope use($scope): void {
-    foreach ($hosts as $host) {
-        spawn child {
-            echo gethostbyname('php.net').PHP_EOL;
-        };
-    }      
-};
-
-$scope->awaitIgnoringErrors();
 ```
 
 ### Suspension
@@ -3161,7 +3097,7 @@ which is very similar to this **RFC**.
 | **Feature**               | **PHP True Async (Scope)**                                                                                                                                                     | **Java Loom (StructuredTaskScope)**                                                                                         |
 |---------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------|
 | **Creation**              | `new Scope()` or `Scope::inherit()` to form hierarchical concurrency; `TaskGroup` for grouped tasks. `async $scope {}` can define bounded or inherited scopes automatically.   | `new StructuredTaskScope<>()` or specialized subtypes to manage forked virtual threads.                                     |
-| **Task Launch**           | `spawn with $scope someTask()` or `async $scope { ... }`. Also `TaskGroup->add()` for grouped tasks; `spawn child` creates child scopes.                                       | `scope.fork(() -> someTask())` inside the `StructuredTaskScope` block.                                                      |
+| **Task Launch**           | `spawn with $scope someTask()` or `async $scope { ... }`. Also `TaskGroup->add()` for grouped tasks.                                                                           | `scope.fork(() -> someTask())` inside the `StructuredTaskScope` block.                                                      |
 | **Hierarchy**             | Scopes can form a tree of child scopes; canceling a parent scope cancels all children. `TaskGroup` is optional but can reference a scope.                                      | `StructuredTaskScope` can nest calls (`fork()` in sub-scopes). Canceling/closing a parent can interrupt child tasks.        |
 | **Awaiting**              | `await $scope` waits for all coroutines in that scope; `await spawn someFn()` for a single coroutine; `await $taskGroup` collects grouped results.                             | `scope.join()` to wait for all forked tasks, or individual `Future.get()`.                                                  |
 | **Bounded Execution**     | `async bounded $scope { ... }` auto-cancels any child tasks left running once the block ends. A `TaskGroup` can be flagged as bounded too.                                     | Exiting the structured concurrency block ends sub-tasks: they are joined or canceled.                                       |

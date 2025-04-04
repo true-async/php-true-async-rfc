@@ -16,7 +16,6 @@ async $scope {
 };
 **[#FFD700] A hierarchy
 ***[#lightgreen] async inherit $scope
-***[#lightgreen] spawn child ...
 *[#lightblue] Waiting for Results
 **[#lightgreen] await <Async\Awaitable>
 **[#FFD700] Waiting for multiple tasks

@@ -24,7 +24,9 @@ final class RequestHandler
         spawn with $this->scope use($server) {
             try {
                 while (($client = stream_socket_accept($server)) !== false) {
-                    spawn child with $this->scope $this->handleConnection($client);
+                    $child = Scope::inherit($this->scope);
+                    $coroutine = spawn with $child $this->handleConnection($client);
+                    $coroutine->onComplete(static fn() => $child->dispose());
                 }
             } finally {
                 fclose($server);
