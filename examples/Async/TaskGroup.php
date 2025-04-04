@@ -7,7 +7,7 @@ namespace Async;
 final class TaskGroup implements Awaitable
 {
     public function __construct(
-        private ?Scope  $scope          = null,
+        private Scope  $scope,
         private bool $captureResults    = false
     ) {}
     

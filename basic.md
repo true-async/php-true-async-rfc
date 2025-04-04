@@ -109,13 +109,14 @@ Goodbye, World
 ```php
 function mergeFiles(string ...$files): string
 {
-    $taskGroup = new Async\TaskGroup(captureResults: true);
+    $scope = new Async\Scope();
+    $taskGroup = new Async\TaskGroup(scope: $scope, captureResults: true);
     
     foreach ($files as $file) {
        $taskGroup->spawn(file_get_contents(...), $file);
     }
     
-    return array_merge("\n", await $taskGroup->all());
+    return array_merge("\n", await $taskGroup);
 }
 ```
 
@@ -160,7 +161,7 @@ function fetchUserProfile(string $userId): array
 {
     async inherit $userDataScope {
     
-        $taskGroup = new Async\TaskGroup($userDataScope);
+        $taskGroup = new Async\TaskGroup($userDataScope, captureResults: true);
     
         $taskGroup->add(spawn fetchUserData());
         $taskGroup->add(spawn fetchUserSettings($userId));
@@ -1658,7 +1659,7 @@ function generateReport(): void
     try {
         async inherit $scope {
         
-            $taskGroup = new TaskGroup();
+            $taskGroup = new TaskGroup($scope);
         
             [$employees, $salaries, $workHours] = await $taskGroup->add([
                 spawn fetchEmployees(),
@@ -1982,7 +1983,8 @@ can set a custom timeout for that specific `Scope` using the `Scope::disposeAfte
 ```php
 function mergeFiles(string ...$files): string
 {
-    $taskGroup = new Async\TaskGroup(captureResults: true);
+    $scope = new Async\Scope();
+    $taskGroup = new Async\TaskGroup($scope, captureResults: true);
     
     foreach ($files as $file) {
        $taskGroup->add(spawn file_get_contents($file));
@@ -2026,7 +2028,8 @@ If the results are no longer needed, the `TaskGroup::disposeResults()` method sh
 function processInBatches(array $files, int $limit): array
 {
     $allResults = [];
-    $taskGroup  = new Async\TaskGroup(captureResults: true);
+    $scope      = new Async\Scope();
+    $taskGroup  = new Async\TaskGroup($scope, captureResults: true);
     $count      = 0;
 
     foreach ($files as $file) {
@@ -2063,7 +2066,44 @@ The reason for this behavior lies in the fact that `TaskGroup` only keeps track 
 If a task group is being disposed, it means the user clearly understands 
 that all coroutines launched within it should also be terminated.
 
-#### Combining TaskGroup and Scope
+#### Adding coroutines to a `TaskGroup`
+
+The method `TaskGroup::add` adds a new coroutine to the `TaskGroup`. It performs the following checks:
+* the coroutine must not be completed
+* the coroutine must belong to the same `Scope` associated with the `TaskGroup`
+* A task must not be added more than once.
+
+If these checks fail, an exception is thrown.
+
+```php
+use Async\TaskGroup;
+
+$scope = new Async\Scope();
+$taskGroup = new Async\TaskGroup($scope);
+
+$taskGroup->add(spawn {return;}); // <- Exception: Wrong scope
+
+$coroutine = spawn with $scope {return;};
+
+suspend;
+$taskGroup->add($coroutine); // <- Exception: Task already completed
+
+$coroutine = spawn with $scope {return;};
+$taskGroup->add($coroutine);
+$taskGroup->add($coroutine); // <- Exception: Task already added
+```
+
+#### TaskGroup and Scope
+
+The `TaskGroup` constructor always requires an explicit `Scope` to be defined. 
+This is done to make the developer consider how long the tasks in the `TaskGroup` should live.
+
+`TaskGroup` ties its lifetime to that of the `Scope` and cannot outlive it. 
+As a result, a `TaskGroup` cannot "hang in the air" like zombie coroutines do.
+
+`TaskGroup` does not increase the reference count of the `$scope` object and does not prevent it from being disposed. 
+When the `Scope` associated with the `TaskGroup` enters the disposal phase, 
+it first releases all tasks within the `TaskGroup`.
 
 Combining `Scope` and `TaskGroup` helps implement the pattern of primary and secondary tasks, 
 where tasks in the `TaskGroup` are treated as explicit, primary tasks that must be monitored for completion. 
@@ -2078,20 +2118,24 @@ use Async\TaskGroup;
 function targetTask(int $i): void
 {
     spawn {
-        // subtask
+        // subtask should be added to the same scope
     };
 }
 
-$scope = new Scope();
-$taskGroup = new TaskGroup(scope: $scope, captureResults: true);
+$scope = new Scope(); // <- $scope reference equals one.
+// TaskGroup will be binded to the $scope
+$taskGroup = new TaskGroup(scope: $scope, captureResults: true); // <- Scope reference equals one.
 
 for($i = 0; $i < 10; $i++) {
     $taskGroup->add(spawn with $scope targetTask($i));
 }
 
 try {
+    // wait for only the tasks that were added to the TaskGroup
     $results = await $taskGroup;
 } finally {
+    // First dispose the task group
+    // then dispose the scope
     $scope->dispose();
 }
 ```
@@ -2176,7 +2220,8 @@ with the only difference being that it allows you to pass a specific exception.
 ```php
 use Async\TaskGroup;
 
-$taskGroup = new Async\TaskGroup(captureResults: false);
+$scope = new Async\Scope();
+$taskGroup = new Async\TaskGroup(scope: $scope, captureResults: false);
 $taskGroup->add(spawn {
     try {
         suspend;
@@ -2223,7 +2268,8 @@ Using the option `$nullOnFail`, you can specify that the results of failed
 tasks should be filled with `NULL` instead.
 
 ```php
-$taskGroup = new Async\TaskGroup(captureResults: true);
+$scope = new Async\Scope();
+$taskGroup = new Async\TaskGroup($scope, captureResults: true);
 $taskGroup->add(spawn {return 'result 1';});
 $taskGroup->add(spawn {throw new Exception('Error')});
 
