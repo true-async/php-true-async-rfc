@@ -39,6 +39,6 @@ function taskGroup(array $files): void
     } catch (Exception $e) {
         echo "Caught exception: ", $e->getMessage();
     } finally {
-        $tasks->dispose();
+        $scope->dispose();
     }
 }
