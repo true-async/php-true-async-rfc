@@ -270,6 +270,26 @@ All functions, classes, and constants defined in this **RFC** are located in the
 Extensions for **Scheduler/Reactor** are allowed to extend this namespace with functions and classes,
 provided that they are directly related to concurrency functionality.
 
+### Cancellable by design
+
+This RFC is based on the principle of **"Cancellable by design"**, which can be described as follows:
+
+> By default, coroutines **should be** designed in such a way that their 
+> cancellation at any moment does not compromise data integrity.
+
+> Coroutines launched without a defined `Scope` or lifetime **must** adhere to the "Cancellable by design" principle.
+
+> If a coroutine’s lifetime needs to be controlled — it **MUST** be done **EXPLICITLY**!
+
+In practice, this means that if a coroutine is created using the expression `spawn <callable>`, 
+the developer treats it as non-critical in terms of data integrity. 
+If the developer needs to manage the coroutine’s lifetime, they will use the expression `spawn with`. 
+In other words, the developer must take extra steps to explicitly extend the coroutine's lifetime.
+
+The **Cancellable by design** principle works especially well for server-side applications, 
+but it can conflict with the principles of **structured concurrency**. 
+This **RFC** proposes a balance between both approaches.
+
 ### Coroutine
 
 > A `Coroutine` is an `execution container`, transparent to the code,
