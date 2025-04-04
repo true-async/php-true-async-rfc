@@ -1645,7 +1645,6 @@ function generateReport(): void
     } catch (Exception $e) {
         echo "Failed to generate report: ", $e->getMessage(), "\n";
     } finally {
-        $taskGroup->dispose();
         $scope->disposeSafely();
     }
 }
@@ -1900,7 +1899,7 @@ final class ProcessPool
         $this->poolScope = new Scope();
         $this->watcherScope = new Scope();
         $this->jobsScope = new Scope();
-        $this->taskGroup = new TaskGroup(captureResults: false);
+        $this->taskGroup = new TaskGroup($this->poolScope, captureResults: false);
     }
     
     public function __destruct()
@@ -2066,21 +2065,51 @@ that all coroutines launched within it should also be terminated.
 
 #### Combining TaskGroup and Scope
 
-`TaskGroup` is convenient to use in combination with `Scope`, if 
-the `$scope` object belongs exclusively to the `TaskGroup`. 
-In that case, when the `TaskGroup` goes out of scope,
-the `Scope` object and all associated tasks will be destroyed together.
+Combining `Scope` and `TaskGroup` helps implement the pattern of primary and secondary tasks, 
+where tasks in the `TaskGroup` are treated as explicit, primary tasks that must be monitored for completion. 
+All other tasks that enter the `Scope` while the primary tasks are running are considered secondary.
+
+The following code demonstrates this idea:
 
 ```php
-$scope = new Async\Scope();
-$taskGroup = new Async\TaskGroup(scope: $scope, captureResults: false); // <- Scope reference equals two.
+use Async\Scope;
+use Async\TaskGroup;
+
+function targetTask(int $i): void
+{
+    spawn {
+        // subtask
+    };
+}
+
+$scope = new Scope();
+$taskGroup = new TaskGroup(scope: $scope, captureResults: true);
+
+for($i = 0; $i < 10; $i++) {
+    $taskGroup->add(spawn with $scope targetTask($i));
+}
+
+try {
+    $results = await $taskGroup;
+} finally {
+    $scope->dispose();
+}
+```
+
+Coroutines that can be created by `targetTask` will be placed into `$scope`. 
+However, only the tasks that are explicitly added to the `TaskGroup` will be awaited. 
+When `$scope` is cancelled, the `TaskGroup` will be disposed of along with it.
+
+```php
+$scope = new Async\Scope(); // <- $scope reference equals one.
+$taskGroup = new Async\TaskGroup(scope: $scope, captureResults: false); // <- Scope reference equals one.
 $taskGroup->add(spawn with $scope {
     Async\delay(5000);
     echo "This line will be executed\n";
 });
-unset($scope); // <- $scope reference equals one.
 sleep(1);
-$taskGroup->dispose(); // <- $scope reference equals zero.
+$scope->dispose(); // <- $scope reference equals zero.
+                   // $taskGroup->dispose() will be called before the $scope disposal.
 ```
 
 **Expected output:**
@@ -2089,41 +2118,11 @@ $taskGroup->dispose(); // <- $scope reference equals zero.
 ```
 
 There are no warnings about **zombie coroutines** in the output 
-because the task was canceled using `$taskGroup->dispose()`, after which the `scope` was also destroyed.
+because the task was canceled using `$taskGroup->dispose()`.
 
 However, if the `Scope` contains other coroutines that were created outside the `TaskGroup`, 
 they will follow the general rules. In the case of the `Scope::disposeSafely()` strategy, 
 a warning will be issued if unfinished tasks are detected, as they would become **zombie coroutines**.
-
-If you are certain that all tasks should be canceled, use the `bounded: true` option in the `TaskGroup` constructor. 
-In this case, the `Scope` will be terminated using the `Scope::dispose()` strategy.
-
-```php
-use Async\TaskGroup;
-use Async\Scope;
-use function Async\delay;
-
-$scope = new Scope();
-$taskGroup = new TaskGroup(scope: , captureResults: false, bounded: true);
-
-spawn with $scope { // <- it's a zombie coroutine, but it will be canceled because of the bounded task group
-    delay(5000);
-    echo "This line will be executed1\n";
-};
-
-$taskGroup->spawn(function() {
-    delay(5000);
-    echo "This line will be executed2\n";
-});
-
-sleep(1);
-$scope->dispose();
-```
-
-**Expected output:**
-
-```
-```
 
 #### TaskGroup Race
 
@@ -2134,7 +2133,8 @@ use Async\TaskGroup;
 
 function fetchFirstSuccessful(string ...$apiHosts): string
 {
-    $taskGroup = new Async\TaskGroup(scope: new Async\Scope(), captureResults: false, bounded: true);
+    $scope = new Async\Scope();
+    $taskGroup = new Async\TaskGroup(scope: $scope, captureResults: false);
 
     foreach ($apiHosts as $host) {
         $taskGroup->spawn(function() use ($host) {

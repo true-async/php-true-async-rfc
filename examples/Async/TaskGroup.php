@@ -8,8 +8,7 @@ final class TaskGroup implements Awaitable
 {
     public function __construct(
         private ?Scope  $scope          = null,
-        private bool    $ignoreErrors   = false,
-        private bool    $bounded        = false,
+        private bool    $ignoreErrors   = false
     ) {}
     
     public function race(bool $ignoreErrors = false): Awaitable {}
