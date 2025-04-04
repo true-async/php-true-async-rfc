@@ -14,7 +14,7 @@ function fetchAllUrls(array $urls): array
 {
     async bounded $scope {
         
-        $tasks = new \Async\TaskGroup();
+        $tasks = new \Async\TaskGroup($scope, true);
         
         foreach ($urls as $url) {
             $tasks->add(spawn fetchUrl($url));

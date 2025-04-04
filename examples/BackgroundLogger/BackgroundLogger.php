@@ -10,10 +10,12 @@ use Async\TaskGroup;
 class BackgroundLogger
 {
     private TaskGroup $taskGroup;
+    private Scope $scope;
     
     public function __construct()
     {
-        $this->taskGroup = new TaskGroup(new Scope());
+        $this->scope = new Scope();
+        $this->taskGroup = new TaskGroup($this->scope);
     }
     
     public function logAsync(string $message): void
@@ -33,7 +35,7 @@ class BackgroundLogger
     
     public function __destruct()
     {
-        $this->taskGroup->dispose();
+        $this->scope->dispose();
     }
 }
 

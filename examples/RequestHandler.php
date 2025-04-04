@@ -24,7 +24,7 @@ final class RequestHandler
         spawn with $this->scope use($server) {
             try {
                 while (($client = stream_socket_accept($server)) !== false) {
-                    spawn with child $this->scope $this->handleConnection($client);
+                    spawn child with $this->scope $this->handleConnection($client);
                 }
             } finally {
                 fclose($server);

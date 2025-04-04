@@ -11,6 +11,8 @@ use Async\TaskGroup;
 final class ProcessPool
 {
     private Scope $watcherScope;
+    private Scope $poolScope;
+    private Scope $jobsScope;
     private TaskGroup $poolTasks;
     private TaskGroup $jobsTasks;
     /**
@@ -28,16 +30,18 @@ final class ProcessPool
     public function __construct(readonly public string $entryPoint, readonly public int $max, readonly public int $min)
     {
         // Define the coroutine scopes for the pool, watcher, and jobs
-        $this->poolTasks    = new TaskGroup(new Scope());
-        $this->jobsTasks    = new TaskGroup(new Scope());
+        $this->poolScope    = new Scope();
+        $this->jobsScope    = new Scope();
+        $this->poolTasks    = new TaskGroup($this->poolScope);
+        $this->jobsTasks    = new TaskGroup($this->jobsScope);
         $this->watcherScope = new Scope();
     }
     
     public function __destruct()
     {
         $this->watcherScope->dispose();
-        $this->poolTasks->dispose();
-        $this->jobsTasks->dispose();
+        $this->poolScope->dispose();
+        $this->jobsScope->dispose();
     }
     
     public function start(): void
