@@ -2933,7 +2933,7 @@ for functions like `fwrite` (if such behavior is specified in the documentation)
 
 #### Cancellation policy
 
-When a coroutine is cancelled, the Scheduler resumes it with an exception and applies the **Cancellation Policy**. 
+When a coroutine is cancelled, the `Scheduler` resumes it with an exception and applies the **Cancellation Policy**. 
 The **Cancellation Policy** controls what happens next:
 
 1. If the cancelled coroutine does not complete but returns control to the Scheduler (uses `suspend`), 
