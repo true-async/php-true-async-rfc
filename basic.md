@@ -1491,6 +1491,11 @@ Warning: Coroutine is zombie at ... in Scope disposed at ...
 Task 2
 ```
 
+The `dispose*()` methods can be called multiple times, which is not considered an error.
+
+If the `Scope::cancel()` method is called with a parameter after the `Scope` has already been cancelled, 
+**PHP** will emit a warning indicating that the call will be ignored.
+
 #### Scope cancellation/disposal order
 
 If a `Scope` has child `Scopes`, the coroutines in the child `Scopes` will be canceled or disposed first,
@@ -2047,6 +2052,46 @@ $coroutine = spawn with $scope {return;};
 $taskGroup->add($coroutine);
 $taskGroup->add($coroutine); // <- Exception: Task already added
 ```
+
+Once the `TaskGroup::dispose` or `TaskGroup::cancel` methods have been called, 
+the `TaskGroup` object transitions into a closed state. 
+No further tasks can be added to such a `TaskGroup`. Attempting to do so will result in an exception.
+
+```php
+use Async\Scope;
+use Async\TaskGroup;
+use Async\CancellationException;
+
+$scope = new Scope();
+$taskGroup = new TaskGroup($scope, captureResults: true);
+
+$taskGroup->add(spawn fetchData('https://example.com/data1'));
+
+try {
+    $results = await $taskGroup;
+    foreach ($results as $result) {
+        // ...
+    }
+} catch (Exception $e) {
+}
+
+$taskGroup->dispose();
+
+try {
+    $taskGroup->add(spawn fetchData('https://example.com/data2'));
+} catch (Exception $e) {
+    echo "Exception: " . $e->getMessage() . PHP_EOL;
+}
+```
+
+**Expected output:**
+
+```
+Exception: TaskGroup was already disposed at ...
+```
+
+The `TaskGroup::dispose` and `TaskGroup::cancel` methods can be called multiple times. 
+Once the `TaskGroup` has been marked as closed, later calls will have no effect.
 
 #### TaskGroup and Scope
 
