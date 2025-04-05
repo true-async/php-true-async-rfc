@@ -2410,7 +2410,7 @@ function task(): void
 {
     coroutineContext()->set('data', 'This local data');
     
-    spawn function() {
+    spawn {
          // No data will be found
          echo coroutineContext()->find('data')."\n";
     };
@@ -2524,7 +2524,7 @@ An uncaught exception in a coroutine follows this flow:
 2. The exception is passed to the `Scope`.
 3. If the `Scope` has an exception handler defined, it will be invoked.
 4. If the `Scope` does not have an exception handler, the `cancel()` method is called,
-   canceling all coroutines in this scope from top to bottom in the hierarchy, including all child scopes.
+   canceling all coroutines in this scope, including all child scopes.
 5. If the `Scope` has responsibility points, i.e., the construction `await $scope`,
    all responsibility points receive the exception.
 6. Otherwise, the exception is passed to the parent scope if it is defined.
@@ -2920,7 +2920,7 @@ The end
 
 #### CancellationException propagation
 
-The `CancellationException` affects PHP standard library functions differently.
+The `CancellationException` affects **PHP** standard library functions differently.
 If it is thrown inside one of these functions that previously did not throw exceptions,
 the PHP function will terminate with an error.
 
