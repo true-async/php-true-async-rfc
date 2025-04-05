@@ -9,13 +9,9 @@
 **[#FFD700] Grouping tasks
 ***[#lightgreen] new TaskGroup() + await TaskGroup
 **[#FFD700] The parent waits for all child tasks
-***[#lightgreen]: async block + await Scope
-
-async $scope {
-		await $scope
-};
+***[#lightgreen] new Scope + await Scope
 **[#FFD700] A hierarchy
-***[#lightgreen] async inherit $scope
+***[#lightgreen] Scope::inherit()
 *[#lightblue] Waiting for Results
 **[#lightgreen] await <Async\Awaitable>
 **[#FFD700] Waiting for multiple tasks

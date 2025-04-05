@@ -11,9 +11,12 @@
 *[#lightblue] Do you want to wait for a result?
 **[#lightgreen] Use await <Async\Awaitable>
 **[#87CEEB] Do you want to wait for multiple tasks?
-***[#lightgreen] Use **TaskGroup**:
-**** TaskGroup->add(spawn ...)
-**** await $taskGroup
+***[#lightgreen]: Use **TaskGroup**
+
+$taskGroup = new Async\TaskGroup()
+spawn with $taskGroup ...
+await $taskGroup
+;
 **[#87CEEB] Do you want to wait for multiple tasks with results?
 ***[#lightgreen] Use new Async\TaskGroup(captureResults: true)
 **[#87CEEB] Do you want to wait for the first completed task (race)?
