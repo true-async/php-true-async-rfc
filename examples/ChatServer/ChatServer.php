@@ -2,7 +2,7 @@
 
 function startChatServer(string $host, int $port): void
 {
-    async $serverScope {
+    with new Async\Scope() as $serverScope {
         // Store connected clients
         $clients = [];
         
@@ -23,7 +23,7 @@ function startChatServer(string $host, int $port): void
                 
                 // Handle each client in a separate coroutine and child scope
                 spawn use($client, $id, &$clients) {
-                    async inherited $clientScope {
+                    with Scope::inherit() $clientScope {
                         try {
                             // Send welcome message
                             socket_write($client, "Welcome to the chat room!\n");

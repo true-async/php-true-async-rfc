@@ -1,10 +1,11 @@
 <?php
 
 use function Async\currentContext;
+use Async\Scope;
 
 function orchestrateDistributedProcess(array $nodes, array $taskConfig): array
 {
-    async $orchestratorScope {
+    with new Scope() as $orchestratorScope {
         $context = $orchestratorScope->context;
         $context->set('job_id', uniqid('job_'));
         $context->set('start_time', microtime(true));
@@ -17,7 +18,7 @@ function orchestrateDistributedProcess(array $nodes, array $taskConfig): array
         $countNodes = count($nodes);
         echo "Performing health checks on {$countNodes} nodes...\n";
         
-        async inherited $healthCheckScope {
+        with Scope::inherit() $healthCheckScope {
             foreach ($nodes as $nodeId => $nodeConfig) {
                 spawn use($nodeId, $nodeConfig, &$nodeHealth) {
                     try {
@@ -48,7 +49,7 @@ function orchestrateDistributedProcess(array $nodes, array $taskConfig): array
         echo "Starting distributed task on " . count($availableNodes) . " nodes\n";
         
         // Task distribution phase
-        async inherited $distributionScope {
+        with Scope::inherit() $distributionScope {
             $distributedTasks = distributeTaskLoad($taskConfig, array_keys($availableNodes));
             
             foreach ($distributedTasks as $nodeId => $nodeTasks) {

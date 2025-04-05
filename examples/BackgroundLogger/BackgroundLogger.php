@@ -10,17 +10,15 @@ use Async\TaskGroup;
 class BackgroundLogger
 {
     private TaskGroup $taskGroup;
-    private Scope $scope;
     
     public function __construct()
     {
-        $this->scope = new Scope();
-        $this->taskGroup = new TaskGroup($this->scope);
+        $this->taskGroup = new TaskGroup();
     }
     
     public function logAsync(string $message): void
     {
-        $this->taskGroup->spawn(static function() use($message) {
+        spawn with $this->taskGroup use($message) {
             try {
                 file_put_contents(
                     'app.log',
@@ -30,12 +28,12 @@ class BackgroundLogger
             } catch (\Throwable $e) {
                 error_log("Async log failed: " . $e->getMessage());
             }
-        });
+        };
     }
     
     public function __destruct()
     {
-        $this->scope->dispose();
+        $this->taskGroup->dispose();
     }
 }
 

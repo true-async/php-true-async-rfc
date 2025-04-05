@@ -21,7 +21,7 @@ function fetchWithRetry(string $url, int $maxRetries = 3): string
 
 function scrapeWebsites(array $urls, int $concurrency = 5): array
 {
-    async $scraperScope {
+    with new Scope as $scraperScope {
         // Rate limiter implementation
         $rateLimiter = new \WebScraper\RateLimiter($concurrency);
         

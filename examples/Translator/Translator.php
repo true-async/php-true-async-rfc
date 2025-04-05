@@ -36,7 +36,7 @@ final class Translator
     
     public function start(): void
     {
-        $this->scope->spawn($this->run(...));
+        spawn with $this->scope $this->run();
     }
     
     private function run(): void
@@ -48,7 +48,7 @@ final class Translator
     
     private function handleRequest(\Socket $socket): void
     {
-        async inherit bounded $scope {
+        with Scope::inherit()->asNotSafely() as $scope {
             try {
                 $this->handleLines($socket);
             } catch (\Throwable $exception) {

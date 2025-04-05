@@ -12,7 +12,7 @@ function fetchUrl(string $url): string {
 
 function fetchAllUrls(array $urls): array
 {
-    async bounded $scope {
+    with new Scope()->asNotSafely() as $scope {
         
         $tasks = new \Async\TaskGroup($scope, true);
         

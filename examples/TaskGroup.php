@@ -25,11 +25,10 @@ function taskGroup(array $files): void
         return $result;
     };
     
-    $scope = Scope::inherit();
-    $tasks = new \Async\TaskGroup($scope);
+    $tasks = new \Async\TaskGroup(Scope::inherit());
     
     foreach ($files as $file) {
-        $tasks->add(spawn in $scope $fileReadTask($file));
+        spawn with $tasks $fileReadTask($file);
     }
     
     try {
@@ -38,7 +37,5 @@ function taskGroup(array $files): void
         }
     } catch (Exception $e) {
         echo "Caught exception: ", $e->getMessage();
-    } finally {
-        $scope->dispose();
     }
 }

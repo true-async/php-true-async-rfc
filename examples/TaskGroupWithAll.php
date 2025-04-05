@@ -6,7 +6,7 @@ use Async\Scope;
 
 function taskGroup(array $files): void
 {
-    async inherit $scope {
+    with new \Async\TaskGroup() as $taskGroup {
         
         $fileReadTask = function (string $fileName): string {
           
@@ -32,8 +32,8 @@ function taskGroup(array $files): void
         }
         
         try {
-            foreach (await $scope->directTasks() as $file => $result) {
-                echo "File $file: $result\n";
+            foreach (await $taskGroup as $result) {
+                echo "File $result\n";
             }
         } catch (Exception $e) {
             echo "Caught exception: ", $e->getMessage();
