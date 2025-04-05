@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Async;
 
-final class TaskGroup implements Awaitable
+final class TaskGroup implements Awaitable, ScopeProvider
 {
     public function __construct(
         private ?Scope  $scope = null,
@@ -17,6 +17,9 @@ final class TaskGroup implements Awaitable
     public function firstResult(bool $ignoreErrors = false): Awaitable {}
     public function getResults(): array {}
     public function getErrors(): array {}
+    
+    #[\Override] public function getScope(): Scope {}
+    
     
     public function add(Coroutine ...$coroutines): self {}
     

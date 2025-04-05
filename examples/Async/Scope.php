@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Async;
 
-final class Scope implements Awaitable
+final class Scope implements Awaitable, ScopeProvider
 {
     public readonly Context $context;
     
@@ -17,6 +17,8 @@ final class Scope implements Awaitable
      * @return Scope
      */
     public static function inherit(?Scope $parentScope = null): Scope {}
+    
+    #[\Override] public function getScope(): Scope {}
     
     public function __construct() {}
     
