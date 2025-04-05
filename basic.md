@@ -518,10 +518,18 @@ class Test {
 
 The `with` keyword allows specifying the scope in which the coroutine.
 
+The operand for `spawn with $scope` can be either an `Async\Scope` object or a class 
+that implements the `Async\ScopeProvider` interface. For example, such a class is `TaskGroup`.
+
 ```php
 $scope = new Async\Scope();
+$taskGroup = new Async\TaskGroup($scope);
 
 $coroutine = spawn with $scope use():string {
+    return gethostbyname('php.net');
+};
+
+$coroutine = spawn with $taskGroup use():string {
     return gethostbyname('php.net');
 };
 
@@ -530,10 +538,11 @@ function defineTargetIpV4(string $host): string {
 }
 
 spawn with $scope defineTargetIpV4($host);
+spawn with $taskGroup defineTargetIpV4($host);
 ```
 
 The `scope` expression can be:
-- A variable:
+- A variable of the `Async\ScopeProvider` type:
 
 ```php
 spawn with $scope use():void {
@@ -546,6 +555,117 @@ spawn with $scope use():void {
 ```php
 spawn with $this->scope $this->method();
 spawn with $this->getScope() $this->method();
+```
+
+#### `ScopeProvider` Interface
+
+The `ScopeProvider` interface allows objects to provide an `Async\Scope` instance that can be used 
+in a `spawn with` expression.
+
+This is useful when you want to abstract the scope management logic, 
+letting higher-level structures (like a task group or a custom container) 
+expose a scope without directly exposing internal details.
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace Async;
+
+interface ScopeProvider
+{
+    /**
+     * Returns the associated Scope instance.
+     *
+     * This scope will be used when spawning a coroutine via `spawn with $provider`.
+     *
+     * @return Scope
+     */
+    public function getScope(): Scope;
+}
+```
+
+**Example Use Case:**
+
+A task group can implement this interface to automatically provide its internal scope to `spawn with`:
+
+```php
+class CustomTaskGroup implements ScopeProvider
+{
+    private Scope $scope;
+
+    public function __construct()
+    {
+        $this->scope = new Scope();
+    }
+
+    public function getScope(): Scope
+    {
+        return $this->scope;
+    }
+}
+```
+
+This allows you to spawn coroutines into the task group using:
+
+```php
+spawn with $taskGroup => {
+    // This coroutine is bound to the TaskGroup's scope
+};
+```
+
+#### `SpawnedCoroutineAcceptor` Interface
+
+The `SpawnedCoroutineAcceptor` interface allows attaching a newly spawned coroutine 
+to a custom user-defined context immediately after the `spawn with` expression is evaluated.
+
+This is useful for scenarios where the coroutine should be registered, tracked, 
+or logically grouped within a context (e.g., a `TaskGroup` or a custom task manager).
+
+```php
+interface SpawnedCoroutineAcceptor
+{
+    /**
+     * Accepts a spawned coroutine.
+     *
+     * This method is called after a coroutine is created via `spawn with`,
+     * allowing the implementation to associate the coroutine with a specific context.
+     *
+     * @param Coroutine $coroutine
+     */
+    public function acceptCoroutine(Coroutine $coroutine): void;
+}
+```
+
+If the `$scope` object in a `spawn with` expression implements the `SpawnedCoroutineAcceptor` interface, 
+then the `acceptCoroutine` method will be called immediately after the coroutine is created.
+
+**Example:**
+
+A class like `CustomTaskGroup` might implement this interface 
+to automatically collect all spawned coroutines under its management:
+
+```php
+class CustomTaskGroup implements Async\ScopeProvider, Async\SpawnedCoroutineAcceptor
+{
+    private array $coroutines = [];
+
+    public function acceptCoroutine(Coroutine $coroutine): void
+    {
+        $this->coroutines[] = $coroutine;
+        echo "Coroutine added to the group as ".$coroutine->getSpawnLocation()."\n";
+    }
+
+    // Additional methods for managing the group...
+}
+
+$customTaskGroup = new CustomTaskGroup();
+
+spawn with $customTaskGroup {
+    // This coroutine will be automatically added to the custom task group
+};
+
 ```
 
 ### Suspension

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Async;
 
-final class TaskGroup implements Awaitable, ScopeProvider
+final class TaskGroup implements Awaitable, ScopeProvider, SpawnedCoroutineAcceptor
 {
     public function __construct(
         private ?Scope  $scope = null,
@@ -20,10 +20,8 @@ final class TaskGroup implements Awaitable, ScopeProvider
     
     #[\Override] public function getScope(): Scope {}
     
-    
-    public function add(Coroutine ...$coroutines): self {}
-    
-    public function spawn(\Closure $closure, mixed ...$args): Coroutine {}
+    #[\Override]
+    public function acceptCoroutine(Coroutine $coroutine): void {}
     
     /**
      * Cancel a task group.
