@@ -1,6 +1,7 @@
 # Common Errors and Pitfalls
 
-This document describes common mistakes developers might encounter when using the PHP True Async API, including examples and suggested best practices to avoid them.
+This document describes common mistakes developers might encounter when using the PHP True Async API, 
+including examples and suggested best practices to avoid them.
 
 ## 1. Spawn and Await Issues
 
@@ -16,7 +17,7 @@ spawn file_get_contents('file.txt');
 Using `await` unnecessarily.
 
 ```php
-await spawn echo "test"; // Unnecessary await
+await spawn file_get_contents('file.txt'); // Unnecessary await
 ```
 
 ## 2. Scope Management Errors
@@ -114,14 +115,14 @@ async bounded $scope {
 Exceptions not handled or awaited.
 
 ```php
-spawn throw new Exception(); // Lost exception
+spawn {throw new Exception();} // Lost exception
 ```
 
 ### Missing Exception Handlers
 
 ```php
 $scope = new Scope();
-spawn with $scope throw new Exception(); // Entire scope canceled
+spawn with $scope {throw new Exception();} // Entire scope canceled
 ```
 
 ## 7. Context Issues
@@ -139,7 +140,7 @@ currentContext()->set('db', $pdo);
 ```php
 coroutineContext()->set('data', 'x');
 spawn {
-  coroutineContext()->get('data'); // null, separate local context
+  currentContext()->get('data'); // null, separate local context
 };
 ```
 
