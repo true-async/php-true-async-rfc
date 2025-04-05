@@ -1966,10 +1966,26 @@ and adds a coroutine to the `Scope` that lives indefinitely.
 In server applications, using `await $scope` is not a good idea and can be considered an antipattern.
 
 The `TaskGroup` class is an explicit pattern for managing a group of coroutines. 
-Unlike `Scope`, tasks cannot be added to it "accidentally". 
-`TaskGroup` cannot be part of a `spawn` expression and is not a replacement for `Scope`.
+Unlike `Scope`, tasks cannot be added to it "accidentally".
 
 Unlike `Scope`, `TaskGroup` can capture the results of tasks, which makes it convenient for awaiting results.
+
+#### TaskGroup spawn
+
+The `TaskGroup` constructor accepts several parameters:
+
+1. `$scope` – the `Scope` in which the tasks will be executed. 
+    If this parameter is not provided, a new, separate `Scope` will be created.
+2. `$captureResults` – an option to capture the results of the tasks.
+3. `$bounded` – an option to `Scope::dispose` all Scope tasks when the `TaskGroup` is disposed.
+
+Once a `$taskGroup` is created, it can be used in a `spawn with $taskGroup` expression, 
+which has an additional effect for task groups: a coroutine is created within the `TaskGroup`'s `$scope`, 
+and the coroutine is added to the task group.
+
+A `TaskGroup` holds a reference to the `Scope` in which the tasks will be executed. 
+If this is the only reference to the `Scope`, the `TaskGroup` will automatically call `Scope::dispose()` 
+as soon as the `TaskGroup::dispose` or `TaskGroup::cancel` method is invoked.
 
 #### Await TaskGroup
 
