@@ -1667,10 +1667,10 @@ function startServer(): void
 
 In this example, the server runs until `stream_socket_accept` returns `false`, or until the user presses **CTRL-C**.
 
-#### async syntax
+#### Async syntax
 
 ```php
-async [inherit] [bounded] [<scope>] {
+async [with <expression> as] [<scope>] {
     <codeBlock>
 }
 ```
@@ -1703,11 +1703,40 @@ async $object?->scope
 async &$object
 ```
 
-- `inherit` - a keyword that allows inheriting the parent `Scope` object.
+- `with` - a keyword that allows you to create a new `Scope` object
+  and assign it to the variable specified in the `scope` parameter.
 
-- `bounded` - a keyword that cancels all child coroutines
-  if they have not been completed by the time the `Scope` block exits.
-  Without this attribute, such coroutines are marked as **Zombie**.
+- `as` - a keyword that allows you to create a new `Scope` object
+  and assign it to the variable specified in the `scope` parameter.
+
+- `expression` - an expression that will be used to create a new `Scope` object.
+  This expression must return an object of type `Async\Scope`.
+
+options:
+
+```php
+// variable
+async with $var as $scope {}
+```
+
+Function call:
+
+```php
+async with getScope() as $scope {}
+```
+
+Static method or class method:
+
+```php
+async with Scope::inherit() as $scope {}
+async with $object->getScope() as $scope {}
+```
+
+Array element:
+
+```php
+async with $array[0] as $scope {}
+```
 
 - `codeBlock` - a block of code that will be executed in the `Scope` context.
 

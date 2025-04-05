@@ -20,6 +20,8 @@ final class Scope implements Awaitable
     
     public function __construct() {}
     
+    public function asNotSafely(): Scope {}
+    
     public function spawn(\Closure $callable, ...$params): Coroutine {}
     
     public function cancel(?CancellationException $cancellationException = null): void {}
