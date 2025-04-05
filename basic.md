@@ -2931,6 +2931,18 @@ Additionally, the `CancellationException` will not appear in `get_last_error()`,
 but it may trigger an `E_WARNING` to maintain compatibility with expected behavior
 for functions like `fwrite` (if such behavior is specified in the documentation).
 
+#### Cancellation policy
+
+When a coroutine is cancelled, the Scheduler resumes it with an exception and applies the **Cancellation Policy**. 
+The **Cancellation Policy** controls what happens next:
+
+1. If the cancelled coroutine does not complete but returns control to the Scheduler (uses `suspend`), 
+   it is marked as a *Zombie* (if it hasn’t already been marked), but no warning is issued.
+2. The Scheduler grants the coroutine a limited number of time quanta and waits for it to finish.
+3. If the coroutine still fails to complete within this time, the `Scheduler` raises the cancellation exception again.
+4. If the coroutine is still unable to properly terminate after this second exception, 
+   the system transitions into a *fatal error* state.
+
 #### protect function
 
 Sometimes it's necessary to execute a critical section of code that must not be cancelled via `CancellationException`.
