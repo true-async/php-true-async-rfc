@@ -125,28 +125,25 @@ function mergeFiles(string ...$files): string
 ```php
 function loadDashboardData(string $userId): array
 {
-    async $dashboardScope {
+    $taskGroup = new Async\TaskGroup(captureResults: true);
+
+    spawn with $taskGroup fetchUserProfile($userId);
+    spawn with $taskGroup fetchUserNotifications($userId);
+    spawn with $taskGroup fetchRecentActivity($userId);
     
-        $taskGroup = new Async\TaskGroup($dashboardScope, captureResults: true);
-    
-        $taskGroup->add(spawn fetchUserProfile($userId));
-        $taskGroup->add(spawn fetchUserNotifications($userId));
-        $taskGroup->add(spawn fetchRecentActivity($userId));
+    try {
+        await $taskGroup->getScope();
         
-        try {
-            await $dashboardScope;
-            
-            [$profile, $notifications, $activity] = $taskGroup->getResults();
-            
-            return [
-                'profile' => $profile,
-                'notifications' => $notifications,
-                'activity' => $activity,
-            ];
-        } catch (\Exception $e) {
-            logError("Dashboard loading failed", $e);
-            return ['error' => $e->getMessage()];
-        }
+        [$profile, $notifications, $activity] = $taskGroup->getResults();
+        
+        return [
+            'profile' => $profile,
+            'notifications' => $notifications,
+            'activity' => $activity,
+        ];
+    } catch (\Exception $e) {
+        logError("Dashboard loading failed", $e);
+        return ['error' => $e->getMessage()];
     }
 }
 
@@ -159,21 +156,19 @@ function fetchUserSettings(string $userId): array
 
 function fetchUserProfile(string $userId): array 
 {
-    async inherit $userDataScope {
+    $userDataScope = new Async\Scope();
+    $taskGroup = new Async\TaskGroup($userDataScope, captureResults: true);
     
-        $taskGroup = new Async\TaskGroup($userDataScope, captureResults: true);
+    $taskGroup->add(spawn fetchUserData());
+    $taskGroup->add(spawn fetchUserSettings($userId));
+
+    await $userDataScope;
     
-        $taskGroup->add(spawn fetchUserData());
-        $taskGroup->add(spawn fetchUserSettings($userId));
-        
-        await $userDataScope;
-        
-        [$userData, $settings] = $taskGroup->getResults();
-        
-        $userData['settings'] = $settings ?? [];
-       
-        return $userData;
-    }
+    [$userData, $settings] = $taskGroup->getResults();
+    
+    $userData['settings'] = $settings ?? [];
+    
+    return $userData;
 }
 
 spawn loadDashboardData($userId);
@@ -610,7 +605,7 @@ class CustomTaskGroup implements ScopeProvider
 This allows you to spawn coroutines into the task group using:
 
 ```php
-spawn with $taskGroup => {
+spawn with $taskGroup {
     // This coroutine is bound to the TaskGroup's scope
 };
 ```
@@ -1706,15 +1701,14 @@ Consider the following code:
 ```php
 function generateReport(): void
 {
-    $scope = Scope::inherit();
-    $taskGroup = new TaskGroup($scope);
+    $taskGroup = new TaskGroup(Scope::inherit());
 
-    try {
-        [$employees, $salaries, $workHours] = await $taskGroup->add(
-            spawn with $scope fetchEmployees(),
-            spawn with $scope fetchSalaries(),
-            spawn with $scope fetchWorkHours()
-        );
+    try {        
+        spawn with $taskGroup fetchEmployees();
+        spawn with $taskGroup fetchSalaries();
+        spawn with $taskGroup fetchWorkHours();
+    
+        [$employees, $salaries, $workHours] = await $taskGroup;
 
         foreach ($employees as $id => $employee) {
             $salary = $salaries[$id] ?? 'N/A';
@@ -1725,7 +1719,7 @@ function generateReport(): void
     } catch (Exception $e) {
         echo "Failed to generate report: ", $e->getMessage(), "\n";
     } finally {
-        $scope->disposeSafely();
+        $taskGroup->dispose();
     }
 }
 ```
