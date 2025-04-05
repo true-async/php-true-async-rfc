@@ -1943,11 +1943,10 @@ can set a custom timeout for that specific `Scope` using the `Scope::disposeAfte
 ```php
 function mergeFiles(string ...$files): string
 {
-    $scope = new Async\Scope();
-    $taskGroup = new Async\TaskGroup($scope, captureResults: true);
+    $taskGroup = new Async\TaskGroup(captureResults: true);
     
     foreach ($files as $file) {
-       $taskGroup->add(spawn file_get_contents($file));
+       spawn with $taskGroup file_get_contents($file);
     }
     
     return array_merge("\n", await $taskGroup);
@@ -2062,8 +2061,7 @@ use Async\Scope;
 use Async\TaskGroup;
 use Async\CancellationException;
 
-$scope = new Scope();
-$taskGroup = new TaskGroup($scope, captureResults: true);
+$taskGroup = new TaskGroup(new Scope(), captureResults: true);
 
 $taskGroup->add(spawn fetchData('https://example.com/data1'));
 
