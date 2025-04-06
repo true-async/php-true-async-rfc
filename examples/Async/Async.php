@@ -15,11 +15,11 @@ function any(iterable $futures): Awaitable {}
 
 function all(iterable $futures): Awaitable {}
 
-function anyOf(int $limit, iterable $futures): Awaitable {}
+function anyOf(int $count, iterable $futures): Awaitable {}
 
-function ignoreErrors(Awaitable $awaitable): Awaitable {}
+function ignoreErrors(Awaitable $awaitable, callable $handler): Awaitable {}
 
-function withErrors(Awaitable $awaitable): Awaitable {}
+function captureErrors(Awaitable $awaitable): Awaitable {}
 
 function delay(int $ms): void {}
 

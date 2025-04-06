@@ -2578,6 +2578,74 @@ This code relies on the fact that an instance of the `ConnectionProxy`
 class will be destroyed as soon as the coroutine completes.  
 The destructor will be called, and the connection will automatically return to the pool.
 
+### Async combinators
+
+The following functions allow combining `Awaitable` objects or capturing errors from `Awaitable` objects:
+
+| Function                                                 | Description                                                               |
+|----------------------------------------------------------|---------------------------------------------------------------------------|
+| `any(iterable $futures)`                                 | Triggers if at least one `Awaitable` completes successfully               |
+| `all(iterable $futures)`                                 | Triggers when all `Awaitable` objects have completed                      |
+| `anyOf(int $count, iterable $futures)`                   | Triggers when at least `$count` `Awaitable` objects have completed        |
+| `captureErrors(Awaitable $awaitable)`                    | Returns an additional array containing errors                             |
+| `ignoreErrors(Awaitable $awaitable, callable $handler)`  | Captures errors from `Awaitable` and calls `$handler` on each error       |
+
+```php
+use function Async\all;
+
+$results = await all([
+    fetchUserData(),
+    fetchUserSettings()    
+]);
+```
+
+```php
+use function Async\any;
+
+// Returns when at least one API call
+$results = await any([
+    fetchDataFromAPI1(),
+    fetchDataFromAPI2(),
+    fetchDataFromAPI3(),
+]);
+```
+
+```php
+
+// Returns when at least 2 images are loaded
+$results = await Async\anyOf(2, [
+    loadImage('preview.jpg'),
+    loadImage('medium.jpg'),
+    loadImage('full.jpg'),
+]);
+```
+
+```php
+use function Async\captureErrors;
+
+[$result, $errors] = await captureErrors(Async\all([fetchUserData(), fetchUserSettings()]));
+
+if(empty($errors)) {
+    // $result contains successful result
+} else {
+    // $result contains null
+    // $errors contains an exception or empty array
+}
+```
+
+```php
+use function Async\any;
+use function Async\ignoreErrors;
+
+// Returns when at least one API call ignores errors
+$results = await ignoreErrors(any([
+    fetchDataFromAPI1(),
+    fetchDataFromAPI2(),
+    fetchDataFromAPI3(),
+]), fn(Throwable $throwable) => null);
+```
+
+
 ### Error Handling
 
 An uncaught exception in a coroutine follows this flow:
