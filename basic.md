@@ -2741,7 +2741,7 @@ final class Service
             
             $scope = Scope::inherit($this->scope);
             
-            (spawn with $scope $this->handleRequest($socket))->onCompletion(
+            (spawn with $scope $this->handleRequest($socket))->onFinally(
                 static function () use ($scope) {
                     $scope->disposeSafely();
                 }
@@ -2829,9 +2829,9 @@ An exception handler has the right to suppress the exception.
 However, if the exception handler throws another exception,
 the exception propagation algorithm will continue.
 
-#### onCompletion
+#### onFinally
 
-The `onCompletion` method allows defining a callback function that will be invoked when a coroutine or scope completes.  
+The `onFinally` method allows defining a callback function that will be invoked when a coroutine or scope completes.  
 This method can be considered a direct analog of `defer` in Go.
 
 ```php
@@ -2841,7 +2841,7 @@ spawn with $scope {
     throw new Exception("Task 1");
 };
 
-$scope->onCompletion(function () {
+$scope->onFinally(function () {
     echo "Task 1 completed\n";
 });
 
@@ -2858,20 +2858,20 @@ function task(): void
 
 $coroutine = spawn task();
 
-$coroutine->onCompletion(function () {
+$coroutine->onFinally(function () {
     echo "Task completed\n";
 });
 
 ```
 
-The `onCompletion` semantics are most commonly used to release resources,
+The `onFinally` semantics are most commonly used to release resources,
 serving as a shorter alternative to `try-finally` blocks:
 
 ```php
 function task(): void 
 {
     $file = fopen('file.txt', 'r');    
-    onCompletion(fn() => fclose($file));
+    onFinally(fn() => fclose($file));
     
     throw new Exception("Task 1");
 }
@@ -3145,7 +3145,7 @@ which is very similar to this **RFC**.
 | **Bounded Execution**     | `$scope->cancel()` auto-cancels any child tasks left running once the block ends. A `TaskGroup` can be flagged as bounded too.                                                 | Exiting the structured concurrency block ends sub-tasks: they are joined or canceled.                                       |
 | **Cancellation**          | `$scope->cancel()` or `$coroutine->cancel()` raises `CancellationException`. `await ... until <token>` for timeouts. `dispose()` forcibly ends tasks.                          | `scope.shutdown()`, `scope.close()`, or `Thread.interrupt()` can stop the tasks, typically throwing `InterruptedException`. |
 | **Exception Handling**    | Unhandled exceptions bubble upward. Use `Scope::setExceptionHandler()` for scope-level or child-scope errors. `TaskGroup` can capture/aggregate child errors.                  | `scope.join()` or `scope.throwIfFailed()` may propagate aggregated exceptions. Standard `try/catch` also applies.           |
-| **Automatic Cleanup**     | `dispose()`, `disposeSafely()`, or `disposeAfterTimeout()` forcibly or gracefully end tasks. `TaskGroup->dispose()` also cancels tasks. `onCompletion()` is like a `defer`.    | `try (var scope = new StructuredTaskScope<>()) { ... }` auto-closes tasks (join/interrupt) on exiting the try-block.        |
+| **Automatic Cleanup**     | `dispose()`, `disposeSafely()`, or `disposeAfterTimeout()` forcibly or gracefully end tasks. `TaskGroup->dispose()` also cancels tasks. `onFinally()` is like a `defer`.    | `try (var scope = new StructuredTaskScope<>()) { ... }` auto-closes tasks (join/interrupt) on exiting the try-block.        |
 | **Context Inheritance**   | Each `Scope` has a `.context`; child scopes inherit from parents. There's also a coroutine-level local context.                                                                | `ScopedValues` or `ThreadLocal` for carrying data in virtual threads. Not directly integrated with `StructuredTaskScope`.   |
 | **Goals**                 | Transparent coroutines, structured concurrency, safe cancellation, no function coloring. `TaskGroup` for partial grouping. Inherits or bounds child tasks for resource safety. | Virtual threads for simpler concurrency, aiming for structured concurrency in standard Java. Loom is still evolving.        |
 

@@ -45,7 +45,7 @@ final class Scope implements Awaitable, ScopeProvider
      */
     public function setChildScopeExceptionHandler(callable $exceptionHandler): void {}
     
-    public function onCompletion(\Closure $callback): void {}
+    public function onFinally(\Closure $callback): void {}
     
     public function dispose(): void {}
     

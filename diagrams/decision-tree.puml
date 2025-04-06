@@ -47,7 +47,7 @@ await $taskGroup
 **[#lightgreen] Use Async\protect(\Closure $criticalSection)
 
 *[#lightblue] Do you want to execute logic on completion?
-**[#lightgreen] Use Coroutine::onCompletion()
+**[#lightgreen] Use Coroutine::onFinally()
 **[#87CEEB] Need a fallback?
 ***[#lightgreen] Use a finally block
 

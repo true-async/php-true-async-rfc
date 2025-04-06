@@ -38,4 +38,6 @@ final class TaskGroup implements Awaitable, ScopeProvider, SpawnStrategy
     public function isFinished(): bool {}
     
     public function isClosed(): bool {}
+    
+    public function onFinally(\Closure $callback): void {}
 }
