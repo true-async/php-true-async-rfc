@@ -66,6 +66,18 @@ class Some {
 ***[#lightgreen] Async\Context
 **[#FFD700] Inheriting context across scopes
 ***[#lightgreen] Scope Inheritance
+
+*[#lightblue] Managing Zombie Coroutines
+**[#lightgreen] Zombie Coroutine Policy or Task cancellation
+
+*[#lightblue] Completion Handlers
+**[#lightgreen] Coroutine::onFinally()
+**[#lightgreen] Scope::onFinally()
+**[#lightgreen] TaskGroup::onFinally()
+
+*[#lightblue]  Coroutine creation management: spawn with
+**[#lightgreen] SpawnStrategy interface
+
 *[#lightblue] Managing Zombie Coroutines
 **[#lightgreen] Zombie Coroutine Policy or Task cancellation
 @endmindmap

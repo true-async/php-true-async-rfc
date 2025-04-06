@@ -47,7 +47,7 @@ await $taskGroup
 **[#lightgreen] Use Async\protect(\Closure $criticalSection)
 
 *[#lightblue] Do you want to execute logic on completion?
-**[#lightgreen] Use Coroutine::onFinally()
+**[#lightgreen] Use Coroutine::onFinally(), Scope::onFinally(), TaskGroup::onFinally()
 **[#87CEEB] Need a fallback?
 ***[#lightgreen] Use a finally block
 
@@ -56,6 +56,9 @@ await $taskGroup
 
 *[#lightblue] Do you need context inheritance?
 **[#lightgreen] Use Scope::inherit()
+
+*[#lightblue] Need control over coroutine spawning?
+**[#lightgreen] Use SpawnStrategy interface + spawn with SpawnStrategy
 
 *[#lightblue] Are you managing implicit coroutines or worried about zombie coroutines?
 **[#87CEEB] Need safe or timed disposal?
