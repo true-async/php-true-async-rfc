@@ -2645,6 +2645,33 @@ $results = await ignoreErrors(any([
 ]), fn(Throwable $throwable) => null);
 ```
 
+Since `Awaitable` objects act as triggers rather than futures, their state can change multiple times.  
+This can be useful in complex scenarios. 
+
+**For example:**
+
+```php
+function getFirstAvailable(array $sources, int $errorTolerance = 0): Awaitable
+{
+    if($errorTolerance <= 0) {
+        $errorTolerance = count($sources) / 2;
+    }
+    
+    $errors     = 0;
+    $trigger    = Async\any($sources);
+    
+    while($errors < $errorTolerance) {
+        try {
+            return await $trigger;        
+        } catch (Exception $e) {
+            $errors++;
+        }
+    }
+}
+```
+
+The function will return the first successful value with error tolerance,  
+which by default is set to 50% of the total number of `$sources`.
 
 ### Error Handling
 
