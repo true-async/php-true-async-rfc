@@ -2594,8 +2594,8 @@ The following functions allow combining `Awaitable` objects or capturing errors 
 use function Async\all;
 
 $results = await all([
-    fetchUserData(),
-    fetchUserSettings()    
+    spawn fetchUserData(),
+    spawn fetchUserSettings()    
 ]);
 ```
 
@@ -2604,9 +2604,9 @@ use function Async\any;
 
 // Returns when at least one API call
 $results = await any([
-    fetchDataFromAPI1(),
-    fetchDataFromAPI2(),
-    fetchDataFromAPI3(),
+    spawn fetchDataFromAPI1(),
+    spawn fetchDataFromAPI2(),
+    spawn fetchDataFromAPI3(),
 ]);
 ```
 
@@ -2614,16 +2614,16 @@ $results = await any([
 
 // Returns when at least 2 images are loaded
 $results = await Async\anyOf(2, [
-    loadImage('preview.jpg'),
-    loadImage('medium.jpg'),
-    loadImage('full.jpg'),
+    spawn loadImage('preview.jpg'),
+    spawn loadImage('medium.jpg'),
+    spawn loadImage('full.jpg'),
 ]);
 ```
 
 ```php
 use function Async\captureErrors;
 
-[$result, $errors] = await captureErrors(Async\all([fetchUserData(), fetchUserSettings()]));
+[$result, $errors] = await captureErrors(Async\all([spawn fetchUserData(), spawn fetchUserSettings()]));
 
 if(empty($errors)) {
     // $result contains successful result
@@ -2639,9 +2639,9 @@ use function Async\ignoreErrors;
 
 // Returns when at least one API call ignores errors
 $results = await ignoreErrors(any([
-    fetchDataFromAPI1(),
-    fetchDataFromAPI2(),
-    fetchDataFromAPI3(),
+    spawn fetchDataFromAPI1(),
+    spawn fetchDataFromAPI2(),
+    spawn fetchDataFromAPI3(),
 ]), fn(Throwable $throwable) => null);
 ```
 
