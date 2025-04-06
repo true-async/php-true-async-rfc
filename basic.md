@@ -2667,6 +2667,8 @@ function getFirstAvailable(array $sources, int $errorTolerance = 0): mixed
             $errors++;
         }
     }
+    
+    throw new Exception("All sources failed: {$errors} errors");
 }
 ```
 
