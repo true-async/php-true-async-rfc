@@ -12,6 +12,11 @@ final class Coroutine implements Awaitable
     public function getId(): int {}
     
     /**
+     * Marks the Coroutine as high priority.
+     */
+    public function asHiPriority(): Coroutine {}
+    
+    /**
      * Returns the Coroutine local-context.
      */
     public function getContext(): Context {}

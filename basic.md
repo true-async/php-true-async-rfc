@@ -132,7 +132,7 @@ function loadDashboardData(string $userId): array
     spawn with $taskGroup fetchRecentActivity($userId);
     
     try {
-        await $taskGroup->getScope();
+        await $taskGroup->provideScope();
         
         [$profile, $notifications, $activity] = $taskGroup->getResults();
         
@@ -577,11 +577,13 @@ interface ScopeProvider
      *
      * This scope will be used when spawning a coroutine via `spawn with $provider`.
      *
-     * @return Scope
+     * @return Scope|null
      */
-    public function getScope(): Scope;
+    public function provideScope(): ?Scope;
 }
 ```
+
+> The `provideScope` method may return `NULL`; in this case, the current **Scope** will be used.
 
 **Example Use Case:**
 
@@ -597,7 +599,7 @@ class CustomTaskGroup implements ScopeProvider
         $this->scope = new Scope();
     }
 
-    public function getScope(): Scope
+    public function provideScope(): ?Scope
     {
         return $this->scope;
     }
@@ -612,30 +614,37 @@ spawn with $taskGroup {
 };
 ```
 
-#### `SpawnedCoroutineAcceptor` Interface
+#### `SpawnStrategy` Interface
 
-The `SpawnedCoroutineAcceptor` interface allows attaching a newly spawned coroutine 
+The `SpawnStrategy` interface allows attaching a newly spawned coroutine 
 to a custom user-defined context immediately after the `spawn with` expression is evaluated.
 
 This is useful for scenarios where the coroutine should be registered, tracked, 
 or logically grouped within a context (e.g., a `TaskGroup` or a custom task manager).
 
 ```php
-interface SpawnedCoroutineAcceptor
+interface SpawnStrategy extends ScopeProvider
 {
     /**
-     * Accepts a spawned coroutine.
+     * Called before a coroutine is spawned, before it is enqueued.
      *
-     * This method is called after a coroutine is created via `spawn with`,
-     * allowing the implementation to associate the coroutine with a specific context.
+     * @param   Coroutine   $coroutine  The coroutine to be spawned.
+     * @param   Scope       $scope      The Scope instance.
+     *
+     */
+    public function beforeCoroutineEnqueue(Coroutine $coroutine, Scope $scope): array;
+    
+    /**
+     * Called after a coroutine is spawned, enqueued.
      *
      * @param Coroutine $coroutine
+     * @param Scope     $scope
      */
-    public function acceptCoroutine(Coroutine $coroutine): void;
+    public function afterCoroutineEnqueue(Coroutine $coroutine, Scope $scope): void;
 }
 ```
 
-If the `$scope` object in a `spawn with` expression implements the `SpawnedCoroutineAcceptor` interface, 
+If the `$scope` object in a `spawn with` expression implements the `SpawnStrategy` interface, 
 then the `acceptCoroutine` method will be called immediately after the coroutine is created.
 
 **Example:**
@@ -644,11 +653,11 @@ A class like `CustomTaskGroup` might implement this interface
 to automatically collect all spawned coroutines under its management:
 
 ```php
-class CustomTaskGroup implements Async\ScopeProvider, Async\SpawnedCoroutineAcceptor
+class CustomTaskGroup implements Async\SpawnStrategy
 {
     private array $coroutines = [];
 
-    public function acceptCoroutine(Coroutine $coroutine): void
+    public function afterCoroutineEnqueue(Coroutine $coroutine, Scope $scope): void
     {
         $this->coroutines[] = $coroutine;
         echo "Coroutine added to the group as ".$coroutine->getSpawnLocation()."\n";
@@ -662,8 +671,64 @@ $customTaskGroup = new CustomTaskGroup();
 spawn with $customTaskGroup {
     // This coroutine will be automatically added to the custom task group
 };
+```
+
+The `beforeCoroutineEnqueue()` method is called after the coroutine has been created, 
+but before it is added to the queue. 
+It allows for additional operations to be performed with the coroutine and its context, 
+and it returns an optional list of options for the `Scheduler`.
+
+> The list of options for the Scheduler is not part of this **RFC** 
+> and is defined by the `Scheduler` implementation.
+
+```php
+class HiPriorityStrategy implements Async\SpawnStrategy
+{
+    public function beforeCoroutineEnqueue(Coroutine $coroutine, Scope $scope): array
+    {
+        // Mark the coroutine as high priority before it is enqueued
+        $coroutine->asHiPriority();
+    }
+
+    // Additional methods ...
+}
+
+spawn with new HiPriorityStrategy() {
+    // This coroutine will be marked as high priority
+};
+```
+
+#### `hiPriority` strategy
+
+The `Async\hiPriority(?Scope $scope = null)` function allows launching a coroutine with high priority:
+
+```php
+spawn {
+    echo "normal priority\n";
+};
+
+spawn with hiPriority() {
+    echo "high priority\n";
+};
+```
+
+**Expected output:**
 
 ```
+high priority
+normal priority
+```
+
+If the `$scope` parameter is not specified, the current `Scope` will be used for launching.
+
+The `hiPriority` strategy marks the `coroutine` as high-priority using the `Coroutine::asHiPriority()` method.
+
+This action serves as a recommendation for the `Scheduler`, suggesting that the coroutine should be placed as 
+close to the front of the queue as possible. However, the programmer **MUST NOT** rely on this outcome.
+
+`hiPriority` can be useful in situations where resources need to be released as quickly as possible 
+or when a critical section of code must be executed promptly. The programmer should not overuse it, 
+as this may negatively affect the application's performance.
 
 ### Suspension
 

@@ -18,7 +18,7 @@ final class Scope implements Awaitable, ScopeProvider
      */
     public static function inherit(?Scope $parentScope = null): Scope {}
     
-    #[\Override] public function getScope(): Scope {}
+    #[\Override] public function provideScope(): Scope {}
     
     public function __construct() {}
     

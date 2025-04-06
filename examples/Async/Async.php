@@ -9,6 +9,14 @@ namespace Async;
  */
 function protect(\Closure $closure): void {}
 
+/**
+ * Returns a ScopeStrategy that provides
+ * a special Scope for coroutines intended for resource cleanup or action cancellation.
+ */
+function cleanup(): SpawnStrategy {}
+
+function hiPriority(?Scope $scope = null): SpawnStrategy {}
+
 function any(iterable $futures): Awaitable {}
 
 function all(iterable $futures): Awaitable {}

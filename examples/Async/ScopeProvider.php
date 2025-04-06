@@ -6,5 +6,5 @@ namespace Async;
 
 interface ScopeProvider
 {
-    public function getScope(): Scope;
+    public function provideScope(): ?Scope;
 }
