@@ -2675,6 +2675,9 @@ For this purpose, two methods are used:
 - **`setExceptionHandler`** – triggers for any exceptions thrown within this **Scope**.
 - **`setChildScopeExceptionHandler`** – triggers for exceptions from **child Scopes**.
 
+> The methods `setExceptionHandler` and `setChildScopeExceptionHandler` cannot be used with the `globalScope`.
+> If an attempt is made to do so, an exception will be thrown.
+
 **Example:**
 
 ```php
@@ -2693,6 +2696,9 @@ await $scope;
 Using these handlers,
 you can implement the **Supervisor** pattern, i.e.,
 a **Scope** that will not be canceled when an exception occurs in coroutines.
+
+> If the `setExceptionHandler` or `setChildScopeExceptionHandler` handlers throw an exception, 
+> it will be propagated to the **parent Scope** or the **global Scope**.
 
 The **`setChildScopeExceptionHandler`** method allows handling exceptions only from **child Scopes**,
 which can be useful for implementing an algorithm where the **main Scope** runs core tasks,
