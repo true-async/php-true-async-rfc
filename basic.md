@@ -2651,7 +2651,7 @@ This can be useful in complex scenarios.
 **For example:**
 
 ```php
-function getFirstAvailable(array $sources, int $errorTolerance = 0): Awaitable
+function getFirstAvailable(array $sources, int $errorTolerance = 0): mixed
 {
     if($errorTolerance <= 0) {
         $errorTolerance = count($sources) / 2;
