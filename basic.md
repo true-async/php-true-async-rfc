@@ -2694,6 +2694,28 @@ function getFirstAvailable(array $sources, int $errorTolerance = 0): mixed
 The function will return the first successful value with error tolerance,  
 which by default is set to 50% of the total number of `$sources`.
 
+### Timer functions
+
+The standard async library includes two functions similar to `usleep()`:
+* `Async\delay(int $ms): void`
+* `Async\timeout(int $ms): Awaitable`
+
+The `delay` function suspends the execution of a coroutine for the specified number of milliseconds.  
+Unlike `usleep`, the `delay` function will throw a cancellation exception if the coroutine is cancelled.
+Timer functions.
+
+The `timeout` function is similar to `delay`, but it returns an `Awaitable` object:
+
+```php
+use function Async\timeout;
+use function Async\delay;
+
+delay(1000); // suspends the coroutine for 1 second
+
+// Try to fetch data from the URL within 1 second
+echo await spawn file_get_content('https://php.net/') until timeout(1000);  
+```
+
 ### Error Handling
 
 An uncaught exception in a coroutine follows this flow:
