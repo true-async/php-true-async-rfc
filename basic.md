@@ -1032,6 +1032,11 @@ The `await` expression can be used just like any other expression together with 
 
 #### Await with cancellation
 
+The expression `await + until <cancellationExp>` allows limiting 
+the wait time to the moment the `cancellationExp` trigger fires.
+
+When `cancellationExp` is triggered, an exception `Async\AwaitCancelledException` is thrown.
+
 ##### Motivation
 
 The wait operation is often combined with a `cancellation token`.  
