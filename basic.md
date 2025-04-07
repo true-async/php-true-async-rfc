@@ -125,14 +125,15 @@ function mergeFiles(string ...$files): string
 ```php
 function loadDashboardData(string $userId): array
 {
-    $taskGroup = new Async\TaskGroup(captureResults: true);
+    $scope = new Async\Scope();
+    $taskGroup = new Async\TaskGroup($scope, captureResults: true);
 
     spawn with $taskGroup fetchUserProfile($userId);
     spawn with $taskGroup fetchUserNotifications($userId);
     spawn with $taskGroup fetchRecentActivity($userId);
     
     try {
-        await $taskGroup->provideScope();
+        await $scope;
         
         [$profile, $notifications, $activity] = $taskGroup->getResults();
         
