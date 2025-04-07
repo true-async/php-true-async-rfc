@@ -278,20 +278,6 @@ the developer treats it as non-critical in terms of data integrity.
 If the developer needs to manage the coroutine’s lifetime, they will use the expression `spawn with`.
 In other words, the developer must take extra steps to explicitly extend the coroutine's lifetime.
 
-The **Cancellable by design** principle works especially well for server-side applications.
-
-In the context of **structural concurrency**, 
-an explicit cooperative cancellation mechanism may be used, 
-which is based on the rule:  
-
-> if the child Tasks never check for cancellation, it’s like the system doesn’t support cancellation at all
-
-(Please see: [Cooperative cancellation](https://alejandromp.com/development/blog/the-importance-of-cooperative-cancellation/))
-
-This **RFC** is based on a hybrid cancellation principle, which is formulated as follows:
-
-> A task can be cancelled at any point where it has explicitly or implicitly yielded control via `suspend`.
-
 ### Namespace
 
 All functions, classes, and constants defined in this **RFC** are located in the `Async` namespace.
@@ -3255,6 +3241,7 @@ which is very similar to this **RFC**.
 
 ## References
 
+* [Cooperative cancellation](https://alejandromp.com/development/blog/the-importance-of-cooperative-cancellation/)
 * [Understanding Concurrency Bugs in Real-World Programs with Kotlin Coroutines](https://pure.tudelft.nl/ws/portalfiles/portal/222760871/LIPIcs.ECOOP.2024.8.pdf)
 * [Understanding Real-World Concurrency Bugs in Go](https://dl.acm.org/doi/10.1145/3297858.3304069)
 * [Speed Up Your Python Program With Concurrency](https://realpython.com/python-concurrency/)
