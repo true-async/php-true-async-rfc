@@ -160,8 +160,8 @@ function fetchUserProfile(string $userId): array
     $userDataScope = new Async\Scope();
     $taskGroup = new Async\TaskGroup($userDataScope, captureResults: true);
     
-    $taskGroup->add(spawn fetchUserData());
-    $taskGroup->add(spawn fetchUserSettings($userId));
+    spawn with $taskGroup fetchUserData();
+    spawn with $taskGroup fetchUserSettings($userId);
 
     await $userDataScope;
     
