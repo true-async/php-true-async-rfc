@@ -1946,7 +1946,7 @@ zombie coroutines are given a time limit within which they must complete executi
 If this limit is exceeded, all zombie coroutines are canceled.
 
 The delay time for handling zombie coroutines can be configured using
-a constant in the `ini` file: `async.zombie_coroutine_timeout`, which is set to two seconds by default.
+a constant in the `php.ini` file: `async.zombie_coroutine_timeout`, which is set to two seconds by default.
 
 If a coroutine is created within a user-defined `Scope`, the programmer
 can set a custom timeout for that specific `Scope` using the `Scope::disposeAfterTimeout(int $ms)` method.
@@ -1969,6 +1969,9 @@ function mergeFiles(string ...$files): string
 
 echo await spawn mergeFiles(['file1.txt', 'file2.txt', 'file3.txt']);
 ```
+
+> ⚠️ The `TaskGroup` class is not part of the **PHP core** 
+> and should be provided as part of the standard asynchronous library.
 
 #### Motivation
 
