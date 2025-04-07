@@ -2710,10 +2710,15 @@ The `timeout` function is similar to `delay`, but it returns an `Awaitable` obje
 use function Async\timeout;
 use function Async\delay;
 
-delay(1000); // suspends the coroutine for 1 second
-
-// Try to fetch data from the URL within 1 second
-echo await spawn file_get_content('https://php.net/') until timeout(1000);  
+try {
+    delay(1000); // suspends the coroutine for 1 second
+    // Try to fetch data from the URL within 1 second
+    echo await spawn file_get_content('https://php.net/') until timeout(1000);
+} catch (\Async\AwaitCancelledException) {
+    echo "Operation was cancelled by timeout\n";
+} catch (\Async\CancellationException) {
+    echo "Operation was cancelled by user\n";
+}
 ```
 
 ### Error Handling
