@@ -354,10 +354,10 @@ The `spawn` construct is available in two variations:
 
 ```php
 // Executing a known function
-spawn [child] [with <scope>] <function_call>;
+spawn [with <scope>] <function_call>;
 
 // Closure form
-spawn [child] [with <scope>] [static] [use(<parameters>)][: <returnType>] {
+spawn [with <scope>] [static] [use(<parameters>)][: <returnType>] {
     <codeBlock>
 };
 ```
@@ -459,7 +459,7 @@ spawn (fn() => sleep(1))();
 Allows creating a coroutine from a closure directly when using `spawn`:
 
 ```php
-spawn [child] [with <scope>] [static] [use(<parameters>)[: <returnType>]] {
+spawn [with <scope>] [static] [use(<parameters>)[: <returnType>]] {
     <codeBlock>
 };
 ```
