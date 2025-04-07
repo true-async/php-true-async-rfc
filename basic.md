@@ -1784,10 +1784,34 @@ The following scenarios are considered potentially erroneous:
 3. Tasks were not cancelled using the `cancel()` method, but through a call to `dispose()`.  
    This indicates that the programmer did not intend to cancel the execution of the coroutine,  
    yet it happened because the scope was destroyed.
-4. Deadlocks caused by circular dependencies between coroutines.
+4. An attempt to await a coroutine from within itself.
+5. Awaiting `$scope` from within itself or from one of its child scopes.
+6. Deadlocks caused by circular dependencies between coroutines.
 
 **PHP** will respond to such situations by issuing **warnings**, including debug information about the involved coroutines.  
 Developers are expected to write code in a way that avoids triggering these warnings.
+
+An attempt to use the expression `await $coroutine` from within the same coroutine throws an exception.
+
+```php
+$coroutine = null;
+$coroutine = spawn use(&$coroutine) {
+    await $coroutine; // <- Fatal error: A coroutine cannot await itself. Coroutine spawned at ...
+};
+```
+
+Using the expression `await $scope` from a coroutine that belongs to the same `$scope` or 
+to one of its child scopes will throw a fatal exception. 
+This condition makes it impossible to perform the `await globalScope` expression.
+
+```php
+$scope = new Scope();
+
+spawn with $scope use($scope) {
+    await $scope; // <- Fatal error: Awaiting a scope from within itself or
+                  // its child scope would cause a deadlock. Scope created at ...
+};
+```
 
 #### Error mitigation strategies
 
