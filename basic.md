@@ -1891,7 +1891,8 @@ The following scenarios are considered potentially erroneous:
    yet it happened because the scope was destroyed.
 4. An attempt to await a coroutine from within itself.
 5. Awaiting `$scope` from within itself or from one of its child scopes.
-6. Deadlocks caused by circular dependencies between coroutines.
+6. Stuck tasks in the cancellation state.
+7. Deadlocks caused by circular dependencies between coroutines.
 
 **PHP** will respond to such situations by issuing **warnings**, including debug information about the involved coroutines.  
 Developers are expected to write code in a way that avoids triggering these warnings.
@@ -3269,6 +3270,16 @@ spawn task();
 
 If a `CancellationException` was sent to a coroutine during `protect()`,
 the exception will be thrown immediately after the execution of `protect()` completes.
+
+#### Cancellation policy
+
+This **RFC** intentionally does not define rules for tracking the execution time of cancelled coroutines. 
+The reason is that cancellation operations may be long-running—for example, 
+rollback strategies—and may require blocking the function being cancelled.
+
+Intentionally stopping coroutines that are in the cancellation state is a dangerous operation 
+that can lead to data loss. To avoid overcomplicating this **RFC**, 
+it is proposed to delegate the responsibility for such logic to the `Scheduler` implementation.
 
 #### exit and die keywords
 
