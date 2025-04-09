@@ -675,6 +675,8 @@ class HiPriorityStrategy implements Async\SpawnStrategy
     {
         // Mark the coroutine as high priority before it is enqueued
         $coroutine->asHiPriority();
+        
+        return [];
     }
 
     // Additional methods ...
