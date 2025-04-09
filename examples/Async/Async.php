@@ -11,11 +11,11 @@ function protect(\Closure $closure): void {}
 
 function hiPriority(?Scope $scope = null): SpawnStrategy {}
 
-function any(iterable $futures): Awaitable {}
+function any(iterable $triggers): Awaitable {}
 
-function all(iterable $futures): Awaitable {}
+function all(iterable $triggers): Awaitable {}
 
-function anyOf(int $count, iterable $futures): Awaitable {}
+function anyOf(int $count, iterable $triggers): Awaitable {}
 
 function ignoreErrors(Awaitable $awaitable, callable $handler): Awaitable {}
 

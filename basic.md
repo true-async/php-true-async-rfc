@@ -210,9 +210,24 @@ function processJob(mixed $job): void {
 }
 ```
 
-### Scheduler and Reactor
+### Implementation requirements
 
-**Scheduler** and **Reactor** must be implemented as `PHP` extensions that implement low-level interfaces.
+The implementation of this **RFC** should be carried out in a way that minimizes changes to the PHP core. 
+
+The proposed changes include:
+* syntax modifications to the language,
+* interfaces without implementations for `Reactor` and `Scheduler`,
+* an internal interface for the `Scope` class.
+
+All other classes and functions from this **RFC** will be moved to a separate module, 
+which will become part of the standard library. 
+However, this module can be replaced with a different one if necessary.
+
+The `Scope` and `TaskGroup` classes are not part of the **PHP** core.
+
+#### Scheduler and Reactor
+
+**Scheduler** and **Reactor** must be implemented as **PHP** extensions that implement low-level interfaces.
 
 The **Scheduler** and **Reactor** interfaces are part of the implementation of this **RFC**.
 
@@ -835,7 +850,7 @@ suspend;
 $couroutine->cancel();
 ```
 
-Expected output:
+**Expected output:**
 
 ```
 Hello, World!
@@ -862,7 +877,7 @@ spawn function:void {
 echo "Main flow";
 ```
 
-Expected output:
+**Expected output:**
 
 ```
 Start reading file1.txt
