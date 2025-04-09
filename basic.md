@@ -760,6 +760,16 @@ Goodbye, Universe!
     my_function(suspend);
 ```
 
+The `suspend` statement is considered executable code.
+Therefore, it **MUST NOT** appear before any use or namespace declarations at the top-level scope:
+
+```php
+suspend; // <- Not allowed
+namespace MyNamespace;
+suspend; // <- Not allowed
+use MyNamespace\MyClass;
+```
+
 The `suspend` keyword must not conflict with a function name, class name, or constant:
 
 ```php
