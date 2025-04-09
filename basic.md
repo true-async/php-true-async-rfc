@@ -212,7 +212,7 @@ function processJob(mixed $job): void {
 
 ### Implementation requirements
 
-The implementation of this **RFC** should be carried out in a way that minimizes changes to the PHP core. 
+The implementation of this **RFC** should be carried out in a way that minimizes changes to the **PHP** core. 
 
 The proposed changes include:
 * syntax modifications to the language,
@@ -223,7 +223,10 @@ All other classes and functions from this **RFC** will be moved to a separate mo
 which will become part of the standard library. 
 However, this module can be replaced with a different one if necessary.
 
-The `Scope` and `TaskGroup` classes are not part of the **PHP** core.
+The `Coroutine`, `Scope` and `TaskGroup` classes are not part of the **PHP** core.
+
+The behavior of expressions and statements such as `spawn`, `await`, and `suspend` is not defined in the core, 
+and can be overridden by an extension, which must adhere to the logic defined in this **RFC**.
 
 #### Scheduler and Reactor
 
