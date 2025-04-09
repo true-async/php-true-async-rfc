@@ -62,6 +62,9 @@ class Some {
 ***[#lightgreen] Scope::dispose()
 **[#FFD700] Cancel all child tasks with zombie coroutine
 ***[#lightgreen] Scope::disposeSafely()
+**[#FFD700] Protect critical sections?
+***[#lightgreen] Use Async\protect(\Closure $criticalSection)
+
 *[#lightblue] Context Management
 **[#FFD700] Passing data across coroutine boundaries
 ***[#lightgreen] Async\Context
