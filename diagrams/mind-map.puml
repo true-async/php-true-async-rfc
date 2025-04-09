@@ -3,6 +3,9 @@
 @startmindmap
 *[#lightblue] Creating Coroutines
 **[#lightgreen] spawn
+**[#FFD700]  Custom spawn behavior: spawn with
+***[#lightgreen] SpawnStrategy interface
+
 *[#lightblue] Switching to Scheduler
 **[#lightgreen] suspend
 *[#lightblue] Structured Concurrency
@@ -36,8 +39,6 @@ await $coroutine until $cancellation;
 ***[#lightgreen] TaskGroup
 **[#FFD700] Shared task space for spawn expression
 ***[#lightgreen] Scope
-**[#FFD700] Binding of TaskGroup to the scope
-***[#lightgreen] new TaskGroup(new Scope())
 **[#FFD700] Linking PHP object with coroutines
 ***[#lightgreen]: Scope or/and TaskGroup
 
@@ -67,19 +68,14 @@ class Some {
 **[#FFD700] Inheriting context across scopes
 ***[#lightgreen] Scope Inheritance
 
-*[#lightblue] Managing Zombie Coroutines
-**[#lightgreen] Zombie Coroutine Policy or Task cancellation
-
 *[#lightblue] Completion Handlers
 **[#lightgreen] Coroutine::onFinally()
 **[#lightgreen] Scope::onFinally()
 **[#lightgreen] TaskGroup::onFinally()
 
-*[#lightblue]  Coroutine creation management: spawn with
-**[#lightgreen] SpawnStrategy interface
+*[#lightblue] Error Detection
+**[#lightgreen] Zombie Coroutine Policy
 
-*[#lightblue] Managing Zombie Coroutines
-**[#lightgreen] Zombie Coroutine Policy or Task cancellation
 @endmindmap
 
 @enduml
