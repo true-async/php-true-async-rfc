@@ -1310,6 +1310,68 @@ try {
 Error occurred
 ```
 
+The `await $scope` expression can be used multiple times 
+because `$scope` acts as a trigger that can transition to a completed state multiple times:
+
+```php
+$scope = new Scope();
+
+try {
+    spawn with $scope task1();
+    spawn with $scope task2();
+    // Wait all tasks
+    await $scope;
+} catch (Exception $exception) {    
+    $scope->cancel();
+    // Wait cancellation  
+    await $scope;
+}
+```
+
+In this example, the second use of the `await` expression is required to wait for the full completion of coroutines 
+within the Scope after they have been cancelled, 
+since the cancellation operation does not necessarily mean that the coroutines have fully finished.
+
+The expression `await $scope` after the `cancel()` operation makes logical sense 
+because the `cancel()` operation takes time to complete.
+
+> ℹ️ **Warning:** Be careful. If the expression `await $scope` starts after `$scope` has already been cancelled, 
+> the cancellation exception will not be received!
+
+```php
+$scope1 = new Scope();
+$scope2 = new Scope();
+
+spawn {
+    try {
+        await $scope1;
+        
+        sleep(5); // <- second coroutine will be executed
+                
+        await $scope2; // <- we lost the cancellation exception here
+    } catch (\Async\CancellationException $exception) {
+        // Some logic <- this code will not be executed
+    }
+};
+
+spawn use($scope1, $scope2) {
+    $scope2->cancel();
+};
+```
+
+Important code that handles the cancellation of `$scope` will not be executed 
+because the `await $scope` happens after `$scope` has already been cancelled.  
+If you need to ensure that `await $scope` catches the cancellation exception, 
+you can use the `Scope::isClosed()` check.
+
+```php
+if($scope->isClosed()) {
+    throw new CancellationException("Scope is closed");
+} else {
+    await $scope;
+}
+```
+
 #### Scope Hierarchy
 
 A hierarchy can be a convenient way to describe an application as a set of dependent tasks:
