@@ -692,6 +692,8 @@ spawn with new HiPriorityStrategy() {
 The `Async\hiPriority(?Scope $scope = null)` function allows launching a coroutine with high priority:
 
 ```php
+use function Async\hiPriority;
+
 spawn {
     echo "normal priority\n";
 };
@@ -752,12 +754,23 @@ Goodbye, Universe!
 **Wrong use:**
 
 ```php
-    // not function
-    suspend();
     // not part of the expression
     suspend + $any;
     // not parameter
     my_function(suspend);
+```
+
+The `suspend` keyword must not conflict with a function name, class name, or constant:
+
+```php
+function suspend(): void { // <- Allowed 
+    
+}
+
+const SUSPEND = 1; // <- Allowed
+
+class Suspend { // <- Allowed
+}
 ```
 
 The `suspend` keyword can be used only for the current coroutine.
