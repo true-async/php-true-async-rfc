@@ -8,10 +8,10 @@ package "PHP True Async RFC" {
         R1 : Non-blocking I/O Support
         R2 : Structured Concurrency
         R3 : Transparent Coroutines
-        R4 : Error and Cancellation Control
+        R4 : Cancellation Control
         R5 : Context Management
         R6 : Task Grouping and Scope
-        R7 : Control Coroutines Without Scope
+        R7 : Error Detection
     }
 
     package "Features" {
@@ -24,9 +24,8 @@ package "PHP True Async RFC" {
         F7 : Structured Concurrency Support
         F8 : Error Propagation and Handling
         F9 : Graceful Shutdown
-        F10 : Explicit/Implicit Coroutines
-        F11 : Zombie Coroutines
-        F12 : TaskGroup
+        F10 : Zombie Coroutines
+        F11 : TaskGroup
     }
 
     package "Architectural Changes" {
@@ -51,9 +50,8 @@ R4 --> F9 : Unhandled exceptions
 R4 --> F8 : Handle exceptions
 R5 --> F5 : Associate data with scope
 R6 --> F7 : Group tasks into scopes
-R6 --> F12 : Group tasks with TaskGroup
-R7 --> F10 : Define explicit/implicit coroutines
-R7 --> F11 : Introduce zombie coroutine logic
+R6 --> F11 : Group tasks with TaskGroup
+R7 --> F10 : Introduce zombie coroutine logic
 
 ' Define relationships from Features to Architectural Changes
 F1 --> A1 : Launch coroutines via Scheduler
@@ -67,7 +65,6 @@ F7 --> A4 : Structured concurrency through Scope
 F12 --> A4 : Structured concurrency with async block
 F8 --> A6 : Handle uncaught exceptions
 F9 --> A6 : Graceful shutdown on fatal error
-F10 --> A3 : Define coroutine management policy
-F11 --> A7 : Implement zombie coroutine handling
+F10 --> A7 : Implement zombie coroutine handling
 
 @enduml
