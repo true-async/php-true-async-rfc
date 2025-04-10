@@ -1240,10 +1240,18 @@ serving as a primitive for organizing structured concurrency in situations
 where other methods are unavailable (such as the absence of **colored functions**).
 Read more about [how colored functions help implement structured concurrency](./colored_functions.md).
 
-In addition to structured concurrency, `Scope` also helps organize the separation of responsibilities between 
-the calling code and the called code (Point of responsibility).
-In other words, the top-level code gains the ability to control the lifetime of coroutines 
-created by the code that resides lower in the call hierarchy.
+The main use cases for `Scope` are:
+
+1. Controlling the lifetime of coroutines created within a single scope
+2. Handling errors from all coroutines within the scope (**Point of responsibility**)
+3. Binding the lifetime of the scope's coroutines to the lifetime of a **PHP object**
+
+Binding Scope to objects is a good practice that has proven effective in **Kotlin**.  
+By allowing coroutines to be tied to an object (this could be a `Screen` or a `ViewModel`),  
+it is possible to avoid the error where coroutines outlive the object that manages them.
+
+For frameworks, it can be useful to be able to control all coroutines created within a `Scope`,  
+to apply context-dependent constraints to them.
 
 The `spawn <callable>` expression allows you to create coroutines,
 but it says nothing about who "owns" the coroutines.
