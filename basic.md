@@ -254,10 +254,9 @@ function fetchFirstSuccessful(string ...$apiHosts): string
 }
 ```
 
-
 ### Implementation requirements
 
-The implementation of this **RFC** should be carried out in a way that minimizes changes to the **PHP** core. 
+The implementation of this **RFC** should be carried out in a way that minimizes changes to the **PHP core**. 
 
 The proposed changes include:
 * syntax modifications to the language,
@@ -1937,6 +1936,14 @@ The files must remain open until the subtasks are completed.
 This illustrates the key idea of structured concurrency:
 tying the lifetime of child tasks to the scope that allocates resources.  
 Both the child tasks and the resources must be cleaned up in a well-defined order.
+
+Waiting for all child coroutines in a `Scope` is **a dangerous operation**,  
+as in the case of a **zombie coroutine**, memory and descriptor resources may be held indefinitely.  
+This approach is only acceptable in scenarios where the user can cancel the operation,  
+such as during the execution of **console commands**.
+
+In the context of web server applications, you **should not** wait on a `Scope`  
+unless it is part of a **Supervisor** strategy.
 
 ### Error detection
 
