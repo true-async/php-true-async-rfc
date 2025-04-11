@@ -2194,10 +2194,10 @@ if a programmer mistakenly uses the `spawn <callable>` expression
 and adds a coroutine to the `Scope` that lives indefinitely.
 
 The `TaskGroup` class is an explicit pattern for managing a group of coroutines. 
-Unlike `Scope`, tasks cannot be added to it "accidentally".
+Unlike `Scope`, tasks cannot be added to it accidentally.
 
 In a `TaskGroup`, a task can only be added **explicitly**, using the `spawn with` expression. 
-A `TaskGroup` is not inherited through the execution context by child coroutines.
+A `TaskGroup` is not propagated through the execution context by child coroutines.
 
 And unlike `Scope`, `TaskGroup` can capture the results of tasks, which makes it convenient for awaiting results.
 
