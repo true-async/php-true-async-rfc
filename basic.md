@@ -113,7 +113,7 @@ function mergeFiles(string ...$files): string
     $taskGroup = new Async\TaskGroup(scope: $scope, captureResults: true);
     
     foreach ($files as $file) {
-       $taskGroup->spawn(file_get_contents(...), $file);
+       spawn with $taskGroup file_get_contents($file);
     }
     
     return array_merge("\n", await $taskGroup);
@@ -209,6 +209,51 @@ function processJob(mixed $job): void {
     await $scope;
 }
 ```
+
+#### Binding Coroutines to a PHP Object
+
+```php
+class HttpClient
+{
+    private Scope $scope;
+    
+    public function __construct()
+    {
+        $this->scope = new Scope();
+    }
+    
+    public function request(array $data): \Async\Awaitable
+    {
+        return spawn with $this->scope use($data) {
+            // This coroutine is bound to the MyClass instance
+        };
+    }
+}
+
+$service = new HttpClient;
+$service->request(['login' => 'admin', 'password' => '1234']);
+// HttpClient instance will stop all coroutines bound to it.
+unset($service);
+```
+
+#### Tasks race
+
+```php
+use Async\TaskGroup;
+
+function fetchFirstSuccessful(string ...$apiHosts): string
+{
+    $taskGroup = new Async\TaskGroup(captureResults: false);
+
+    foreach ($apiHosts as $host) {
+        spawn with $taskGroup file_get_contents($host);
+    }
+
+    // Get the first successful result
+    return await $taskGroup->race(ignoreErrors: true);
+}
+```
+
 
 ### Implementation requirements
 
@@ -2323,7 +2368,7 @@ function fetchFirstSuccessful(string ...$apiHosts): string
     $taskGroup = new Async\TaskGroup(captureResults: false);
 
     foreach ($apiHosts as $host) {
-        $taskGroup->spawn(function() use ($host) {
+        spawn with $taskGroup use ($host) {
             $response = file_get_contents($host);
             
             if($response === false) {
@@ -2951,9 +2996,9 @@ $scope->setExceptionHandler(function (Async\Scope $scope, Async\Coroutine $corou
     echo "Caught exception: {$e->getMessage()}\n in coroutine: {$coroutine->getSpawnLocation()}\n";
 });
 
-$scope->spawn(function() {
+spawn with $scope {
     throw new Exception("Task 1");
-});
+};
 
 await $scope;
 ```
@@ -3058,9 +3103,9 @@ A **responsibility point** is code that explicitly waits for the completion of a
 ```php
 $scope = new Scope();
 
-$scope->spawn(function() {
+spawn with $scope {
   throw new Exception("Task 1");        
-});
+};
 
 try {
     await $scope;
