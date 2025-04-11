@@ -2971,7 +2971,7 @@ function processAllUserTasks(int ...$userIds): iterable
     }
 }
 
-$results = await all(fetchAllUsers());
+$results = await all(processAllUserTasks());
 ```
 
 ### Timer functions
