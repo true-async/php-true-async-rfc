@@ -133,9 +133,7 @@ function loadDashboardData(string $userId): array
     spawn with $taskGroup fetchRecentActivity($userId);
     
     try {
-        await $scope;
-        
-        [$profile, $notifications, $activity] = $taskGroup->getResults();
+        [$profile, $notifications, $activity] = await $taskGroup;
         
         return [
             'profile' => $profile,
@@ -197,7 +195,7 @@ function processBackgroundJobs(string ...$jobs): array
     }
     
     // Waiting for all child tasks throughout the entire depth of the hierarchy.
-    await $scope;
+    $scope->awaitCompletion(Async\timeout(300 * 1000));
 }
 
 function processJob(mixed $job): void {
@@ -206,7 +204,7 @@ function processJob(mixed $job): void {
     spawn $scope task2($job);
     
     // Waiting for all child tasks in the current scope.
-    await $scope;
+    $scope->awaitCompletion(Async\timeout(300 * 1000));
 }
 ```
 
@@ -1324,7 +1322,7 @@ spawn with $scope { // <- new scope
     };   
 };
 
-await $scope;
+$scope->awaitCompletion(Async\signal(SIGTERM));
 ```
 
 **Expected output:**
@@ -1647,7 +1645,7 @@ function socketServer(): void
         try {
             $scope->cancel();
             // Await for all coroutines to finish but not more than 5 seconds
-            await $scope until Async\timeout(5000);
+            $scope->awaitAfterCancellation(cancellation: Async\timeout(5000));
             echo "Server stopped\n";
         } catch (\Throwable $exception) {
             // Force exit
@@ -1968,7 +1966,7 @@ try {
         echo "Copy complete.\n";
     };
 
-    await $scope;    
+    $scope->awaitCompletion(Async\signal(SIGTERM));
 } finally {
     fclose($source);
     fclose($target);
@@ -2018,16 +2016,16 @@ $coroutine = spawn use(&$coroutine) {
 };
 ```
 
-Using the expression `await $scope` from a coroutine that belongs to the same `$scope` or 
+Using the `Scope::awaitCompletion()` from a coroutine that belongs to the same `$scope` or 
 to one of its child scopes will throw a fatal exception. 
-This condition makes it impossible to perform the `await globalScope` expression.
+This condition makes it impossible to perform the `$globalScope->awaitCompletion` call.
 
 ```php
 $scope = new Scope();
 
 spawn with $scope use($scope) {
-    await $scope; // <- Fatal error: Awaiting a scope from within itself or
-                  // its child scope would cause a deadlock. Scope created at ...
+    $scope->awaitCompletion(Async\timeout(1000)); // <- Fatal error: Awaiting a scope from within itself or
+                                                  // its child scope would cause a deadlock. Scope created at ...
 };
 ```
 
@@ -2199,8 +2197,6 @@ Moreover, the wait strategy of `$scope` can lead to resource leaks
 if a programmer mistakenly uses the `spawn <callable>` expression 
 and adds a coroutine to the `Scope` that lives indefinitely.
 
-In server applications, using `await $scope` is not a good idea and can be considered an antipattern.
-
 The `TaskGroup` class is an explicit pattern for managing a group of coroutines. 
 Unlike `Scope`, tasks cannot be added to it "accidentally".
 
@@ -2245,7 +2241,7 @@ $taskGroup2 = new TaskGroup($scope);
 spawn with $taskGroup1 task1();
 spawn with $taskGroup2 task2();
 
-await $scope;
+$scope->awaitCompletion(Async\signal(SIGTERM));
 ```
 
 **Structure:**
@@ -2275,7 +2271,6 @@ The `TaskGroup` class implements the `Awaitable` interface,
 so it can be used with the `await` expression.
 The `await $taskGroup` expression captures both the results of execution
 and any exceptions that occur in the tasks.
-In this regard, its behavior is no different from `await $scope`.
 
 If the constructor option `captureResults: true` is specified, 
 then the `await $taskGroup` expression will return the results of all tasks that were added to the group. 
@@ -2307,8 +2302,7 @@ echo implode("\n", $results);
 ```
 
 The `$taskGroup` object can be used in an `await` expression multiple times. 
-If the `captureResults` mode is not enabled, the `await` expression will always return `NULL`, 
-just like the equivalent `await $scope` expression.
+If the `captureResults` mode is not enabled, the `await` expression will always return `NULL`.
 
 > Be careful when capturing coroutine results, as this may cause memory leaks or keep large amounts of data in memory. 
 > Plan the waiting process wisely, and use the `TaskGroup::disposeResults()` method.
@@ -2951,7 +2945,7 @@ An uncaught exception in a coroutine follows this flow:
 3. If the `Scope` has an exception handler defined, it will be invoked.
 4. If the `Scope` does not have an exception handler, the `cancel()` method is called,
    canceling all coroutines in this scope, including all child scopes.
-5. If the `Scope` has responsibility points, i.e., the construction `await $scope`,
+5. If the `Scope` has responsibility points, i.e., the construction `Scope::awaitCompletion`,
    all responsibility points receive the exception.
 6. Otherwise, the exception is passed to the parent scope if it is defined.
 7. If there is no parent scope, the exception falls into `globalScope`,
@@ -3006,7 +3000,7 @@ $scope2 = new Scope();
 
 spawn with $scope2 use($scope, &$exception1) {
     try {
-        await $scope;
+        $scope->awaitCompletion(Async\signal(SIGTERM));
     } catch (Exception $e) {
         $exception1 = $e;
         echo "Caught exception1: {$e->getMessage()}\n";
@@ -3015,14 +3009,14 @@ spawn with $scope2 use($scope, &$exception1) {
 
 spawn with $scope2 use($scope, &$exception2) {
     try {
-        await $scope;
+        $scope->awaitCompletion(Async\signal(SIGTERM));
     } catch (Exception $e) {
         $exception2 = $e;
         echo "Caught exception2: {$e->getMessage()}\n";
     }
 };
 
-await $scope2;
+$scope2->awaitCompletion(Async\signal(SIGTERM));
 
 echo $exception1 === $exception2 ? "The same exception\n" : "Different exceptions\n";
 ```
@@ -3051,7 +3045,7 @@ spawn with $scope {
     throw new Exception("Task 1");
 };
 
-await $scope;
+$scope->awaitCompletion(Async\signal(SIGTERM));
 ```
 
 Using these handlers,
@@ -3159,7 +3153,7 @@ spawn with $scope {
 };
 
 try {
-    await $scope;
+    $scope->awaitCompletion(Async\signal(SIGTERM));
 } catch (\Throwable $e) {
      echo "Caught exception: {$e->getMessage()}\n";
 }      
@@ -3183,7 +3177,7 @@ $scope->setExceptionHandler(function (Exception $e) {
     echo "Caught exception: {$e->getMessage()}\n";
 });
 
-await $scope;
+$scope->awaitCompletion(Async\signal(SIGTERM));
 ```
 
 An exception handler has the right to suppress the exception.  
@@ -3206,7 +3200,7 @@ $scope->onFinally(function () {
     echo "Task 1 completed\n";
 });
 
-await $scope;
+$scope->awaitCompletion(Async\signal(SIGTERM));
 ```
 
 Or for coroutines:
@@ -3512,7 +3506,7 @@ which is very similar to this **RFC**.
 | **Creation**              | `new Scope()` or `Scope::inherit()` to form hierarchical concurrency; `TaskGroup` for grouped tasks. `async $scope {}` can define bounded or inherited scopes automatically.   | `new StructuredTaskScope<>()` or specialized subtypes to manage forked virtual threads.                                     |
 | **Task Launch**           | `spawn someTask()` or `spawn with $scope someTask()`.                                                                                                                          | `scope.fork(() -> someTask())` inside the `StructuredTaskScope` block.                                                      |
 | **Hierarchy**             | Scopes can form a tree of child scopes; canceling a parent scope cancels all children. `TaskGroup` is optional but can reference a scope.                                      | `StructuredTaskScope` can nest calls (`fork()` in sub-scopes). Canceling/closing a parent can interrupt child tasks.        |
-| **Awaiting**              | `await $scope` waits for all coroutines in that scope; `await spawn someFn()` for a single coroutine; `await $taskGroup` collects grouped results.                             | `scope.join()` to wait for all forked tasks, or individual `Future.get()`.                                                  |
+| **Awaiting**              | `await spawn someFn()` for a single coroutine; `await $taskGroup` collects grouped results; `Scope::awaitCompletion` to wait for all implicit tasks.                           | `scope.join()` to wait for all forked tasks, or individual `Future.get()`.                                                  |
 | **Bounded Execution**     | `$scope->cancel()` auto-cancels any child tasks left running once the block ends. A `TaskGroup` can be flagged as bounded too.                                                 | Exiting the structured concurrency block ends sub-tasks: they are joined or canceled.                                       |
 | **Cancellation**          | `$scope->cancel()` or `$coroutine->cancel()` raises `CancellationException`. `await ... until <token>` for timeouts. `dispose()` forcibly ends tasks.                          | `scope.shutdown()`, `scope.close()`, or `Thread.interrupt()` can stop the tasks, typically throwing `InterruptedException`. |
 | **Exception Handling**    | Unhandled exceptions bubble upward. Use `Scope::setExceptionHandler()` for scope-level or child-scope errors. `TaskGroup` can capture/aggregate child errors.                  | `scope.join()` or `scope.throwIfFailed()` may propagate aggregated exceptions. Standard `try/catch` also applies.           |
