@@ -974,7 +974,6 @@ and is intended for objects implemented as PHP extensions, such as:
 The following classes from this **RFC** also implement this interface:
 
 - `Coroutine`
-- `Scope`
 - `TaskGroup`
 
 Unlike `Future`, the `Awaitable` interface does not impose limitations on the number of state changes, 
@@ -989,12 +988,12 @@ so using them multiple times in an `await` expression will always yield the same
 
 **Comparison of Different Awaitable Classes:**
 
-|                                    | Coroutine | Scope | TaskGroup | Future | Cancellation |
-|------------------------------------|-----------|-------|-----------|--------|--------------|
-| Supports multiple state changes    | No        | Yes   | Yes       | No     | No           |
-| Multiple await returns same result | Yes       | No    | No        | Yes    | Yes          |
-| Can capture result                 | Yes       | No    | Yes       | Yes    | No           |
-| Can capture exception              | Yes       | Yes   | Yes       | Yes    | No           |
+|                                    | Coroutine | TaskGroup | Future | Cancellation |
+|------------------------------------|-----------|-----------|--------|--------------|
+| Supports multiple state changes    | No        | Yes       | No     | No           |
+| Multiple await returns same result | Yes       | No        | Yes    | Yes          |
+| Can capture result                 | Yes       | Yes       | Yes    | No           |
+| Can capture exception              | Yes       | Yes       | Yes    | No           |
 
 ### Await
 
@@ -1360,7 +1359,17 @@ for all coroutines executed within that Scope.
 
 #### Scope waiting
 
-The `Scope` object implements the `Awaitable` interface, which means it can be used with the `await` expression:
+The `Scope` class does not implement the `Awaitable` interface, 
+and therefore cannot be used in an `await` expression. 
+Awaiting a `Scope` is a potentially **dangerous operation** that should be performed consciously, not accidentally.
+
+To support a task awaiting in a controlled manner, `Scope` provides two specific methods:
+
+- `public function awaitCompletion(Awaitable $cancellation): void {}`
+- `public function awaitAfterCancellation(?callable $errorHandler = null, ?Awaitable $cancellation = null): void {}`
+
+The `awaitCompletion` method blocks the execution flow until all tasks within the scope are completed.  
+The `awaitAfterCancellation` method does the same but is intended to be called only after the scope has been cancelled.
 
 ```php
 use Async\Scope;
@@ -1380,7 +1389,7 @@ spawn with $scope {
     };   
 };
 
-await $scope;
+$scope->awaitCompletion(Async\signal(SIGTERM));
 ```
 
 **Expected output:**
@@ -1391,16 +1400,13 @@ Sibling task 2
 Sibling task 3
 ```
 
-The expression `await $scope` suspends the execution of the current coroutine  
-until all tasks within `$scope` are completed, including tasks in child `Scope` instances.
-
-This condition directly aligns with the concept of **structured concurrency**,  
-where a parent task must wait for the completion of all its child tasks.
-
-The expression `await $scope`, unlike `await $coroutine`, 
-does not capture the result of coroutine execution and always returns `NULL`.
+The `Scope` awaiting methods do not capture any task results, 
+so they cannot be used to await return values.
 
 > ℹ️ **Note:** If you need to retrieve the result of a group of tasks, use the `Async\TaskGroup` class.
+
+The `awaitCompletion` method can only be used with an explicitly defined cancellation token.  
+This requirement helps prevent indefinite waiting.
 
 Awaiting the `$scope` object also allows handling exceptions from coroutines within the `$scope`:
 
@@ -1418,7 +1424,7 @@ spawn with $scope {
 };
 
 try {
-    await $scope;
+    $scope->awaitCompletion(Async\signal(SIGTERM));
 } catch (Exception $exception) {
     echo $exception->getMessage()."\n";
 }
@@ -1430,8 +1436,8 @@ try {
 Error occurred
 ```
 
-The `await $scope` expression can be used multiple times 
-because `$scope` acts as a **trigger** that can transition to a completed state multiple times:
+The `Scope::awaitCompletion()` method can be used multiple times 
+because `Scope::awaitCompletion()` acts as a **trigger** that can transition to a completed state multiple times:
 
 ```php
 $scope = new Scope();
@@ -1440,22 +1446,22 @@ try {
     spawn with $scope task1();
     spawn with $scope task2();
     // Wait all tasks
-    await $scope;
+    $scope->awaitCompletion(Async\signal(SIGTERM));
 } catch (Exception $exception) {    
     $scope->cancel();
     // Wait cancellation  
-    await $scope;
+    $scope->awaitCompletion(Async\signal(SIGTERM));
 }
 ```
 
-In this example, the second use of the `await` expression is required to wait for the full completion of coroutines 
-within the Scope after they have been cancelled, 
+In this example, the second use of the `Scope::awaitCompletion()` method is required 
+to wait for the full completion of coroutines within the `Scope` after they have been cancelled, 
 since the cancellation operation does not necessarily mean that the coroutines have fully finished.
 
-The expression `await $scope` after the `cancel()` operation makes logical sense 
+The `Scope::awaitCompletion()` after the `cancel()` operation makes logical sense 
 because the `cancel()` operation takes time to complete.
 
-> ℹ️ **Warning:** Be careful. If the expression `await $scope` starts after `$scope` has already been cancelled, 
+> ℹ️ **Warning:** Be careful. If the `Scope::awaitCompletion()` starts after `$scope` has already been cancelled, 
 > the cancellation exception will not be received!
 
 ```php
@@ -1464,11 +1470,11 @@ $scope2 = new Scope();
 
 spawn {
     try {
-        await $scope1;
+        $scope1->awaitCompletion(Async\signal(SIGTERM));
         
         sleep(5); // <- second coroutine will be executed
                 
-        await $scope2; // <- we lost the cancellation exception here
+        $scope2->awaitCompletion(Async\signal(SIGTERM)); // <- we lost the cancellation exception here
     } catch (\Async\CancellationException $exception) {
         // Some logic <- this code will not be executed
     }
@@ -1480,15 +1486,15 @@ spawn use($scope1, $scope2) {
 ```
 
 Important code that handles the cancellation of `$scope` will not be executed 
-because the `await $scope` happens after `$scope` has already been cancelled.  
-If you need to ensure that `await $scope` catches the cancellation exception, 
+because the `Scope::awaitCompletion()` happens after `$scope` has already been cancelled.  
+If you need to ensure that `Scope::awaitCompletion()` catches the cancellation exception, 
 you can use the `Scope::isClosed()` check.
 
 ```php
 if($scope->isClosed()) {
     throw new CancellationException("Scope is closed");
 } else {
-    await $scope;
+    $scope->awaitCompletion(Async\signal(SIGTERM));
 }
 ```
 

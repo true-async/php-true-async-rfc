@@ -261,7 +261,7 @@ final class EditorServer
             
             socket_close($this->server);
             
-            $this->documentScope->awaitIgnoringErrors();
+            $this->documentScope->awaitAfterCancellation();
         }
     }
     

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Async;
 
-final class Scope implements Awaitable, ScopeProvider
+final class Scope implements ScopeProvider
 {
     public readonly Context $context;
     
@@ -28,7 +28,9 @@ final class Scope implements Awaitable, ScopeProvider
     
     public function cancel(?CancellationException $cancellationException = null): void {}
     
-    public function awaitIgnoringErrors(?callable $errorHandler = null, ?Awaitable $cancellation = null): void {}
+    public function awaitCompletion(Awaitable $cancellation): void {}
+    
+    public function awaitAfterCancellation(?callable $errorHandler = null, ?Awaitable $cancellation = null): void {}
     
     public function isFinished(): bool {}
     

@@ -43,6 +43,6 @@ function copyFiles(string $destinationDir, string ...$files): void
             spawn with $rollback unlink($destinationDir.'/'.$file);
         }
         
-        $rollback->awaitIgnoringErrors();
+        $rollback->awaitCompletion();
     }
 }

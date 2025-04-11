@@ -36,7 +36,7 @@ function orchestrateDistributedProcess(array $nodes, array $taskConfig): array
             }
             
             // Wait for all health checks to complete
-            $healthCheckScope->awaitIgnoringErrors();
+            $healthCheckScope->awaitCompletion();
         }
         
         // Filter out unhealthy nodes
@@ -93,7 +93,7 @@ function orchestrateDistributedProcess(array $nodes, array $taskConfig): array
                 };
             }
             
-            $distributionScope->awaitIgnoringErrors();
+            $distributionScope->awaitCompletion();
         }
         
         // Process and merge results
