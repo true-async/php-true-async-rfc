@@ -2426,6 +2426,8 @@ function fetchFirstSuccessful(string ...$apiHosts): string
 
 The `TaskGroup::race()` method returns an `Awaitable` trigger 
 that can be used multiple times to obtain the first completed task.
+The `race()` trigger clears the internal result storage after completion,  
+so you won't be able to retrieve the same result twice.
 
 If you need to get the first available result, use the `firstResult()` method.
 The `TaskGroup::firstResult()` trigger returns the first available result. 
