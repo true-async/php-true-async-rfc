@@ -503,6 +503,25 @@ spawn "sleep"(5);
 spawn (fn() => sleep(1))();
 ```
 
+The `spawn` or `with` keywords does not affect the ability to define `functions`, `constants`, or `classes` 
+with the same name:
+
+```php
+function spawn(): void {} // <- Allowed
+
+const SPAWN = 1; // <- Allowed
+
+class Spawn {} // <- Allowed
+```
+
+The `spawn` expression cannot appear before `namespace` or `use` declarations:
+
+```php
+spawn myFunction(); // <- Not allowed
+namespace MyNamespace;
+use MyNamespace\MyClass;
+```
+
 #### Spawn closure expression
 
 Allows creating a coroutine from a closure directly when using `spawn`:
@@ -1103,6 +1122,25 @@ The `await` expression can be used just like any other expression together with 
     }
 ```
 
+The `await` or `until` keywords does not affect the ability to define `functions`, `constants`, or `classes`
+with the same name:
+
+```php
+function await(): void {} // <- Allowed
+
+const AWAIT = 1; // <- Allowed
+$x = AWAIT + 2;  // <- Allowed
+
+class Await {} // <- Allowed
+```
+
+The `await` expression cannot appear before `namespace` or `use` declarations:
+
+```php
+await file_get_contents('file1.txt'); // <- Not allowed
+namespace MyNamespace;
+use MyNamespace\MyClass;
+```
 
 #### Await with cancellation
 
