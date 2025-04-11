@@ -1169,6 +1169,35 @@ The `suspend` keyword will have no effect, and the `spawn` operation will not be
 
 > **Coroutine Scope** — the space associated with coroutines created using the `spawn` expression.
 
+#### Motivation
+
+Sometimes it is necessary to gain control not only over a currently running coroutine,  
+but also over all coroutines that will be launched within a new one — without having direct access to them.  
+This could be the case for web server code that handles requests in separate coroutines  
+and does not know how many additional coroutines will be launched,  
+or a JobExecutor that wants to manage the lifecycle of running jobs.
+
+Without such control, the application code loses the ability to resist runtime errors,  
+which increases the risk of a complete service failure.
+
+This is why the **Coroutine Scope** pattern is of critical importance in the context of ensuring reliability.
+
+The main use cases for `Scope` are:
+
+1. Controlling the lifetime of coroutines created within a single scope (**Point of responsibility**)
+2. Handling errors from all coroutines within the scope
+3. Binding the lifetime of the scope's coroutines to the lifetime of a **PHP object**
+4. Creating a hierarchy of scopes to manage coroutines in a structured way
+
+Binding Scope to objects is a good practice that has proven effective in **Kotlin**.  
+By allowing coroutines to be tied to an object (this could be a `Screen` or a `ViewModel`),  
+it is possible to avoid the error where coroutines outlive the object that manages them.
+
+For frameworks, it can be useful to be able to control all coroutines created within a `Scope`,  
+to apply context-dependent constraints to them.
+
+#### Scope propagation
+
 By default, all coroutines are associated with the **Global Coroutine Scope**:
 
 ```php
@@ -1189,24 +1218,26 @@ If an application never creates **custom Scopes**, its behavior is similar to co
 * Coroutines are not explicitly linked to each other.
 * The lifetime of coroutines is not limited.
 
-The expression `spawn with $scope` creates a **new coroutine** bound to the specified scope. 
-Coroutines created during the execution of this **new coroutine** will become **sibling tasks**.
+The expression `spawn with $scope` creates a **new coroutine** bound to the specified scope.
+Scope is propagated between coroutines.
+If a coroutine is launched within a specific Scope, that Scope is considered the current one.  
+Any expression like `spawn <callable>` will create a coroutine within the current Scope.
 
-> ℹ️ Coroutines created after `spawn with <expression>` inherit the specified `$scope`.
+Coroutines created during the execution of this **new coroutine** will become **sibling tasks**:
 
 ```php
 use Async\Scope;
 
 $scope = new Scope();
 
-spawn with $scope {
+spawn with $scope { // <- new scope
 
     echo "Sibling task 1\n";
     
-    spawn { 
+    spawn { // <- $scope is current scope
         echo "Sibling task 2\n";
         
-        spawn {
+        spawn { // <- $scope is current scope
             echo "Sibling task 3\n";
         };        
     };   
@@ -1233,61 +1264,17 @@ main()                          ← defines a $scope
     ├── task3()                 ← runs in the $scope
 ```
 
-#### Motivation
+Thus, the expression `spawn with $scope` creates a new branch of sibling coroutines,  
+where the new coroutine exists at the same level as all subsequent ones.
 
-The **Coroutine Scope** pattern was inspired by the **Kotlin**, 
-serving as a primitive for organizing structured concurrency in situations 
-where other methods are unavailable (such as the absence of **colored functions**).
-Read more about [how colored functions help implement structured concurrency](./colored_functions.md).
+The code that owns a Scope object becomes the **Point of responsibility**  
+for all coroutines executed within that Scope.
 
-The main use cases for `Scope` are:
-
-1. Controlling the lifetime of coroutines created within a single scope
-2. Handling errors from all coroutines within the scope (**Point of responsibility**)
-3. Binding the lifetime of the scope's coroutines to the lifetime of a **PHP object**
-
-Binding Scope to objects is a good practice that has proven effective in **Kotlin**.  
-By allowing coroutines to be tied to an object (this could be a `Screen` or a `ViewModel`),  
-it is possible to avoid the error where coroutines outlive the object that manages them.
-
-For frameworks, it can be useful to be able to control all coroutines created within a `Scope`,  
-to apply context-dependent constraints to them.
-
-The `spawn <callable>` expression allows you to create coroutines,
-but it says nothing about who "owns" the coroutines.
-This can become a source of errors, as resources are allocated without explicit management.
-
-Scope helps solve this problem by implementing responsibility for coroutine ownership.
-
-```php
-function subtask(): void {}
-
-function task(): void
-{
-    spawn subtask();
-}
-
-$scope = new Scope();
-spawn with $scope task();
-```
-
-```
-main()                          ← defines a $scope and run task()
-└── task()                      ← inherits $scope and run subtask()
-    └── subtask()               ← inherits $scope
-```
-
-Once `$scope` is defined and a coroutine is created from it,
-`$scope` is inherited throughout the entire depth of function calls.
-
-This way, a place in the code is created that can control the lifetime of coroutines,
-wait for their completion, handle exceptions, or cancel their execution.
-
-Scope serves as a **point of responsibility** in managing coroutine resources.
-
-This is especially useful for frameworks or top-level components that need to control resources and coroutines
-created by lower-level functions without any knowledge of what those functions do.
-Without Coroutine Scope, implementing such control at the application level is extremely difficult.
+> A good practice is to ensure that a Scope object has **only ONE owner**.  
+> Passing `$scope` as a parameter to other functions or assigning it to multiple objects  
+> is a **potentially dangerous** operation that can lead to complex bugs.  
+> If you need to interact with the `Scope` in different parts of the program,  
+> use `Async\ScopeProvider` containers or other appropriate mechanisms.
 
 #### Scope waiting
 
