@@ -2809,13 +2809,20 @@ The destructor will be called, and the connection will automatically return to t
 
 The following functions allow combining `Awaitable` objects or capturing errors from `Awaitable` objects:
 
-| Function                                                 | Description                                                               |
-|----------------------------------------------------------|---------------------------------------------------------------------------|
-| `any(iterable $futures)`                                 | Triggers if at least one `Awaitable` completes successfully               |
-| `all(iterable $futures)`                                 | Triggers when all `Awaitable` objects have completed                      |
-| `anyOf(int $count, iterable $futures)`                   | Triggers when at least `$count` `Awaitable` objects have completed        |
-| `captureErrors(Awaitable $awaitable)`                    | Returns an additional array containing errors                             |
-| `ignoreErrors(Awaitable $awaitable, callable $handler)`  | Captures errors from `Awaitable` and calls `$handler` on each error       |
+| Function                                                | Description                                                               |
+|---------------------------------------------------------|---------------------------------------------------------------------------|
+| `any(iterable $triggers)`                               | Triggers if at least one `Awaitable` completes successfully               |
+| `all(iterable $triggers)`                               | Triggers when all `Awaitable` objects have completed                      |
+| `anyOf(int $count, iterable $triggers)`                 | Triggers when at least `$count` `Awaitable` objects have completed        |
+| `captureErrors(Awaitable $awaitable)`                   | Returns an additional array containing errors                             |
+| `ignoreErrors(Awaitable $awaitable, callable $handler)` | Captures errors from `Awaitable` and calls `$handler` on each error       |
+
+
+The combinators `any`, `all`, and `anyOf` **throw an exception** and terminate their execution.  
+If you need to ignore errors, you should use the `captureErrors` or `ignoreErrors` combinator.
+
+The `Async\all` method modifies the execution result and returns an array of values.  
+The order of the values matches the order of `$triggers`.
 
 ```php
 use function Async\all;
@@ -2824,7 +2831,21 @@ $results = await all([
     spawn fetchUserData(),
     spawn fetchUserSettings()    
 ]);
+
+print_r($results);
 ```
+
+Expected output:
+
+```text
+Array
+(
+    [0] => ... // result of fetchUserData()
+    [1] => ... // result of fetchUserSettings()
+)
+```
+
+`Any` returns a trigger that fires as soon as at least one item from the list has completed:
 
 ```php
 use function Async\any;
@@ -2837,8 +2858,13 @@ $results = await any([
 ]);
 ```
 
-```php
+The `any` trigger can be invoked multiple times, and each time 
+it will respond to the completion of the next item from the list.  
+This allows you to organize a loop of calls.
 
+The `anyOf` combinator is used to wait for at least N items from the list:
+
+```php
 // Returns when at least 2 images are loaded
 $results = await Async\anyOf(2, [
     spawn loadImage('preview.jpg'),
@@ -2846,6 +2872,14 @@ $results = await Async\anyOf(2, [
     spawn loadImage('full.jpg'),
 ]);
 ```
+
+The `captureErrors` combinator ignores trigger errors and waits for the first successful execution.  
+Use it together with `any`, `all`, or `anyOf` to wait for events while ignoring errors.
+
+The `captureErrors` combinator modifies the trigger results.  
+It returns an array with two elements:
+* the first element is the operation result
+* the second element is an array of errors
 
 ```php
 use function Async\captureErrors;
@@ -2859,6 +2893,9 @@ if(empty($errors)) {
     // $errors contains an exception or empty array
 }
 ```
+
+The `ignoreErrors` combinator also allows you to ignore errors,  
+but instead of returning errors, as a result, it sends them to a special handler function.
 
 ```php
 use function Async\any;
@@ -2901,6 +2938,41 @@ function getFirstAvailable(array $sources, int $errorTolerance = 0): mixed
 
 The function will return the first successful value with error tolerance,  
 which by default is set to 50% of the total number of `$sources`.
+
+The combinators `any`, `all`, and `anyOf` can accept an iterator as a source of triggers.  
+The iterator can be asynchronous. In this case, 
+`all` will wait not only for all triggers but also for the iterator to finish.
+
+The `captureErrors` and `ignoreErrors` combinators do not affect errors 
+that occur inside the iterator providing the triggers.  
+
+If an exception is thrown inside the iterator, 
+it will be passed through `captureErrors` or `ignoreErrors` further up the call stack.
+
+```php
+use function Async\all;
+use function Async\captureErrors;
+
+function processAllUserTasks(int ...$userIds): iterable
+{
+    $taskGroup = new Async\TaskGroup(captureResults: true);
+
+    foreach ($userIds as $userId) {
+        spawn with $taskGroup getUser($userId);
+    }
+    
+    while ($taskGroup->isFinished() === false) {
+    
+        $user = await $taskGroup->race();
+            
+        foreach ($user['tasks'] ?? [] as $task) {
+            yield spawn processUserTask($task);
+        }        
+    }
+}
+
+$results = await all(fetchAllUsers());
+```
 
 ### Timer functions
 
