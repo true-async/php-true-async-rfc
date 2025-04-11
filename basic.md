@@ -125,15 +125,14 @@ function mergeFiles(string ...$files): string
 ```php
 function loadDashboardData(string $userId): array
 {
-    $scope = new Async\Scope();
-    $taskGroup = new Async\TaskGroup($scope, captureResults: true);
+    $dashboardTasks = new Async\TaskGroup(captureResults: true);
 
-    spawn with $taskGroup fetchUserProfile($userId);
-    spawn with $taskGroup fetchUserNotifications($userId);
-    spawn with $taskGroup fetchRecentActivity($userId);
+    spawn with $dashboardTasks fetchUserProfile($userId);
+    spawn with $dashboardTasks fetchUserNotifications($userId);
+    spawn with $dashboardTasks fetchRecentActivity($userId);
     
     try {
-        [$profile, $notifications, $activity] = await $taskGroup;
+        [$profile, $notifications, $activity] = await $dashboardTasks;
         
         return [
             'profile' => $profile,
@@ -155,15 +154,12 @@ function fetchUserSettings(string $userId): array
 
 function fetchUserProfile(string $userId): array 
 {
-    $userDataScope = new Async\Scope();
-    $taskGroup = new Async\TaskGroup($userDataScope, captureResults: true);
+    $userTasks = new Async\TaskGroup(\Async\Scope::inherit(), captureResults: true);
     
-    spawn with $taskGroup fetchUserData();
-    spawn with $taskGroup fetchUserSettings($userId);
+    spawn with $userTasks fetchUserData();
+    spawn with $userTasks fetchUserSettings($userId);
 
-    await $userDataScope;
-    
-    [$userData, $settings] = $taskGroup->getResults();
+    [$userData, $settings] = await $userTasks;
     
     $userData['settings'] = $settings ?? [];
     
@@ -174,8 +170,8 @@ spawn loadDashboardData($userId);
 ```
 
 ```text
-loadDashboardData()  ← async $dashboardScope
-├── fetchUserProfile()  ← async inherit $userDataScope
+loadDashboardData()  ← $dashboardTasks
+├── fetchUserProfile()  ← $userTasks inherited scope from $dashboardTasks
 │   ├── spawn fetchUserData()
 │   └── spawn fetchUserSettings()
 │       ├── throw new Exception(...) ← ❗can stop all tasks in the hierarchy
