@@ -1331,8 +1331,8 @@ spawn with $scope {
     spawn { 
         spawn {
             throw new Exception("Error occurred");
-        };        
-    };   
+        };
+    };
 };
 
 try {
@@ -1349,7 +1349,7 @@ Error occurred
 ```
 
 The `await $scope` expression can be used multiple times 
-because `$scope` acts as a trigger that can transition to a completed state multiple times:
+because `$scope` acts as a **trigger** that can transition to a completed state multiple times:
 
 ```php
 $scope = new Scope();
@@ -1485,13 +1485,22 @@ function connectionLimiter(callable $cancelToken): void
 
 function connectionHandler($socket): void
 {
-    $scope = Scope::inherit();
+    // Note that a parent Scope can stop the execution of all coroutines  
+    // belonging to a child Scope at any moment.
+    $scope = Scope::inherit();    
 
+    // 
+    // Passing `$scope` via `use` into a single coroutine is equivalent to the logic:  
+    // the lifetime of `$scope` equals the lifetime of the coroutine.  
+    // In this way, we create a coroutine-closure that acts as a Point of Responsibility.
+    // This code is one example of how to implement Points of Responsibility.
+    //
     spawn with $scope use($socket, $scope) {
     
         $limiterScope = Scope::inherit(); // child scope for connectionLimiter and connectionChecker
 
-        $cancelToken = fn(string $message) => $scope->cancel(new CancellationException($message));        
+        // We do not provide direct access to the Scope object in other functions, because this is an antipattern!
+        $cancelToken = fn(string $message) => $scope->cancel(new CancellationException($message));
 
         // Limiter coroutine
         spawn with $limiterScope connectionLimiter($cancelToken);
@@ -1505,6 +1514,7 @@ function connectionHandler($socket): void
             fwrite($socket, "HTTP/1.1 500 Internal Server Error\r\n\r\n");
         } finally {
             fclose($socket);
+            // Explicitly cancel all coroutines in the child scope
             $scope->cancel();
         }
     };
@@ -1512,11 +1522,20 @@ function connectionHandler($socket): void
 
 function socketServer(): void
 {
+    // Main Server $scope
     $scope = new Scope();
 
     // Child coroutine that listens for a shutdown signal
+    // 
+    // Note that we are passing `$scope` to another function!  
+    // This is acceptable here because the code is within a single visual block,  
+    // and the risk of an error due to oversight is minimal.
     spawn with $scope use($scope) {
         try {
+            // Note: The `signal` function is not part of this RFC,
+            // but it may be implemented in the standard library in the future.  
+            // This example shows how such a function could be used.  
+            // The `signal` function returns a trigger `Awaitable`.
             await Async\signal(SIGINT);
         } finally {
             $scope->cancel(new CancellationException('Server shutdown'));
@@ -1524,7 +1543,8 @@ function socketServer(): void
     }
 
     try {
-       // Main coroutine that listens for incoming connections
+       // The main coroutine that listens for incoming connections
+       // The server runs as long as this coroutine is running.
        await spawn with $scope {
            while ($socket = stream_socket_accept($serverSocket, 0)) {            
                connectionHandler($socket);
@@ -1538,7 +1558,8 @@ function socketServer(): void
         // Graceful exit
         try {
             $scope->cancel();
-            await $scope until Async\timeout(5);
+            // Await for all coroutines to finish but not more than 5 seconds
+            await $scope until Async\timeout(5000);
             echo "Server stopped\n";
         } catch (\Throwable $exception) {
             // Force exit
