@@ -2820,7 +2820,7 @@ The following functions allow combining `Awaitable` objects or capturing errors 
 | `ignoreErrors(Awaitable $awaitable, callable $handler)` | Captures errors from `Awaitable` and calls `$handler` on each error       |
 
 
-The combinators `any`, `all`, and `anyOf` **throw an exception** and terminate their execution.  
+The combinators `any`, `all`, and `anyOf` propagate exceptions from their composite triggers.  
 If you need to ignore errors, you should use the `captureErrors` or `ignoreErrors` combinator.
 
 The `Async\all` method modifies the execution result and returns an array of values.  
@@ -2941,7 +2941,10 @@ function getFirstAvailable(array $sources, int $errorTolerance = 0): mixed
 The function will return the first successful value with error tolerance,  
 which by default is set to 50% of the total number of `$sources`.
 
-The combinators `any`, `all`, and `anyOf` can accept an iterator as a source of triggers.  
+#### Iterable triggers
+
+The combinators `any`, `all`, and `anyOf` can accept an iterator as a source of triggers.
+In this case, the iterator will be executed in a concurrent environment.
 The iterator can be asynchronous. In this case, 
 `all` will wait not only for all triggers but also for the iterator to finish.
 
