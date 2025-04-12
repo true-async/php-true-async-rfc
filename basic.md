@@ -2579,6 +2579,69 @@ where each index corresponds to the ordinal number of the task.
 > **Note:** The method `TaskGroup::disposeResults` clears all results and errors at the moment it is called. 
 > Coroutines then reset their ordinal indices starting from zero.
 
+#### TaskGroup scope exception handling
+
+What happens when a coroutine that belongs to a `Scope` 
+but does not belong to a `TaskGroup` throws an exception?
+
+1. If the exception is not handled, it will propagate to the `Scope`.
+2. If a `Scope` has no exception handler, it invokes the `dispose()` strategy, 
+which cancels all coroutines, including any `TaskGroup` associated with the `Scope`. 
+In this case, the `await` point of the `TaskGroup` will receive a `CancellationException`.
+
+**Example:**
+
+```php
+use Async\TaskGroup;
+
+$taskGroup = new Async\TaskGroup(captureResults: false);
+
+spawn with $taskGroup {
+    spawn { // <- subcoroutine in the same scope 
+        throw new Exception('Error in coroutine');
+    };
+    
+    sleep(1);
+};
+
+try {
+    await $taskGroup;
+} catch (Async\CancellationException $exception) {
+    echo "Caught exception: ", $exception->getMessage(), "\n";
+}
+```
+
+**Expected output:**
+
+```
+Caught exception: TaskGroup was cancelled at ...
+```
+
+If you need to handle this type of exception, use the `Scope::setExceptionHandler` 
+method before calling `await $taskGroup`:
+
+```php
+use Async\TaskGroup;
+
+$scope = new Async\Scope();
+$taskGroup = new Async\TaskGroup(scope: $scope, captureResults: false);
+$scope->setExceptionHandler(function (Async\Scope $scope, Async\Coroutine $coroutine, Throwable $e) {
+    echo "Caught exception: {$e->getMessage()}\n in coroutine: {$coroutine->getSpawnLocation()}\n";
+});
+
+spawn with $taskGroup {
+    spawn { // <- subcoroutine in the same scope 
+        throw new Exception('Error in coroutine');
+    };
+    
+    sleep(1);
+};
+
+await $taskGroup;
+```
+
+Please see [Error Handling](#error-handling) for more details.
+
 #### TaskGroup vs Scope
 
 | Feature                             | TaskGroup                                 | Scope                                              |
