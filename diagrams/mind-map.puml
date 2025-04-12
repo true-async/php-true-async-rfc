@@ -11,16 +11,19 @@
 *[#lightblue] Structured Concurrency
 **[#FFD700] Grouping tasks
 ***[#lightgreen] new TaskGroup() + await TaskGroup
-**[#FFD700] The parent waits for all child tasks
-***[#lightgreen] new Scope + await Scope
 **[#FFD700] A hierarchy
 ***[#lightgreen] Scope::inherit()
+
+*[#lightblue] Point of Responsibility
+**[#FFD700] The parent waits for all child tasks
+***[#lightgreen] Scope::awaitCompletion()
+**[#FFD700] The parent waits for cancellation of all child tasks
+***[#lightgreen] Scope::awaitAfterCancellation()
+
 *[#lightblue] Waiting for Results
 **[#lightgreen] await <Async\Awaitable>
 **[#FFD700] Waiting for multiple tasks
 ***[#lightgreen] await TaskGroup
-**[#FFD700] Waiting for all child tasks
-***[#lightgreen] await Scope
 **[#FFD700] Waiting for first tasks (race)
 ***[#lightgreen] TaskGroup::race() or TaskGroup::firstResult()
 **[#FFD700] Waiting with cancellation
