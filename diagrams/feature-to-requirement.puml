@@ -62,7 +62,6 @@ F4 --> A4 : Control Scope Hierarchy
 F5 --> A5 : Context propagation across scopes
 F6 --> A6 : Propagate CancellationException
 F7 --> A4 : Structured concurrency through Scope
-F12 --> A4 : Structured concurrency with async block
 F8 --> A6 : Handle uncaught exceptions
 F9 --> A6 : Graceful shutdown on fatal error
 F10 --> A7 : Implement zombie coroutine handling
