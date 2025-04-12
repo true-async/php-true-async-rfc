@@ -15,6 +15,18 @@ Please use the diagrams from the table to simplify understanding.
 
 ### Overview
 
+#### Short glossary
+
+| Term                       | Description                                                                    | Section                                                                                     |
+|----------------------------|--------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------|
+| **Coroutine**              | An executable unit of code that can be suspended and resumed                   | [Launching any function in non-blocking mode](#launching-any-function-in-non-blocking-mode) |
+| **Scope**                  | A container for managing the lifecycle of coroutines                           | [Scope](#scope)                                                                             |
+| **TaskGroup**              | A container for managing a group of tasks with the ability to retrieve results | [TaskGroup](#taskgroup)                                                                     |
+| **Zombie coroutine**       | A coroutine that continues execution after its Scope has been destroyed        | [Scope disposal](#scope-disposal)                                                           |
+| **Context**                | A data storage associated with a coroutine or Scope                            | [Context API](#context-api)                                                                 |
+| **Structured concurrency** | A pattern for organizing coroutines into a hierarchy                           | [Structured concurrency support](#structured-concurrency-support)                           |
+| **CancellationException**  | A mechanism for cooperative canceling coroutine execution                      | [Cancellation](#cancellation)                                                               |
+
 This **RFC** describes the **API** and **new syntax** for writing concurrent code in PHP, which includes:
 
 #### Launching any function in non-blocking mode:
