@@ -1352,9 +1352,19 @@ for all coroutines executed within that Scope.
 
 #### Scope waiting
 
+> **Warning:** In general, it is strongly discouraged to wait on a `Scope`; instead, prefer using a `TaskGroup`.
+
 The `Scope` class does not implement the `Awaitable` interface, 
 and therefore cannot be used in an `await` expression. 
 Awaiting a `Scope` is a potentially **dangerous operation** that should be performed consciously, not accidentally.
+
+There are several Use-Cases where waiting for a `Scope` might be necessary:
+* Structured concurrency: when a parent awaits the completion of all child coroutines.
+* Waiting for Scope tasks to complete the cancellation process.
+
+The structured concurrency pattern with waiting for all child coroutines can be useful 
+for applications whose lifetime is explicitly limited by external conditions. 
+For example, the user might stop a console application.
 
 To support a task awaiting in a controlled manner, `Scope` provides two specific methods:
 
@@ -1429,8 +1439,8 @@ try {
 Error occurred
 ```
 
-The `Scope::awaitCompletion()` method can be used multiple times 
-because `Scope::awaitCompletion()` acts as a **trigger** that can transition to a completed state multiple times:
+Calling the `awaitCompletion()` method after the `Scope` has been cancelled 
+will immediately throw a cancellation exception.
 
 ```php
 $scope = new Scope();
@@ -1438,58 +1448,63 @@ $scope = new Scope();
 try {
     spawn with $scope task1();
     spawn with $scope task2();
+    $scope->cancel();
     // Wait all tasks
     $scope->awaitCompletion(Async\signal(SIGTERM));
-} catch (Exception $exception) {    
-    $scope->cancel();
-    // Wait cancellation  
-    $scope->awaitCompletion(Async\signal(SIGTERM));
+} catch (Exception $exception) {
+    echo "Caught exception: ",$exception->getMessage()."\n"; 
 }
 ```
 
-In this example, the second use of the `Scope::awaitCompletion()` method is required 
-to wait for the full completion of coroutines within the `Scope` after they have been cancelled, 
-since the cancellation operation does not necessarily mean that the coroutines have fully finished.
+**Expected output:**
 
-The `Scope::awaitCompletion()` after the `cancel()` operation makes logical sense 
-because the `cancel()` operation takes time to complete.
+```
+Caught exception: cancelled at ...
+```
 
-> ℹ️ **Warning:** Be careful. If the `Scope::awaitCompletion()` starts after `$scope` has already been cancelled, 
-> the cancellation exception will not be received!
+In this example, `$scope->awaitCompletion(Async\signal(SIGTERM));` will immediately throw an exception.
+
+If you need to wait for the `Scope` to complete after it has been cancelled, 
+use the special method `awaitAfterCancellation`, which is designed for this case.
 
 ```php
-$scope1 = new Scope();
-$scope2 = new Scope();
+$scope = new Scope();
 
 spawn {
     try {
-        $scope1->awaitCompletion(Async\signal(SIGTERM));
-        
-        sleep(5); // <- second coroutine will be executed
-                
-        $scope2->awaitCompletion(Async\signal(SIGTERM)); // <- we lost the cancellation exception here
+        $scope->awaitCompletion(Async\signal(SIGTERM));
     } catch (\Async\CancellationException $exception) {
-        // Some logic <- this code will not be executed
+        $scope->awaitAfterCancellation();
+        echo "Caught exception: ",$exception->getMessage()."\n";
     }
 };
 
-spawn use($scope1, $scope2) {
-    $scope2->cancel();
+spawn with $scope use($scope) {
+    $scope->cancel();
+    
+    try {
+        Async\delay(1000);
+    } finally {
+        sleep(1);
+        echo "Finally\n";
+    }    
 };
 ```
 
-Important code that handles the cancellation of `$scope` will not be executed 
-because the `Scope::awaitCompletion()` happens after `$scope` has already been cancelled.  
-If you need to ensure that `Scope::awaitCompletion()` catches the cancellation exception, 
-you can use the `Scope::isClosed()` check.
+**Expected output:**
 
-```php
-if($scope->isClosed()) {
-    throw new CancellationException("Scope is closed");
-} else {
-    $scope->awaitCompletion(Async\signal(SIGTERM));
-}
 ```
+Finally
+Caught exception: cancelled at ...
+```
+
+In this example, the line `Finally` will be printed first because `$scope->awaitAfterCancellation()` 
+waits for all coroutines inside the Scope to complete.
+
+The `awaitAfterCancellation` method is used in scenarios where final resource cleanup is required 
+after all child tasks are guaranteed to have finished execution.  
+
+There is also a risk of indefinite waiting, so it is **recommended** to explicitly specify a timeout.
 
 #### Scope Hierarchy
 
