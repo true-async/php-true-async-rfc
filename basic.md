@@ -20,7 +20,7 @@ Please use the diagrams from the table to simplify understanding.
 | Term                       | Description                                                                    | Section                                                                                     |
 |----------------------------|--------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------|
 | **Coroutine**              | An executable unit of code that can be suspended and resumed                   | [Launching any function in non-blocking mode](#launching-any-function-in-non-blocking-mode) |
-| **Scope**                  | A container for managing the lifecycle of coroutines                           | [Scope](#scope)                                                                             |
+| **Scope**                  | A container for managing the lifecycle of coroutines                           | [Scope](#coroutine-scope)                                                                   |
 | **TaskGroup**              | A container for managing a group of tasks with the ability to retrieve results | [TaskGroup](#taskgroup)                                                                     |
 | **Zombie coroutine**       | A coroutine that continues execution after its Scope has been destroyed        | [Scope disposal](#scope-disposal)                                                           |
 | **Context**                | A data storage associated with a coroutine or Scope                            | [Context API](#context-api)                                                                 |
@@ -29,9 +29,78 @@ Please use the diagrams from the table to simplify understanding.
 
 This **RFC** describes the **API** and **new syntax** for writing concurrent code in PHP, which includes:
 
+#### **Coroutine**
+A lightweight execution thread that can be suspended (`suspend`) and resumed.  
+Example:
+```php
+spawn {
+    echo "Start";
+    suspend;  // Suspend the coroutine
+    echo "Resumed";
+};
+```
+
+#### Scope
+A container that manages coroutine lifetimes.  
+Example:
+```php
+$scope = new Async\Scope();
+spawn with $scope {
+    // Coroutine bound to $scope
+    spawn {
+        // Coroutine bound to $scope
+    };
+};
+```
+
+#### TaskGroup
+Explicit group of coroutines with centralized result/error handling.  
+Example:
+```php
+$taskGroup = new Async\TaskGroup(captureResults: true);
+spawn with $taskGroup task1();
+spawn with $taskGroup task2();
+[$result1, $result2] = await $taskGroup;
+```
+
+#### Cancellation
+A special exception that implements cooperative cancellation:
+Example:
+```php
+$coroutine = spawn {
+    try {
+        Async\delay(1000);
+    } catch (Async\CancellationException $e) {
+        echo "Coroutine cancelled";
+    }
+};
+
+suspend;
+
+$coroutine->cancel();
+```
+
+#### Context
+Coroutine/Scope-associated data storage.  
+Example:
+```php
+currentContext()->set("user_id", 123);
+spawn {
+    $userId = currentContext()->get("user_id");
+    echo "User ID: $userId"; // 123
+};
+```
+
+#### Combinators
+Group awaitable objects like `any()`, `all()`, `ignoreError()`.  
+Example:
+```php
+$results = await Async\all([spawn task1(), spawn task2()]);
+```
+
 #### Launching any function in non-blocking mode:
 
-```php 
+```php
 function myFunction(): void 
 {
     echo "Hello, World!\n";
@@ -90,6 +159,7 @@ echo await spawn fetchData("file.txt");
 #### Awaiting a result with cancellation
 
 ```php
+echo await spawn fetchData("https://php.net/") until Async\timeout(2000);
 echo await spawn fetchData("https://php.net/") until spawn sleep(2);
 ```
 
