@@ -1997,7 +1997,8 @@ The following scenarios are considered potentially erroneous:
 4. An attempt to await a coroutine from within itself.
 5. Awaiting `$scope` from within itself or from one of its child scopes.
 6. Stuck tasks in the cancellation state.
-7. Deadlocks caused by circular dependencies between coroutines.
+7. Using `TaskGroup` with a result capturing without an `await` expression.
+8. Deadlocks caused by circular dependencies between coroutines.
 
 **PHP** will respond to such situations by issuing **warnings**, including debug information about the involved coroutines.  
 Developers are expected to write code in a way that avoids triggering these warnings.
