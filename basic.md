@@ -2218,18 +2218,18 @@ And unlike `Scope`, `TaskGroup` can capture the results of tasks, which makes it
 
 #### TaskGroup vs Scope
 
-| Feature                             | TaskGroup                                       | Scope                                              |
-|-------------------------------------|-------------------------------------------------|----------------------------------------------------|
-| **Purpose**                         | Manages a group of explicitly added tasks       | Manages lifetime and hierarchy of all child tasks  |
-| **Task Addition**                   | Only via `spawn with $taskGroup`                | Any coroutine in current scope is added implicitly |
-| **Result Capturing**                | Can capture task results (optional)             | Does not capture results                           |
-| **Implements Awaitable**            | Yes, can be used with `await`                   | No, must use `awaitCompletion()`, **dangerous**    |
-| **Error Propagation**               | Captures exceptions of added tasks              | Allows catching exceptions from child coroutines   |
-| **Scope Lifetime Management**       | Optional internal scope, disposed automatically | `disposeSafly`, `dispose`, `cancel`                |
-| **Used for Structured Concurrency** | Yes, in grouped execution                       | Yes, in hierarchy and parent-child relationships   |
-| **Cancelling Behavior**             | Cancels only its own tasks                      | Cancels all tasks in the scope and children Scope  |
-| **Automatic Disposal**              | Disposes its scope if owns it                   | `disposeSafly`, `dispose`, `cancel`                |
-| **Usage Recommendation**            | Prefer for result-driven parallel logic         | Prefer for lifecycle and hierarchical control      |
+| Feature                             | TaskGroup                                 | Scope                                              |
+|-------------------------------------|-------------------------------------------|----------------------------------------------------|
+| **Purpose**                         | Manages a group of explicitly added tasks | Manages lifetime and hierarchy of all child tasks  |
+| **Task Addition**                   | Only via `spawn with $taskGroup`          | Any coroutine in current scope is added implicitly |
+| **Result Capturing**                | Can capture task results (optional)       | Does not capture results                           |
+| **Implements Awaitable**            | Yes, can be used with `await`             | No, must use `awaitCompletion()`, **dangerous**    |
+| **Error Propagation**               | Captures exceptions of added tasks        | Allows catching exceptions from child coroutines   |
+| **Scope Lifetime Management**       | Separate scope, disposed automatically    | Scope object lifetime                              |
+| **Used for Structured Concurrency** | Yes, in grouped execution                 | Yes, in hierarchy and parent-child relationships   |
+| **Cancelling Behavior**             | Cancels only its own tasks                | Cancels all tasks in the scope and children Scope  |
+| **Automatic Disposal**              | Disposes its scope if owns it             | `disposeSafly`, `dispose`, `cancel`                |
+| **Usage Recommendation**            | Prefer for result-driven parallel logic   | Prefer for lifecycle and hierarchical control      |
 
 
 #### TaskGroup usage
