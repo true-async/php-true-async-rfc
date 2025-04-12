@@ -109,8 +109,7 @@ Goodbye, World
 ```php
 function mergeFiles(string ...$files): string
 {
-    $scope = new Async\Scope();
-    $taskGroup = new Async\TaskGroup(scope: $scope, captureResults: true);
+    $taskGroup = new Async\TaskGroup(captureResults: true);
     
     foreach ($files as $file) {
        spawn with $taskGroup file_get_contents($file);
