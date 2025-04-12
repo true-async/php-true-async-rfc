@@ -2987,7 +2987,6 @@ The standard async library includes two functions similar to `usleep()`:
 
 The `delay` function suspends the execution of a coroutine for the specified number of milliseconds.  
 Unlike `usleep`, the `delay` function will throw a cancellation exception if the coroutine is cancelled.
-Timer functions.
 
 The `timeout` function is similar to `delay`, but it returns an `Awaitable` object:
 
@@ -3232,9 +3231,6 @@ try {
 }      
 ```
 
-A **responsibility point** has a chance to receive
-not only the result of the coroutine execution but also an unhandled exception.
-
 #### Exception Handling
 
 The `Scope` class provides a method for handling exceptions:
@@ -3430,9 +3426,11 @@ Additionally, the `CancellationException` will not appear in `get_last_error()`,
 but it may trigger an `E_WARNING` to maintain compatibility with expected behavior
 for functions like `fwrite` (if such behavior is specified in the documentation).
 
-#### protect function
+#### Critical section
 
-Sometimes it's necessary to execute a critical section of code that must not be cancelled via `CancellationException`.
+Sometimes it's necessary to execute a **critical section** of code 
+that must not be cancelled via `CancellationException`.
+
 For example, this could be a sequence of write operations or a transaction.
 
 For this purpose, the `Async\protect` function is used,
@@ -3449,6 +3447,8 @@ spawn task();
 
 If a `CancellationException` was sent to a coroutine during `protect()`,
 the exception will be thrown immediately after the execution of `protect()` completes.
+
+The use of loops or unsafe operations inside a critical section can be checked by static analyzers.
 
 #### Cancellation policy
 
@@ -3488,7 +3488,7 @@ which can be an external system and is beyond the scope of this **RFC**.
 The **Graceful Shutdown** mode can also be triggered using the function:
 
 ```php
-Async\gracefulShutdown(\Throwable|null $throwable = null): void {}
+Async\gracefulShutdown(?CancellationException $cancellationException = null): void {}
 ```
 
 from anywhere in the application.

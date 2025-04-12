@@ -45,3 +45,5 @@ function rootContext(): Context {}
  * @return Coroutine[]
  */
 function getCoroutines(): array {}
+
+function gracefulShutdown(?CancellationException $cancellationException = null): void {}
