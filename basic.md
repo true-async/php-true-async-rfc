@@ -2197,10 +2197,9 @@ function mergeFiles(string ...$files): string
 echo await spawn mergeFiles(['file1.txt', 'file2.txt', 'file3.txt']);
 ```
 
-> ⚠️ The `TaskGroup` class is not part of the **PHP core** 
-> and should be provided as part of the standard asynchronous library.
-
 #### Motivation
+
+`TaskGroup` is an explicit and safe way to manage a group of tasks.
 
 Using the `Scope` class and the `spawn` expression, you can create groups of coroutines. 
 However, the code that creates `$scope` and/or awaits it might not be aware of which coroutines will be added. 
@@ -2215,6 +2214,10 @@ In a `TaskGroup`, a task can only be added **explicitly**, using the `spawn with
 A `TaskGroup` is not propagated through the execution context by child coroutines.
 
 And unlike `Scope`, `TaskGroup` can capture the results of tasks, which makes it convenient for awaiting results.
+
+If `Scope` is used to create a shared space for coroutines, 
+then `TaskGroup` is intended for explicit control over child tasks.  
+In this role, `TaskGroup` serves as a complement to the logic of `Scope`.
 
 #### TaskGroup usage
 
@@ -2454,7 +2457,44 @@ If it is set to `true`, exceptions from tasks will be ignored, and the `race()`/
 triggers will return the first successful task.
 
 The `TaskGroup::getErrors()` method will return an array of exceptions.
-        
+
+#### TaskGroup hierarchy
+
+You can combine `TaskGroup` with `Scope::inherit()` to create a task group within a child `Scope`, 
+thereby forming a hierarchy between groups:
+
+```php
+use Async\TaskGroup;
+use Async\Scope;
+
+$taskGroupParent = new TaskGroup(captureResults: false);
+
+spawn with $taskGroupParent {
+    $taskGroupChild = new TaskGroup(Scope::inherit(), captureResults: false);
+    
+    spawn with $taskGroupChild {
+        // this task will be added to the child task group
+    };
+    
+    // wait for the child task group to finish
+    await $taskGroupChild;
+};
+
+await $taskGroupParent;
+```
+
+**Structure:**
+
+```
+main()
+└── $taskGroupParent = new TaskGroup()                          <- parent task group scope
+    ├── $taskGroupChild = new TaskGroup(Scope::inherit())       <- child task group scope
+```
+
+Since each `TaskGroup` is associated with its own `Scope`, 
+and `Scope` instances are connected through parent-child relationships, 
+cancelling a parent `TaskGroup` will automatically cancel the entire hierarchy.
+
 #### TaskGroup cancellation
 
 The `TaskGroup` class allows you to cancel all tasks in the group using the `TaskGroup::cancel()` method.
