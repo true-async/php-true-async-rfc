@@ -51,6 +51,9 @@ spawn with $scope {
         // Coroutine bound to $scope
     };
 };
+// Dispose of the scope after 5 seconds
+sleep(5);
+$scope->disposeSafely();
 ```
 
 #### TaskGroup
@@ -63,7 +66,7 @@ spawn with $taskGroup task2();
 [$result1, $result2] = await $taskGroup;
 ```
 
-#### Cancellation
+#### Cooperative cancellation
 A special exception that implements cooperative cancellation:
 Example:
 ```php
@@ -84,7 +87,7 @@ $coroutine->cancel();
 Coroutine/Scope-associated data storage.  
 Example:
 ```php
-currentContext()->set("user_id", 123);
+currentContext()->set('user_id', 123);
 spawn {
     $userId = currentContext()->get("user_id");
     echo "User ID: $userId"; // 123
@@ -96,26 +99,6 @@ Group awaitable objects like `any()`, `all()`, `ignoreError()`.
 Example:
 ```php
 $results = await Async\all([spawn task1(), spawn task2()]);
-```
-
-#### Launching any function in non-blocking mode:
-
-```php
-function myFunction(): void 
-{
-    echo "Hello, World!\n";
-}
-
-spawn myFunction();
-sleep(1);
-echo "Next line\n";
-```
-
-Output:
-
-```
-Hello, World!
-Next line
 ```
 
 #### Non-blocking versions of built-in PHP functions:
@@ -204,60 +187,26 @@ function mergeFiles(string ...$files): string
 #### Structured concurrency
 
 ```php
-function loadDashboardData(string $userId): array
-{
-    $dashboardTasks = new Async\TaskGroup(captureResults: true);
+use Async\Scope;
 
-    spawn with $dashboardTasks fetchUserProfile($userId);
-    spawn with $dashboardTasks fetchUserNotifications($userId);
-    spawn with $dashboardTasks fetchRecentActivity($userId);
+spawn {
+    $parentTasks = new Async\TaskGroup();
     
-    try {
-        [$profile, $notifications, $activity] = await $dashboardTasks;
+    await spawn with $parentTasks {
+        $childTasks = new Async\TaskGroup();
         
-        return [
-            'profile' => $profile,
-            'notifications' => $notifications,
-            'activity' => $activity,
-        ];
-    } catch (\Exception $e) {
-        logError("Dashboard loading failed", $e);
-        return ['error' => $e->getMessage()];
-    }
-}
+        spawn with $childTasks {
+            // Child task 1
+        };
+        
+        spawn with $childTasks {
+            // Child task 2
+        };
+        
+        await $childTasks;
+    };       
+};
 
-function fetchUserSettings(string $userId): array 
-{
-    // ...
-    // This exception stops all tasks in the hierarchy that were created as part of the request.
-    throw new Exception("Error fetching customers");
-}
-
-function fetchUserProfile(string $userId): array 
-{
-    $userTasks = new Async\TaskGroup(\Async\Scope::inherit(), captureResults: true);
-    
-    spawn with $userTasks fetchUserData();
-    spawn with $userTasks fetchUserSettings($userId);
-
-    [$userData, $settings] = await $userTasks;
-    
-    $userData['settings'] = $settings ?? [];
-    
-    return $userData;
-}
-
-spawn loadDashboardData($userId);
-```
-
-```text
-loadDashboardData()  ← $dashboardTasks
-├── fetchUserProfile()  ← $userTasks inherited scope from $dashboardTasks
-│   ├── spawn fetchUserData()
-│   └── spawn fetchUserSettings()
-│       ├── throw new Exception(...) ← ❗can stop all tasks in the hierarchy
-├── spawn fetchUserNotifications()
-└── spawn fetchRecentActivity()
 ```
 
 #### Await all child tasks.
@@ -2004,81 +1953,6 @@ spawn with $scope { // <- Fatal error
 };
 ```
 
-### Structured concurrency support
-
-**Structured concurrency** allows organizing coroutines into a group or hierarchy
-to manage their lifetime or exception handling.
-
-Structural concurrency implies that a parent cannot complete until all its child elements have finished executing.
-This behavior helps prevent the release of resources allocated in the parent coroutine
-until all children have completed their execution.
-
-The following code implements this idea:
-
-```php
-use Async\Scope;
-
-$source = fopen('input.txt', 'r');
-$target = fopen('output.txt', 'w');
-
-$buffer = null;
-
-try {
-    $scope = new Scope();
-    
-    // Read data from the source file
-    spawn with $scope use(&$buffer, $source) {
-        while (!feof($source)) {
-            if ($buffer === null) {
-                $chunk = fread($source, 1024);
-                $buffer = $chunk !== false && $chunk !== '' ? $chunk : null;
-            }
-
-            suspend;
-        }
-
-        $buffer = '';
-    };
-
-    // Write data to the target file
-    spawn with $scope use(&$buffer, $target) {
-        while (true) {
-            if (is_string($buffer)) {
-                if ($buffer === '') {
-                    break; // End of a file
-                }
-
-                fwrite($target, $buffer);
-                $buffer = null;
-            }
-
-            suspend;
-        }
-        
-        echo "Copy complete.\n";
-    };
-
-    $scope->awaitCompletion(Async\signal(SIGTERM));
-} finally {
-    fclose($source);
-    fclose($target);
-}
-```
-
-In this example, the main task opens files in order to process data in subtasks.  
-The files must remain open until the subtasks are completed.  
-This illustrates the key idea of structured concurrency:
-tying the lifetime of child tasks to the scope that allocates resources.  
-Both the child tasks and the resources must be cleaned up in a well-defined order.
-
-Waiting for all child coroutines in a `Scope` is **a dangerous operation**,  
-as in the case of a **zombie coroutine**, memory and descriptor resources may be held indefinitely.  
-This approach is only acceptable in scenarios where the user can cancel the operation,  
-such as during the execution of **console commands**.
-
-In the context of web server applications, you **should not** wait on a `Scope`  
-unless it is part of a **Supervisor** strategy.
-
 ### Error detection
 
 Detecting erroneous situations when using coroutines is an important part of analyzing an application's reliability.
@@ -2736,6 +2610,85 @@ Please see [Error Handling](#error-handling) for more details.
 | **Cancelling Behavior**             | Cancels only its own tasks                | Cancels all tasks in the scope and children Scope  |
 | **Automatic Disposal**              | Disposes its scope if owns it             | `disposeSafly`, `dispose`, `cancel`                |
 | **Usage Recommendation**            | Prefer for result-driven parallel logic   | Prefer for lifecycle and hierarchical control      |
+
+
+### Structured concurrency
+
+**Structured concurrency** allows organizing coroutines into a group or hierarchy
+to manage their lifetime or exception handling.
+
+The parent task is required to take responsibility for its child tasks and
+must not complete before the children have finished their execution.
+
+To implement structured concurrency, it is recommended to use the `TaskGroup` class.
+
+The following code implements this idea:
+
+```php
+use Async\Scope;
+
+function copyFile(string $sourceFile, string $targetFile): void
+{
+    $source = fopen($sourceFile, 'r');
+    $target = fopen($targetFile, 'w');       
+    
+    $buffer = null;
+    
+    try {
+        // Child scope
+        $tasks = new \Async\TaskGroup(Scope::inherit());
+        
+        // Read data from the source file
+        spawn with $tasks use(&$buffer, $source) {
+            while (!feof($source)) {
+                if ($buffer === null) {
+                    $chunk = fread($source, 1024);
+                    $buffer = $chunk !== false && $chunk !== '' ? $chunk : null;
+                }
+    
+                suspend;
+            }
+    
+            $buffer = '';
+        };
+    
+        // Write data to the target file
+        spawn with $tasks use(&$buffer, $target) {
+            while (true) {
+                if (is_string($buffer)) {
+                    if ($buffer === '') {
+                        break; // End of a file
+                    }
+    
+                    fwrite($target, $buffer);
+                    $buffer = null;
+                }
+    
+                suspend;
+            }
+            
+            echo "Copy complete.\n";
+        };
+    
+        await $tasks;
+    } finally {
+        fclose($source);
+        fclose($target);
+    }
+}
+
+$copyTasks = new \Async\TaskGroup;
+
+spawn with $copyTasks copyFile('source.txt', 'target.txt');
+spawn with $copyTasks copyFile('source2.txt', 'target2.txt');
+
+await $copyTasks;
+```
+
+The example creates two task groups: a parent and a child. 
+The parent task group handles the copy operations directly, while the child tasks perform file reading and writing.
+File descriptors will not be closed until all child copy tasks have completed.
+The main code will not finish until all copy operations are completed.
 
 ### Context
 
