@@ -67,6 +67,11 @@ final class Coroutine implements Awaitable
     public function isCancelled(): bool {}
     
     /**
+     * Return true if the coroutine is cancellation requested.
+     */
+    function isCancellationRequested(): bool {}
+    
+    /**
      * Return true if the coroutine is finished.
      */
     public function isFinished(): bool {}
