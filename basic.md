@@ -394,6 +394,61 @@ The `Scheduler` component is responsible for the coroutine resumption algorithm.
 A coroutine can be resumed with an **exception**, in which case an exception
 will be thrown from the suspension point.
 
+#### Coroutine Lifecycle
+
+```plantuml
+@startuml
+state "Created" as Created
+state "Running" as Running
+state "Suspended" as Suspended
+state "Completed" as Completed
+state "Pending Cancellation" as Pending
+state "Cancelled" as Cancelled
+
+[*] --> Created
+Created --> Running : spawn
+Running --> Suspended : suspend
+Suspended --> Running : resume
+Running --> Completed : return/exit
+
+Running --> Pending : cancel() requested
+Pending --> Cancelled : cleanup finished
+Suspended --> Pending : cancel() requested
+
+Completed --> [*]
+Cancelled --> [*]
+
+@enduml
+```
+
+This state diagram illustrates the lifecycle of a coroutine, showing how it transitions through various states during its execution:
+
+**States:**
+- **Created** – The coroutine has been defined but not yet started.
+- **Running** – The coroutine is actively executing.
+- **Suspended** – Execution is paused, usually waiting for a result or I/O.
+- **Completed** – The coroutine has finished successfully (via `return` or `exit`).
+- **Pending Cancellation** – A cancellation was requested; the coroutine is cleaning up.
+- **Cancelled** – Cleanup is done; coroutine is terminated.
+
+**Key Transitions:**
+- `spawn` moves a coroutine from **Created** to **Running**.
+- `suspend` and `resume` move it between **Running** and **Suspended**.
+- `return/exit` ends it in **Completed**.
+- `cancel()` initiates cancellation from **Running** or **Suspended**, leading to **Pending Cancellation**, and finally **Cancelled**.
+
+#### `Coroutine` state check methods
+
+| Method                             | Description                                              | Related State on Diagram        |
+|-----------------------------------|----------------------------------------------------------|----------------------------------|
+| `isStarted(): bool`               | Returns `true` if the coroutine has been started.       | `Running`, `Suspended`, etc.     |
+| `isRunning(): bool`               | Returns `true` if the coroutine is currently running.   | `Running`                        |
+| `isSuspended(): bool`             | Returns `true` if the coroutine is suspended.           | `Suspended`                      |
+| `isCancelled(): bool`             | Returns `true` if the coroutine has been cancelled.     | `Cancelled`                      |
+| `isCancellationRequested(): bool` | Returns `true` if cancellation has been requested.      | `Pending Cancellation`           |
+| `isFinished(): bool`              | Returns `true` if the coroutine has completed execution.| `Completed`, `Cancelled`         |
+
+
 ### Spawn expression
 
 To create coroutines, the `spawn <callable>` expression is used.
