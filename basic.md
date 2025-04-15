@@ -432,7 +432,6 @@ state "Running" as Running
 state "Suspended" as Suspended
 state "Completed" as Completed
 state "Pending Cancellation" as Pending
-state "Cancelled" as Cancelled
 
 [*] --> Created
 Created --> Queued : spawn
@@ -441,12 +440,11 @@ Running --> Suspended : suspend
 Suspended --> Queued : resume
 Running --> Completed : return/exit/throw
 
-Pending --> Cancelled : cleanup finished
+Pending --> Completed : cleanup finished
 Suspended --> Pending : cancel() requested
 Queued -> Pending : cancel() requested
 
-Completed --> [*]
-Cancelled --> [*]
+Completed --> [*] : onFinally()
 
 @enduml
 ```
@@ -460,7 +458,6 @@ This state diagram illustrates the lifecycle of a coroutine, showing how it tran
 - **Suspended** – Execution is paused, usually waiting for a result or I/O.
 - **Completed** – The coroutine has finished successfully (via `return` or `exit`).
 - **Pending Cancellation** – A cancellation was requested; the coroutine is cleaning up.
-- **Cancelled** – Cleanup is done; coroutine is terminated.
 
 **Key Transitions:**
 - `spawn` moves a coroutine from **Created** to **Running**.
