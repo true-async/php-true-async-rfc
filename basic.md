@@ -3254,6 +3254,58 @@ try {
 }
 ```
 
+### Supervisor
+
+The `supervisor` allows organizing a group of tasks in which an error in one task 
+stops all its child tasks but does not affect **sibling** tasks.
+
+To create a `Supervisor`, you can use the following approach:
+
+```php
+class Supervisor implements Async\SpawnStrategy
+{
+    private $supervisor;
+
+    public function __construct() {
+        $this->supervisor = new Async\Scope();
+    }
+    
+    public function provideScope(): ?Scope
+    {
+        return Async\Scope::inherit($this->supervisor);
+    }
+    
+    public function beforeCoroutineEnqueue(Coroutine $coroutine, Scope $scope): array
+    {
+        $coroutine->onFinally(fn() => $scope->dispose());
+        return [];
+    }    
+}
+
+$supervisor = new Supervisor();
+
+spawn with $supervisor {
+
+    spawn {
+        echo "This code is not been executed\n";
+    }
+
+    throw new Exception("Task 1");
+};
+
+spawn with $supervisor {
+    // This task will not be canceled
+    echo "Task 2\n";
+};
+```
+
+To achieve the desired behavior, the `Supervisor` creates each task in a separate child `Scope` 
+and links the lifetime of the `Scope` to the lifetime of the task. 
+If an exception occurs in a task or in a child coroutine, 
+only the task where the exception happened will be cancelled, not all tasks within the `Supervisor`.
+
+> The `Supervisor` class may be included in the standard library in future RFCs.
+
 ### Error Handling
 
 An uncaught exception in a coroutine follows this flow:
