@@ -51,6 +51,8 @@ final class Coroutine implements Awaitable
      */
     public function isStarted(): bool {}
     
+    public function isQueued(): bool {}
+    
     /**
      * Return true if the coroutine is running.
      */

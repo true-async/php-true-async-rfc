@@ -427,6 +427,7 @@ will be thrown from the suspension point.
 ```plantuml
 @startuml
 state "Created" as Created
+state "Queued" as Queued
 state "Running" as Running
 state "Suspended" as Suspended
 state "Completed" as Completed
@@ -434,14 +435,15 @@ state "Pending Cancellation" as Pending
 state "Cancelled" as Cancelled
 
 [*] --> Created
-Created --> Running : spawn
+Created --> Queued : spawn
+Queued --> Running : enqueue
 Running --> Suspended : suspend
-Suspended --> Running : resume
+Suspended --> Queued : resume
 Running --> Completed : return/exit
 
-Running --> Pending : cancel() requested
 Pending --> Cancelled : cleanup finished
 Suspended --> Pending : cancel() requested
+Queued -> Pending : cancel() requested
 
 Completed --> [*]
 Cancelled --> [*]
@@ -453,6 +455,7 @@ This state diagram illustrates the lifecycle of a coroutine, showing how it tran
 
 **States:**
 - **Created** – The coroutine has been defined but not yet started.
+- **Queued** – The coroutine is queued  
 - **Running** – The coroutine is actively executing.
 - **Suspended** – Execution is paused, usually waiting for a result or I/O.
 - **Completed** – The coroutine has finished successfully (via `return` or `exit`).
@@ -467,14 +470,15 @@ This state diagram illustrates the lifecycle of a coroutine, showing how it tran
 
 #### `Coroutine` state check methods
 
-| Method                            | Description                                              | Related State on Diagram         |
-|-----------------------------------|----------------------------------------------------------|----------------------------------|
-| `isStarted(): bool`               | Returns `true` if the coroutine has been started.        | `Running`, `Suspended`, etc.     |
-| `isRunning(): bool`               | Returns `true` if the coroutine is currently running.    | `Running`                        |
-| `isSuspended(): bool`             | Returns `true` if the coroutine is suspended.            | `Suspended`                      |
-| `isCancelled(): bool`             | Returns `true` if the coroutine has been cancelled.      | `Cancelled`                      |
-| `isCancellationRequested(): bool` | Returns `true` if cancellation has been requested.       | `Pending Cancellation`           |
-| `isFinished(): bool`              | Returns `true` if the coroutine has completed execution. | `Completed`, `Cancelled`         |
+| Method                            | Description                                              | Related State on Diagram     |
+|-----------------------------------|----------------------------------------------------------|------------------------------|
+| `isStarted(): bool`               | Returns `true` if the coroutine has been started.        | `Running`, `Suspended`, etc. |
+| `isRunning(): bool`               | Returns `true` if the coroutine is currently running.    | `Running`                    |
+| `isQueued(): bool`                | Returns `true` if the coroutine is queued.               | `Queued`                     |
+| `isSuspended(): bool`             | Returns `true` if the coroutine is suspended.            | `Suspended`                  |
+| `isCancelled(): bool`             | Returns `true` if the coroutine has been cancelled.      | `Cancelled`                  |
+| `isCancellationRequested(): bool` | Returns `true` if cancellation has been requested.       | `Pending Cancellation`       |
+| `isFinished(): bool`              | Returns `true` if the coroutine has completed execution. | `Completed`, `Cancelled`     |
 
 
 ### Spawn expression
