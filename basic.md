@@ -358,21 +358,6 @@ The **Reactor** is a component that implements the **Event Loop**.
 It may be exposed as a separate API in **PHP-land**,
 but its behavior is not defined within this **RFC**.
 
-### Limitations
-
-This **RFC** does not implement "colored functions"
-(see: https://journal.stuffwithstuff.com/2015/02/01/what-color-is-your-function/).
-Instead, it provides **transparent concurrency**, allowing **any function** to be asynchronous.
-
-This **RFC** does not contradict a potential multitasking implementation
-where possible but does not assume its existence.
-
-This **RFC** assumes the ability to create coroutines in other **Threads** using the **Scheduler API**
-or separate extensions but does not describe this capability.
-
-This **RFC** also assumes functionality expansion using **SharedMemory**,
-specifically designed shared memory objects, through a separate API that is not part of this **RFC**.
-
 #### Preemptive Multitasking
 
 **PHP** allows for the implementation of forced coroutine suspension,
