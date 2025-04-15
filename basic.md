@@ -358,7 +358,7 @@ The **Reactor** is a component that implements the **Event Loop**.
 It may be exposed as a separate API in **PHP-land**,
 but its behavior is not defined within this **RFC**.
 
-#### Preemptive Multitasking
+### Preemptive Multitasking
 
 **PHP** allows for the implementation of forced coroutine suspension,
 which can be used in a preemptive multitasking algorithm.
