@@ -1861,7 +1861,6 @@ There are three available strategies for `Scope` termination:
 | `disposeSafely`       | Marks as zombie coroutines, does not cancel  |
 | `dispose`             | Cancels with a warning                       |
 | `disposeAfterTimeout` | Issues a warning, then cancels after a delay |
-| `cancel`              | Cancels without warnings or zombie           |
 
 The main goal of all three methods is to terminate the execution of coroutines
 that belong to the `Scope` or its child Scopes.
