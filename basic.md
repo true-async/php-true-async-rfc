@@ -3858,6 +3858,7 @@ The `Async\getCoroutines()` method returns an array of all coroutines in the app
 * [Coroutine](./examples/Async/Coroutine.php)
 * [Coroutine Context](./examples/Async/Context.php)
 * [Coroutine Scope](./examples/Async/Scope.php)
+* [Task Group](./examples/Async/TaskGroup.php)
 
 ## References
 
