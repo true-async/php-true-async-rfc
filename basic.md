@@ -3469,6 +3469,7 @@ final class Service
             
             $scope = Scope::inherit($this->scope);
             
+            // supervisor pattern
             (spawn with $scope $this->handleRequest($socket))->onFinally(
                 static function () use ($scope) {
                     $scope->disposeSafely();
