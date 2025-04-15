@@ -467,14 +467,14 @@ This state diagram illustrates the lifecycle of a coroutine, showing how it tran
 
 #### `Coroutine` state check methods
 
-| Method                             | Description                                              | Related State on Diagram        |
+| Method                            | Description                                              | Related State on Diagram         |
 |-----------------------------------|----------------------------------------------------------|----------------------------------|
-| `isStarted(): bool`               | Returns `true` if the coroutine has been started.       | `Running`, `Suspended`, etc.     |
-| `isRunning(): bool`               | Returns `true` if the coroutine is currently running.   | `Running`                        |
-| `isSuspended(): bool`             | Returns `true` if the coroutine is suspended.           | `Suspended`                      |
-| `isCancelled(): bool`             | Returns `true` if the coroutine has been cancelled.     | `Cancelled`                      |
-| `isCancellationRequested(): bool` | Returns `true` if cancellation has been requested.      | `Pending Cancellation`           |
-| `isFinished(): bool`              | Returns `true` if the coroutine has completed execution.| `Completed`, `Cancelled`         |
+| `isStarted(): bool`               | Returns `true` if the coroutine has been started.        | `Running`, `Suspended`, etc.     |
+| `isRunning(): bool`               | Returns `true` if the coroutine is currently running.    | `Running`                        |
+| `isSuspended(): bool`             | Returns `true` if the coroutine is suspended.            | `Suspended`                      |
+| `isCancelled(): bool`             | Returns `true` if the coroutine has been cancelled.      | `Cancelled`                      |
+| `isCancellationRequested(): bool` | Returns `true` if cancellation has been requested.       | `Pending Cancellation`           |
+| `isFinished(): bool`              | Returns `true` if the coroutine has completed execution. | `Completed`, `Cancelled`         |
 
 
 ### Spawn expression
