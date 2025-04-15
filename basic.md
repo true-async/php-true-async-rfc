@@ -439,7 +439,7 @@ Created --> Queued : spawn
 Queued --> Running : enqueue
 Running --> Suspended : suspend
 Suspended --> Queued : resume
-Running --> Completed : return/exit
+Running --> Completed : return/exit/throw
 
 Pending --> Cancelled : cleanup finished
 Suspended --> Pending : cancel() requested
