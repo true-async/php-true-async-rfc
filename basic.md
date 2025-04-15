@@ -24,7 +24,6 @@ Please use the diagrams from the table to simplify understanding.
 | **TaskGroup**              | A container for managing a group of tasks with the ability to retrieve results | [TaskGroup](#taskgroup)                                                                     |
 | **Zombie coroutine**       | A coroutine that continues execution after its Scope has been destroyed        | [Scope disposal](#scope-disposal)                                                           |
 | **Context**                | A data storage associated with a coroutine or Scope                            | [Context API](#context-api)                                                                 |
-| **Structured concurrency** | A pattern for organizing coroutines into a hierarchy                           | [Structured concurrency support](#structured-concurrency-support)                           |
 | **CancellationException**  | A mechanism for cooperative canceling coroutine execution                      | [Cancellation](#cancellation)                                                               |
 
 This **RFC** describes the **API** and **new syntax** for writing concurrent code in PHP, which includes:
@@ -146,7 +145,7 @@ echo await spawn fetchData("https://php.net/") until Async\timeout(2000);
 echo await spawn fetchData("https://php.net/") until spawn sleep(2);
 ```
 
-#### Suspend keyword
+#### Suspend statement
 
 Transferring control from the coroutine to the `Scheduler`:
 
@@ -188,25 +187,69 @@ function mergeFiles(string ...$files): string
 
 ```php
 use Async\Scope;
+use Async\TaskGroup;
+use Async\AwaitCancelledException;
 
-spawn {
-    $parentTasks = new Async\TaskGroup();
-    
-    await spawn with $parentTasks {
-        $childTasks = new Async\TaskGroup();
-        
-        spawn with $childTasks {
-            // Child task 1
+/**
+ * Retrieves user profile data from different sources
+ */
+function getUserProfile(int $userId): array 
+{
+    // Main task group with result capturing
+    $profileTasks = new TaskGroup(captureResults: true);
+
+    try {
+        // Start fetching basic user information
+        spawn with $profileTasks use ($userId):array {
+            $userData = await spawn fetchUserData($userId);
+            return ['basic' => $userData];
+        };
+
+        // Start fetching extended details in parallel
+        spawn with $profileTasks use ($userId) {
+            // Subtask group for supplementary information
+            $orderTasks = new TaskGroup(Scope::inherit(), captureResults: true);
+            
+            // Request user orders with 2-second timeout
+            spawn with $orderTasks use ($userId): array {
+                try {
+                    return ['orders' => await spawn fetchUserOrders($userId) until timeout(2000)];
+                } catch (AwaitCancelledException) {
+                    return ['orders' => ['status' => 'timeout']];
+                }
+            };
+            
+            // Request API2 user orders with 2-second timeout
+            spawn with $orderTasks use ($userId): array {
+                try {
+                    return ['orders2' => await spawn fetchUserOrdersAPI2($userId) until timeout(2000)];
+                } catch (AwaitCancelledException) {
+                    return ['orders2' => ['status' => 'timeout']];
+                }
+            };
+                        
+            // Wait for all order tasks to complete
+            return array_merge(...await $orderTasks);
+        };
+
+        // Request user settings
+        spawn with $profileTasks use ($userId): array {
+          return ['settings' => await spawn fetchUserSettings($userId)];
         };
         
-        spawn with $childTasks {
-            // Child task 2
-        };
+        // Merge all results into a single profile
+        return array_merge(...await $profileTasks);
         
-        await $childTasks;
-    };       
-};
+    } catch (Exception $e) {
+        // Error handling
+        error_log("Error fetching user profile: " . $e->getMessage());
+        return ['error' => $e->getMessage()];
+    }
+}
 
+// Usage
+$profile = await spawn getUserProfile(123);
+var_dump($profile);
 ```
 
 #### Await all child tasks.
