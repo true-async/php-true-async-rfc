@@ -22,12 +22,11 @@ final class DataBase
         $context = coroutineContext();
         
         if ($context->has($this->connectionKey)) {
-            $context->get($this->connectionKey);
+            return $context->get($this->connectionKey);
         } else {
             $context->set($this->connectionKey, new PdoProxy($this->pool->borrow(), $this->pool));
+            return $context->get($this->connectionKey);
         }
-        
-        return $context->get($this->connectionKey);
     }
     
     public function getConnection(): PdoProxy
