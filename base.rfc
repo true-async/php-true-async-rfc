@@ -494,8 +494,8 @@ echo "next line".__LINE__."\n";
 </code>
 
 This code:
-1. first returns the contents of the PHP website,
-2. then executes the `echo` statement.
+	1. first returns the contents of the PHP website,
+	2. then executes the `echo` statement.
 
 <code php>
 $coroutine = spawn file_get_contents('https://php.net');
@@ -503,13 +503,13 @@ echo "next line".__LINE__."\n";
 </code>
 
 This code:
-1. starts a coroutine with the `file_get_contents` function.
-2. The next line is executed without waiting for the result of `file_get_contents`.
-3. The coroutine is executed after the `echo` statement.
+	1. starts a coroutine with the `file_get_contents` function.
+	2. The next line is executed without waiting for the result of `file_get_contents`.
+	3. The coroutine is executed after the `echo` statement.
 
 The `spawn` construct is available in two variations:
-* `spawn function_call` - creates a coroutine from a callable expression
-* `spawn closure_block` - creates a coroutine and defines a closure
+	* `spawn function_call` - creates a coroutine from a callable expression
+	* `spawn closure_block` - creates a coroutine and defines a closure
 
 <code php>
 // Executing a known function
