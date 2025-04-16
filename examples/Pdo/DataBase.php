@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Pdo;
 
 use function Async\coroutineContext;
-use function Async\currentContext;
 
 final class DataBase
 {
@@ -27,13 +26,6 @@ final class DataBase
         }
         
         return $context->get($this->connectionKey);
-    }
-    
-    public function executeAndFetchAll(string $sql, array $params = []): array
-    {
-        $stmt = $this->connection()->prepare($sql);
-        $stmt->execute($params);
-        return $stmt->fetchAll(\PDO::FETCH_ASSOC);
     }
     
     public function getConnection(): PdoProxy
