@@ -54,7 +54,7 @@ Please use the diagrams from the table to simplify understanding.
 
 This **RFC** describes the **API** and **new syntax** for writing concurrent code in PHP, which includes:
 
-=== **Coroutine** ===
+=== Coroutine ===
 A lightweight execution thread that can be suspended (`suspend`) and resumed.
 Example:
 <code php>
@@ -143,7 +143,7 @@ echo "Next line\n";
 
 Output:
 
-</code>
+<code>
 Next line
 File content: ...
 </code>
@@ -188,7 +188,7 @@ echo "Next line\n";
 
 Output:
 
-</code>
+<code>
 Hello, World
 Next line
 Goodbye, World
@@ -450,7 +450,7 @@ will be thrown from the suspension point.
 
 === Coroutine Lifecycle ===
 
-</code>plantuml
+<code>plantuml
 @startuml
 state "Created" as Created
 state "Queued" as Queued
@@ -919,7 +919,7 @@ spawn with hiPriority() {
 
 **Expected output:**
 
-</code>
+<code>
 high priority
 normal priority
 </code>
@@ -952,7 +952,7 @@ spawn example('Universe');
 
 Expected output:
 
-</code>
+<code>
 Hello, World!
 Hello, Universe!
 Goodbye, World!
@@ -1020,7 +1020,7 @@ echo "Back to the main flow";
 
 Expected output:
 
-</code>
+<code>
 Hello, World!
 Back to the main flow
 Goodbye, World!
@@ -1051,7 +1051,7 @@ $couroutine->cancel();
 
 **Expected output:**
 
-</code>
+<code>
 Hello, World!
 Caught exception: cancelled at ...
 Goodbye, World!
@@ -1078,7 +1078,7 @@ echo "Main flow";
 
 **Expected output:**
 
-</code>
+<code>
 Start reading file1.txt
 Start reading file2.txt
 Main flow
@@ -1356,7 +1356,7 @@ try {
 
 **Expected output:**
 
-</code>
+<code>
 Caught exception: Error
 </code>
 
@@ -1461,7 +1461,7 @@ $scope->awaitCompletion(Async\signal(SIGTERM));
 
 **Expected output:**
 
-</code>
+<code>
 Sibling task 1
 Sibling task 2
 Sibling task 3
@@ -1469,7 +1469,7 @@ Sibling task 3
 
 **Structure:**
 
-</code>
+<code>
 main()                          ← defines a $scope
 └── $scope = new Scope()
     ├── task1()                 ← runs in the $scope
@@ -1536,7 +1536,7 @@ $scope->awaitCompletion(Async\signal(SIGTERM));
 
 **Expected output:**
 
-</code>
+<code>
 Sibling task 1
 Sibling task 2
 Sibling task 3
@@ -1574,7 +1574,7 @@ try {
 
 **Expected output:**
 
-</code>
+<code>
 Error occurred
 </code>
 
@@ -1597,7 +1597,7 @@ try {
 
 **Expected output:**
 
-</code>
+<code>
 Caught exception: cancelled at ...
 </code>
 
@@ -1632,7 +1632,7 @@ spawn with $scope use($scope) {
 
 **Expected output:**
 
-</code>
+<code>
 Finally
 Caught exception: cancelled at ...
 </code>
@@ -1655,7 +1655,7 @@ A hierarchy can be a convenient way to describe an application as a set of depen
 * Child tasks MUST NOT control or wait for their parent tasks.
 * It is correct if tasks at the same hierarchy level are only connected to tasks of the immediate child level.
 
-</code>
+<code>
 WebServer
 ├── Request Worker
 │   ├── request1 task
@@ -1672,7 +1672,7 @@ Each request may spawn subtasks. On the same level, all requests form a group of
 
 `Scope` is fit for implementing this concept:
 
-</code>
+<code>
 WebServer
 ├── Request Worker
 │   ├── request1 Scope
@@ -1815,7 +1815,7 @@ Let's examine how this example works.
    As soon as the client disconnects, `connectionChecker` will cancel all coroutines related to the request.
 6. If the main `Scope` is closed, all coroutines handling requests will also be canceled.
 
-</code>
+<code>
 GLOBAL <- globalScope
 │
 ├── socketListen (Scope) <- rootScope
@@ -1869,7 +1869,7 @@ $scope->cancel();
 
 **Expected output:**
 
-</code>
+<code>
 </code>
 
 === Scope disposal ===
@@ -1920,7 +1920,7 @@ $scope->disposeSafely();
 
 **Expected output:**
 
-</code>
+<code>
 Root task
 Warning: Coroutine is zombie at ... in Scope disposed at ...
 Warning: Coroutine is zombie at ... in Scope disposed at ...
@@ -1965,7 +1965,7 @@ $scope->dispose();
 
 **Expected output:**
 
-</code>
+<code>
 Warning: Coroutine is zombie at ... in Scope disposed at ...
 Warning: Coroutine is zombie at ... in Scope disposed at ...
 Warning: Coroutine is zombie at ... in Scope disposed at ...
@@ -2013,7 +2013,7 @@ unset($service);
 
 **Expected output:**
 
-</code>
+<code>
 Task 1
 Warning: Coroutine is zombie at ... in Scope disposed at ...
 Task 2
@@ -2322,7 +2322,7 @@ $scope->awaitCompletion(Async\signal(SIGTERM));
 
 **Structure:**
 
-</code>
+<code>
 main()                             ← defines a $scope
 └── $scope = new Scope()
     ├── task1()                    ← runs in the $scope
@@ -2467,7 +2467,7 @@ $scope->dispose();
 
 **Expected output:**
 
-</code>
+<code>
 </code>
 
 There are no warnings about **zombie coroutines** in the output
@@ -2547,7 +2547,7 @@ await $taskGroupParent;
 
 **Structure:**
 
-</code>
+<code>
 main()
 └── $taskGroupParent = new TaskGroup()                          <- parent task group scope
     ├── $taskGroupChild = new TaskGroup(Scope::inherit())       <- child task group scope
@@ -2584,7 +2584,7 @@ $taskGroup->cancel(new \Async\CancellationException('Custom cancellation message
 
 **Expected output:**
 
-</code>
+<code>
 Task was cancelled: Custom cancellation message
 </code>
 
@@ -2675,7 +2675,7 @@ try {
 
 **Expected output:**
 
-</code>
+<code>
 Caught exception: TaskGroup was cancelled at ...
 </code>
 
@@ -3108,7 +3108,7 @@ print_r($results);
 
 Expected output:
 
-</code>text
+<code>text
 Array
 (
     [0] => ... // result of fetchUserData()
@@ -3344,7 +3344,7 @@ An uncaught exception in a coroutine follows this flow:
 7. If there is no parent scope, the exception falls into `globalScope`,
    where the same rules apply as for a regular scope.
 
-</code>
+<code>
 puml
 @startuml
 start
@@ -3509,7 +3509,7 @@ If an exception occurs in a coroutine created within a **child Scope**,
 it will be passed to the `setChildScopeExceptionHandler` handler and will not affect
 the operation of the service as a whole.
 
-</code>
+<code>
 puml
 @startuml
 actor Client
@@ -3703,7 +3703,7 @@ try {
 
 Expected output:
 
-</code>
+<code>
 The end
 </code>
 
@@ -3732,7 +3732,7 @@ try {
 
 Expected output:
 
-</code>
+<code>
 Caught CancellationException
 The end
 </code>
