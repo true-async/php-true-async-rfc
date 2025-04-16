@@ -450,46 +450,23 @@ will be thrown from the suspension point.
 
 === Coroutine Lifecycle ===
 
-<code>plantuml
-@startuml
-state "Created" as Created
-state "Queued" as Queued
-state "Running" as Running
-state "Suspended" as Suspended
-state "Completed" as Completed
-state "Pending Cancellation" as Pending
-
-[*] --> Created
-Created --> Queued : spawn
-Queued --> Running : enqueue
-Running --> Suspended : suspend
-Suspended --> Queued : resume
-Running --> Completed : return/exit/throw
-
-Pending --> Completed : cleanup finished
-Suspended --> Pending : cancel() requested
-Queued -> Pending : cancel() requested
-
-Completed --> [*] : onFinally()
-
-@enduml
-</code>
+{{ :rfc:true_async:coroutine-lifecycle.svg |}}
 
 This state diagram illustrates the lifecycle of a coroutine, showing how it transitions through various states during its execution:
 
 **States:**
-- **Created** – The coroutine has been defined but not yet started.
-- **Queued** – The coroutine is queued
-- **Running** – The coroutine is actively executing.
-- **Suspended** – Execution is paused, usually waiting for a result or I/O.
-- **Completed** – The coroutine has finished successfully (via `return` or `exit`).
-- **Pending Cancellation** – A cancellation was requested; the coroutine is cleaning up.
+	- **Created** – The coroutine has been defined but not yet started.
+	- **Queued** – The coroutine is queued
+	- **Running** – The coroutine is actively executing.
+	- **Suspended** – Execution is paused, usually waiting for a result or I/O.
+	- **Completed** – The coroutine has finished successfully (via `return`).
+	- **Pending Cancellation** – A cancellation was requested; the coroutine is cleaning up.
 
 **Key Transitions:**
-- `spawn` moves a coroutine from **Created** to **Running**.
-- `suspend` and `resume` move it between **Running** and **Suspended**.
-- `return/exit` ends it in **Completed**.
-- `cancel()` initiates cancellation from **Running** or **Suspended**, leading to **Pending Cancellation**, and finally **Cancelled**.
+	- `spawn` moves a coroutine from **Created** to **Running**.
+	- `suspend` and `resume` move it between **Running** and **Suspended**.
+	- `return/exit` ends it in **Completed**.
+	- `cancel()` initiates cancellation from **Running** or **Suspended**, leading to **Pending Cancellation**, and finally **Cancelled**.
 
 === `Coroutine` state check methods ===
 
@@ -3344,37 +3321,7 @@ An uncaught exception in a coroutine follows this flow:
 7. If there is no parent scope, the exception falls into `globalScope`,
    where the same rules apply as for a regular scope.
 
-<code>
-puml
-@startuml
-start
-:Unhandled Exception Occurred;
-if (Await keyword is used?) then (Yes)
-    :Exception is propagated to await points;
-else (No)
-    while (Scope exists?)
-        :Exception is passed to Scope;
-        if (Scope has an exception handler?) then (Yes)
-            :Invoke exception handler;
-            stop
-        else (No)
-            :Scope::cancel();
-        endif
-        if (Scope has responsibility points?) then (Yes)
-            :All responsibility points receive the exception;
-            stop
-        endif
-        if (Parent Scope exists?) then (Yes)
-            :Pass exception to Parent Scope;
-        else (No)
-            :Pass exception to globalScope;
-            break
-        endif
-    endwhile
-endif
-stop
-@enduml
-</code>
+{{ :rfc:true_async:exception_flow.svg |}}
 
 **Example:**
 
@@ -3509,33 +3456,7 @@ If an exception occurs in a coroutine created within a **child Scope**,
 it will be passed to the `setChildScopeExceptionHandler` handler and will not affect
 the operation of the service as a whole.
 
-<code>
-puml
-@startuml
-actor Client
-participant "Service (Main Scope)" as Service
-participant "Request Handler (Child Scope)" as Handler
-
-Client -> Service : New connection request
-Service -> Handler : Create child scope and spawn coroutine
-
-loop For each request
-    Client -> Handler : Send request
-    Handler -> Client : Send response
-end
-
-alt Exception in child scope
-    Handler -> Service : Exception propagated to setChildScopeExceptionHandler
-    note right: Exception is logged, service continues running
-end
-
-alt Main scope cancelled
-    Service -> Handler : Cancel all child scopes
-    Handler -> Client : Disconnect
-end
-
-@enduml
-</code>
+{{ :rfc:true_async:supervisor.svg |}}
 
 === Responsibility points ===
 
@@ -3856,7 +3777,7 @@ The `Coroutine` class implements methods for inspecting the state of a coroutine
 | Method                                 | Description                                                                                                                                                                                            |
 | **`getSpawnFileAndLine():array`**      | Returns an array of two elements: the file name and the line number where the coroutine was spawned.                                                                                                   |
 | **`getSpawnLocation():string`**        | Returns a string representation of the location where the coroutine was spawned, typically in the format `"file:line"`.                                                                                |
-| **`getSuspendFileAndLine():array`**    | Returns an array of two elements: the file name and the line number where the coroutine was last suspended. If the coroutine has not been suspended, it may return `['',0]`.                           |
+| **`getSuspendFileAndLine():array`**    | Returns an array of two elements: the file name and the line number where the coroutine was last suspended. If the coroutine has not been suspended, it may return empty string,0.                     |
 | **`getSuspendLocation():string`**      | Returns a string representation of the location where the coroutine was last suspended, typically in the format `"file:line"`. If the coroutine has not been suspended, it may return an empty string. |
 | **`isSuspended():bool`**               | Returns `true` if the coroutine has been suspended                                                                                                                                                     |
 | **`isCancelled():bool`**               | Returns `true` if the coroutine has been cancelled, otherwise `false`.                                                                                                                                 |
@@ -3875,11 +3796,11 @@ The `Async\getCoroutines()` method returns an array of all coroutines in the app
 
 ==== Prototypes ====
 
-* [Async functions](./examples/Async/Async.php)
-* [Coroutine](./examples/Async/Coroutine.php)
-* [Coroutine Context](./examples/Async/Context.php)
-* [Coroutine Scope](./examples/Async/Scope.php)
-* [Task Group](./examples/Async/TaskGroup.php)
+  * [Async functions](https://github.com/EdmondDantes/php-true-async-rfc/tree/main/examples/Async/Async.php)
+  * [Coroutine](https://github.com/EdmondDantes/php-true-async-rfc/tree/main/examples/Async/Coroutine.php)
+  * [Coroutine Context](https://github.com/EdmondDantes/php-true-async-rfc/tree/main/examples/Async/Context.php)
+  * [Coroutine Scope](https://github.com/EdmondDantes/php-true-async-rfc/tree/main/examples/Async/Scope.php)
+  * [Task Group](https://github.com/EdmondDantes/php-true-async-rfc/tree/main/examples/Async/TaskGroup.php)
 
 ===== Backward Incompatible Changes =====
 
@@ -3919,7 +3840,7 @@ No new constants are introduced.
 
 ==== php.ini Defaults ====
 
-No changes are made to the default settings.
+	* async.zombie_coroutine_timeout - default 5 seconds
 
 ===== Open Issues =====
 None.
