@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pdo;
 
+use function Async\coroutineContext;
 use function Async\currentContext;
 
 final class DataBase
@@ -19,7 +20,7 @@ final class DataBase
     
     private function connection(): PdoProxy
     {
-        $context = currentContext();
+        $context = coroutineContext();
         
         if (!$context->has($this->connectionKey)) {
             $context->set($this->connectionKey, new PdoProxy($this->pool->borrow(), $this->pool));
