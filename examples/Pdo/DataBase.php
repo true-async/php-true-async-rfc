@@ -17,11 +17,13 @@ final class DataBase
         $this->connectionKey = new \stdClass();
     }
     
-    private function connection(): PdoProxy
+    public function getConnectionFromContext(): PdoProxy
     {
         $context = coroutineContext();
         
-        if (!$context->has($this->connectionKey)) {
+        if ($context->has($this->connectionKey)) {
+            $context->get($this->connectionKey);
+        } else {
             $context->set($this->connectionKey, new PdoProxy($this->pool->borrow(), $this->pool));
         }
         
@@ -30,6 +32,6 @@ final class DataBase
     
     public function getConnection(): PdoProxy
     {
-        return $this->connection();
+        return new PdoProxy($this->pool->borrow(), $this->pool);
     }
 }
