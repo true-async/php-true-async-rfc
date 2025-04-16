@@ -36,23 +36,21 @@ This **RFC** is quite complex due to the number of logical connections.
 Please use the diagrams from the table to simplify understanding.
 
 | Diagram Name                                                  | Description                                                                                  |
-|---------------------------------------------------------------|----------------------------------------------------------------------------------------------|
-| [mind-map](diagrams/mind-map.svg)                             | A mind map showing the relationship between key features and problems solved by the **RFC**. |
-| [feature-to-requirement](diagrams/feature-to-requirement.svg) | Maps features to the requirements that generated them.                                       |
-| [decision-tree](diagrams/decision-tree.svg)                   | A decision tree that guides developers on which API to use depending on the situation.       |
+| [[https://github.com/EdmondDantes/php-true-async-rfc/blob/main/diagrams/mind-map.svg]]                            | A mind map showing the relationship between key features and problems solved by the **RFC**. |
+| [[https://github.com/EdmondDantes/php-true-async-rfc/blob/main/diagrams/feature-to-requirement.svg]]| Maps features to the requirements that generated them.                                       |
+| https://github.com/EdmondDantes/php-true-async-rfc/blob/main/diagrams/decision-tree.svg                   | A decision tree that guides developers on which API to use depending on the situation.       |
 
 ==== Overview ====
 
 === Short glossary ===
 
 | Term                       | Description                                                                    | Section                                                                                     |
-|----------------------------|--------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------|
-| **Coroutine**              | An executable unit of code that can be suspended and resumed                   | [Launching any function in non-blocking mode](#launching-any-function-in-non-blocking-mode) |
-| **Scope**                  | A container for managing the lifecycle of coroutines                           | [Scope](#coroutine-scope)                                                                   |
-| **TaskGroup**              | A container for managing a group of tasks with the ability to retrieve results | [TaskGroup](#taskgroup)                                                                     |
-| **Zombie coroutine**       | A coroutine that continues execution after its Scope has been destroyed        | [Scope disposal](#scope-disposal)                                                           |
-| **Context**                | A data storage associated with a coroutine or Scope                            | [Context API](#context-api)                                                                 |
-| **CancellationException**  | A mechanism for cooperative canceling coroutine execution                      | [Cancellation](#cancellation)                                                               |
+| **Coroutine**              | An executable unit of code that can be suspended and resumed                   | Launching any function in non-blocking mode |
+| **Scope**                  | A container for managing the lifecycle of coroutines                           | Scope                                                                   |
+| **TaskGroup**              | A container for managing a group of tasks with the ability to retrieve results | TaskGroup                                                                     |
+| **Zombie coroutine**       | A coroutine that continues execution after its Scope has been destroyed        | Scope disposal                                                           |
+| **Context**                | A data storage associated with a coroutine or Scope                            | Context API                                                                 |
+| **CancellationException**  | A mechanism for cooperative canceling coroutine execution                      | Cancellation                                                               |
 
 This **RFC** describes the **API** and **new syntax** for writing concurrent code in PHP, which includes:
 
@@ -496,7 +494,6 @@ This state diagram illustrates the lifecycle of a coroutine, showing how it tran
 === `Coroutine` state check methods ===
 
 | Method                            | Description                                              | Related State on Diagram     |
-|-----------------------------------|----------------------------------------------------------|------------------------------|
 | `isStarted(): bool`               | Returns `true` if the coroutine has been started.        | `Running`, `Suspended`, etc. |
 | `isRunning(): bool`               | Returns `true` if the coroutine is currently running.    | `Running`                    |
 | `isQueued(): bool`                | Returns `true` if the coroutine is queued.               | `Queued`                     |
@@ -1125,7 +1122,6 @@ so using them multiple times in an `await` expression will always yield the same
 **Comparison of Different Awaitable Classes:**
 
 |                                    | Coroutine | TaskGroup | Future | Cancellation |
-|------------------------------------|-----------|-----------|--------|--------------|
 | Supports multiple state changes    | No        | Yes       | No     | No           |
 | Multiple await returns same result | Yes       | No        | Yes    | Yes          |
 | Can capture result                 | Yes       | Yes       | Yes    | No           |
@@ -1885,7 +1881,6 @@ or implicitly when the `Scope` object loses its last reference.
 There are three available strategies for `Scope` termination:
 
 | **Method**            |                                              |
-|-----------------------|----------------------------------------------|
 | `disposeSafely`       | Marks as zombie coroutines, does not cancel  |
 | `dispose`             | Cancels with a warning                       |
 | `disposeAfterTimeout` | Issues a warning, then cancels after a delay |
@@ -2712,7 +2707,6 @@ Please see [Error Handling](#error-handling) for more details.
 === TaskGroup vs Scope ===
 
 | Feature                             | TaskGroup                                 | Scope                                              |
-|-------------------------------------|-------------------------------------------|----------------------------------------------------|
 | **Purpose**                         | Manages a group of explicitly added tasks | Manages lifetime and hierarchy of all child tasks  |
 | **Task Addition**                   | Only via `spawn with $taskGroup`          | Any coroutine in current scope is added implicitly |
 | **Result Capturing**                | Can capture task results (optional)       | Does not capture results                           |
@@ -2866,7 +2860,6 @@ The `Async\Context` class defines three groups of methods:
 * Methods for modifying or removing keys in the current context
 
 | Method                                                                | Description                                             |
-|-----------------------------------------------------------------------|---------------------------------------------------------|
 | `find(string\|object $key): mixed`                                    | Find a value by key in the current or parent Context.   |
 | `get(string\|object $key): mixed`                                     | Get a value by key in the current Context.              |
 | `has(string\|object $key): bool`                                      | Check if a key exists in the current Context.           |
@@ -3089,7 +3082,6 @@ The destructor will be called, and the connection will automatically return to t
 The following functions allow combining `Awaitable` objects or capturing errors from `Awaitable` objects:
 
 | Function                                                | Description                                                               |
-|---------------------------------------------------------|---------------------------------------------------------------------------|
 | `any(iterable $triggers)`                               | Triggers if at least one `Awaitable` completes successfully               |
 | `all(iterable $triggers)`                               | Triggers when all `Awaitable` objects have completed                      |
 | `anyOf(int $count, iterable $triggers)`                 | Triggers when at least `$count` `Awaitable` objects have completed        |
@@ -3862,7 +3854,6 @@ or it can terminate it without the possibility of resumption (depending on the i
 The `Coroutine` class implements methods for inspecting the state of a coroutine.
 
 | Method                                 | Description                                                                                                                                                                                            |
-|----------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | **`getSpawnFileAndLine():array`**      | Returns an array of two elements: the file name and the line number where the coroutine was spawned.                                                                                                   |
 | **`getSpawnLocation():string`**        | Returns a string representation of the location where the coroutine was spawned, typically in the format `"file:line"`.                                                                                |
 | **`getSuspendFileAndLine():array`**    | Returns an array of two elements: the file name and the line number where the coroutine was last suspended. If the coroutine has not been suspended, it may return `['',0]`.                           |
@@ -3976,11 +3967,6 @@ This would make the API more consistent.
 ===== Proposed Voting Choices =====
 Yes or no vote.  2/3 required to pass.
 
-<doodle title="Accept PHP syntax changes?" auth="crell" voteType="single" closed="true">
-   * Yes
-   * No
-</doodle>
-
 <doodle title="Accept True Async RFC?" auth="crell" voteType="single" closed="true">
    * Yes
    * No
@@ -4001,11 +3987,11 @@ Links to external references, discussions or RFCs
 
 Additional links:
 
-* [Comparison of concurrency models in programming languages](https://github.com/EdmondDantes/php-true-async-rfc/blob/main/comparison.md)
-* [Cooperative cancellation](https://alejandromp.com/development/blog/the-importance-of-cooperative-cancellation/)
-* [Understanding Concurrency Bugs in Real-World Programs with Kotlin Coroutines](https://pure.tudelft.nl/ws/portalfiles/portal/222760871/LIPIcs.ECOOP.2024.8.pdf)
-* [Understanding Real-World Concurrency Bugs in Go](https://dl.acm.org/doi/10.1145/3297858.3304069)
-* [Static Analysis for Asynchronous JavaScript Programs](https://arxiv.org/abs/1901.03575)
+* [[https://github.com/EdmondDantes/php-true-async-rfc/blob/main/comparison.md|Comparison of concurrency models in programming languages]]
+* [[https://alejandromp.com/development/blog/the-importance-of-cooperative-cancellation/|Cooperative cancellation]]
+* [[https://pure.tudelft.nl/ws/portalfiles/portal/222760871/LIPIcs.ECOOP.2024.8.pdf|Understanding Concurrency Bugs in Real-World Programs with Kotlin Coroutines]]
+* [[https://dl.acm.org/doi/10.1145/3297858.3304069|Understanding Real-World Concurrency Bugs in Go]]
+* [[https://arxiv.org/abs/1901.03575|Static Analysis for Asynchronous JavaScript Programs]]
 
 The following can be considered as competing solutions to the current implementation:
 
