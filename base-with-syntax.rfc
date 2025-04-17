@@ -58,11 +58,11 @@ This **RFC** describes the **API** and **new syntax** for writing concurrent cod
 A lightweight execution thread that can be suspended (''suspend'') and resumed.
 Example:
 <code php>
-spawn(function() {
+spawn {
     echo "Start";
     suspend;  // Suspend the coroutine
     echo "Resumed";
-}););
+};
 </code>
 
 === Scope ===
@@ -70,11 +70,11 @@ A container that manages coroutine lifetimes.
 Example:
 <code php>
 $scope = new Async\Scope();
-$scope->spawn(function() {
+spawn with $scope {
     // Coroutine bound to $scope
-    spawn(function() {
+    spawn {
         // Coroutine bound to $scope
-    }););;
+    };
 };
 // Dispose of the scope after 5 seconds
 sleep(5);
@@ -86,19 +86,19 @@ Explicit group of coroutines with centralized result/error handling.
 Example:
 <code php>
 $taskGroup = new Async\TaskGroup(captureResults: true);
-$taskGroup->spawn(task1(...));
-$taskGroup->spawn(task2(...));
-[$result1, $result2] = await($taskGroup);
+spawn with $taskGroup task1();
+spawn with $taskGroup task2();
+[$result1, $result2] = await $taskGroup;
 </code>
 
 === Cooperative cancellation ===
 A special exception that implements cooperative cancellation:
 Example:
 <code php>
-$coroutine = spawn(function() {
+$coroutine = spawn {
     try {
         Async\delay(1000);
-    });); catch (Async\CancellationException $e) {
+    } catch (Async\CancellationException $e) {
         echo "Coroutine cancelled";
     }
 };
@@ -113,30 +113,30 @@ Coroutine/Scope-associated data storage.
 Example:
 <code php>
 currentContext()->set('user_id', 123);
-spawn(function() {
+spawn {
     $userId = currentContext()->get("user_id");
     echo "User ID: $userId"; // 123
-}););;
+};
 </code>
 
 === Combinators ===
 Group awaitable objects like ''any()'', ''all()'', ''ignoreError()''.
 Example:
 <code php>
-$results = await(Async\all([spawn(task1(...)), spawn(task2(...))]));
+$results = await Async\all([spawn task1(), spawn task2()]);
 </code>
 
 === Non-blocking versions of built-in PHP functions: ===
 <code php>
-spawn(function() {
+spawn {
     $result = file_get_contents("file.txt");
 
     if($result === false) {
         echo "Error reading file.txt\n";
-    }););
+    }
 
     echo "File content: $result\n";
-});
+};
 
 echo "Next line\n";
 </code>
@@ -161,28 +161,28 @@ function fetchData(string $file): string
 
     return $result;
 }
-echo await(spawn(fetchData(...), "file.txt"));
+echo await spawn fetchData("file.txt");
 </code>
 
 === Awaiting a result with cancellation ===
 
 <code php>
-echo await(spawn('fetchData', "https://php.net/"), Async\timeout(2000));
-echo await(spawn('fetchData', "https://php.net/"), spawn('sleep', 2));
+echo await spawn fetchData("https://php.net/") until Async\timeout(2000);
+echo await spawn fetchData("https://php.net/") until spawn sleep(2);
 </code>
 
-=== Suspend ===
+=== Suspend statement ===
 
 Transferring control from the coroutine to the ''Scheduler'':
 
 <code php>
 function myFunction(): void {
     echo "Hello, World!\n";
-    Async\suspend();
+    suspend;
     echo "Goodbye, World!\n";
 }
 
-Async\spawn(myFunction(...));
+spawn myFunction();
 echo "Next line\n";
 </code>
 
@@ -202,10 +202,10 @@ function mergeFiles(string ...$files): string
     $taskGroup = new Async\TaskGroup(captureResults: true);
 
     foreach ($files as $file) {
-       $taskGroup->spawn(file_get_contents(...), $file);
+       spawn with $taskGroup file_get_contents($file);
     }
 
-    return array_merge("\n", await($taskGroup));
+    return array_merge("\n", await $taskGroup);
 }
 </code>
 
@@ -226,10 +226,10 @@ function getUserProfile(int $userId): array
 
     try {
         // Start fetching basic user information
-        $profileTasks->spawn(function() use ($userId):array {
-            $userData = await spawn('fetchUserData', $userId);
+        spawn with $profileTasks use ($userId):array {
+            $userData = await spawn fetchUserData($userId);
             return ['basic' => $userData];
-        });
+        };
 
         // Start fetching extended details in parallel
         spawn with $profileTasks use ($userId) {
@@ -239,7 +239,7 @@ function getUserProfile(int $userId): array
             // Request user orders with 2-second timeout
             spawn with $orderTasks use ($userId): array {
                 try {
-                    return ['orders' => await spawn('fetchUserOrders', $userId) until timeout(2000)];
+                    return ['orders' => await spawn fetchUserOrders($userId) until timeout(2000)];
                 } catch (AwaitCancelledException) {
                     return ['orders' => ['status' => 'timeout']];
                 }
@@ -248,23 +248,23 @@ function getUserProfile(int $userId): array
             // Request API2 user orders with 2-second timeout
             spawn with $orderTasks use ($userId): array {
                 try {
-                    return ['orders2' => await spawn('fetchUserOrdersAPI2', $userId) until timeout(2000)];
+                    return ['orders2' => await spawn fetchUserOrdersAPI2($userId) until timeout(2000)];
                 } catch (AwaitCancelledException) {
                     return ['orders2' => ['status' => 'timeout']];
                 }
             };
 
             // Wait for all order tasks to complete
-            return array_merge(...await($orderTasks));
+            return array_merge(...await $orderTasks);
         };
 
         // Request user settings
         spawn with $profileTasks use ($userId): array {
-          return ['settings' => await spawn('fetchUserSettings', $userId)];
+          return ['settings' => await spawn fetchUserSettings($userId)];
         };
 
         // Merge all results into a single profile
-        return array_merge(...await($profileTasks));
+        return array_merge(...await $profileTasks);
 
     } catch (Exception $e) {
         // Error handling
@@ -274,7 +274,7 @@ function getUserProfile(int $userId): array
 }
 
 // Usage
-$profile = await spawn(getUserProfile(), 123);
+$profile = await spawn getUserProfile(123);
 var_dump($profile);
 </code>
 
@@ -286,7 +286,7 @@ function processBackgroundJobs(string ...$jobs): array
     $scope = new Scope();
 
     foreach ($jobs as $job) {
-        $scope->spawn(processJob(...), $job);
+        spawn with $scope processJob($job);
     }
 
     // Waiting for all child tasks throughout the entire depth of the hierarchy.
@@ -295,8 +295,8 @@ function processBackgroundJobs(string ...$jobs): array
 
 function processJob(mixed $job): void {
     $scope = \Async\Scope::inherit();
-    $scope->spawn(task1(...), $job);
-    $scope->spawn(task2(...), $job);
+    spawn $scope task1($job);
+    spawn $scope task2($job);
 
     // Waiting for all child tasks in the current scope.
     $scope->awaitCompletion(Async\timeout(300 * 1000));
@@ -317,9 +317,9 @@ class HttpClient
 
     public function request(array $data): \Async\Awaitable
     {
-        return $this->scope->spawn(function use($data) {
+        return spawn with $this->scope use($data) {
             // This coroutine is bound to the MyClass instance
-        });
+        };
     }
 }
 
@@ -339,11 +339,11 @@ function fetchFirstSuccessful(string ...$apiHosts): string
     $taskGroup = new Async\TaskGroup(captureResults: false);
 
     foreach ($apiHosts as $host) {
-        $taskGroup->spawn(file_get_contents(...), $host);
+        spawn with $taskGroup file_get_contents($host);
     }
 
     // Get the first successful result
-    return await($taskGroup->race(ignoreErrors: true));
+    return await $taskGroup->race(ignoreErrors: true);
 }
 </code>
 
@@ -498,7 +498,7 @@ This code:
   2. then executes the ''echo'' statement.
 
 <code php>
-$coroutine = spawn('file_get_contents', 'https://php.net');
+$coroutine = spawn file_get_contents('https://php.net');
 echo "next line".__LINE__."\n";
 </code>
 
@@ -528,7 +528,7 @@ spawn [with <scope>] [static] [use(<parameters>)][: <returnType>] {
 - call a standard PHP function:
 
 <code php>
-spawn('file_get_contents', 'file1.txt');
+spawn file_get_contents('file1.txt');
 </code>
 
 - call a user-defined function:
@@ -538,7 +538,7 @@ function example(string $name): void {
     echo "Hello, $name!";
 }
 
-spawn('example', 'World');
+spawn example('World');
 </code>
 
 - call a static method:
@@ -627,7 +627,7 @@ class Spawn {} // <- Allowed
 The ''spawn'' expression cannot appear before ''namespace'' or ''use'' declarations:
 
 <code php>
-spawn('myFunction', ); // <- Not allowed
+spawn myFunction(); // <- Not allowed
 namespace MyNamespace;
 use MyNamespace\MyClass;
 </code>
@@ -647,7 +647,7 @@ spawn [with <scope>] [static] [use(<parameters>)[: <returnType>]] {
 <code php>
 $file = 'main.log';
 
-spawn('use', $file): string {
+spawn use($file): string {
     $result = file_get_contents($file);
 
     if($result === false) {
@@ -661,15 +661,15 @@ spawn('use', $file): string {
 - short form:
 
 <code php>
-spawn(function() {
+spawn {
     return file_get_contents('main.log');
-}););;
+};
 </code>
 
 - with return type:
 
 <code php>
-spawn('use', ):string {
+spawn use():string {
     return file_get_contents('main.log');
 };
 </code>
@@ -787,9 +787,9 @@ class CustomTaskGroup implements ScopeProvider
 This allows you to spawn coroutines into the task group using:
 
 <code php>
-$taskGroup->spawn(function() {
+spawn with $taskGroup {
     // This coroutine is bound to the TaskGroup's scope
-});;
+};
 </code>
 
 === ''SpawnStrategy'' Interface ===
@@ -846,9 +846,9 @@ class CustomTaskGroup implements Async\SpawnStrategy
 
 $customTaskGroup = new CustomTaskGroup();
 
-$customTaskGroup->spawn(function() {
+spawn with $customTaskGroup {
     // This coroutine will be automatically added to the custom task group
-});;
+};
 </code>
 
 The ''beforeCoroutineEnqueue()'' method is called after the coroutine has been created,
@@ -885,13 +885,13 @@ The ''Async\hiPriority(?Scope $scope = null)'' function allows launching a corou
 <code php>
 use function Async\hiPriority;
 
-spawn(function() {
+spawn {
     echo "normal priority\n";
-});
+};
 
-spawnWith(hiPriority(), function {
+spawn with hiPriority() {
     echo "high priority\n";
-});
+};
 </code>
 
 **Expected output:**
@@ -919,12 +919,12 @@ A coroutine can suspend itself at any time using the ''suspend'' keyword:
 <code php>
 function example(string $name): void {
     echo "Hello, $name!";
-    Async\suspend();
+    suspend;
     echo "Goodbye, $name!";
 }
 
-spawn('example', 'World');
-spawn('example', 'Universe');
+spawn example('World');
+spawn example('Universe');
 </code>
 
 Expected output:
@@ -936,25 +936,61 @@ Goodbye, World!
 Goodbye, Universe!
 </code>
 
-**Basic usage:**
+**Basic syntax:**
 
 <code php>
-    Async\suspend();
+    suspend;
 </code>
 
-The ''suspend'' can be used in any function including from the **main execution flow**:
+**Wrong use:**
+
+<code php>
+    // not part of the expression
+    suspend + $any;
+    // not parameter
+    my_function(suspend);
+</code>
+
+The ''suspend'' statement is considered executable code.
+Therefore, it **MUST NOT** appear before any use or namespace declarations at the top-level scope:
+
+<code php>
+suspend; // <- Not allowed
+namespace MyNamespace;
+suspend; // <- Not allowed
+use MyNamespace\MyClass;
+</code>
+
+The ''suspend'' keyword must not conflict with a function name, class name, or constant:
+
+<code php>
+function suspend(): void { // <- Allowed
+
+}
+
+const SUSPEND = 1; // <- Allowed
+
+class Suspend { // <- Allowed
+}
+</code>
+
+The ''suspend'' keyword can be used only for the current coroutine.
+
+The ''suspend'' keyword has no parameters and does not return any values, unlike the ''yield'' keyword.
+
+The ''suspend'' keyword can be used in any function including from the **main execution flow**:
 
 <code php>
 function example(string $name): void {
     echo "Hello, $name!";
-    Async\suspend();
+    suspend;
     echo "Goodbye, $name!";
 }
 
-$coroutine = spawn(example(...), 'World');
+$coroutine = spawn example('World');
 
 // suspend the main flow
-Async\suspend();
+suspend;
 
 echo "Back to the main flow";
 </code>
@@ -982,7 +1018,7 @@ function example(string $name): void {
     echo "Goodbye, $name!";
 }
 
-$coroutine = spawn('example', 'World');
+$coroutine = spawn example('World');
 
 // pass control to the coroutine
 suspend;
@@ -1085,11 +1121,11 @@ function readFile(string $fileName):string
     return $result;
 }
 
-$coroutine = spawn(readFile(...), 'file1.txt');
+$coroutine = spawn readFile('file1.txt');
 
-echo await($coroutine);
+echo await $coroutine;
 // or
-echo await spawn(readFile(...), 'file2.txt');
+echo await spawn readFile('file2.txt');
 </code>
 
 ''await'' suspends the execution of the current coroutine until
@@ -1101,7 +1137,7 @@ function testException(): void {
 }
 
 try {
-    await(spawn(testException(...)));
+    await spawn testException();
 } catch (Exception $e) {
     echo "Caught exception: ", $e->getMessage();
 }
@@ -1124,16 +1160,16 @@ try {
 - A variable of the ''Awaitable'' interface
 
 <code php>
-    $readFileJob = spawn('file_get_contents', 'file1.txt');
+    $readFileJob = spawn file_get_contents('file1.txt');
 
-    $result = await($readFileJob);
+    $result = await $readFileJob;
 </code>
 
 - A function that returns an ''Async\Awaitable'' object:
 
 <code php>
     function getContentsJobStarter(string $fileName): \Async\Coroutine {
-        return spawn('file_get_contents', $fileName);
+        return spawn file_get_contents($fileName);
     }
 
     $result = await getContentsJobStarter('file1.txt');
@@ -1142,7 +1178,7 @@ try {
 - A new coroutine:
 
 <code php>
-    $result = await spawn('file_get_contents', 'file1.txt');
+    $result = await spawn file_get_contents('file1.txt');
 </code>
 
 - A new Awaitable object:
@@ -1161,14 +1197,14 @@ try {
 
 <code php>
     $service = new Mailer();
-    $result = await($service)->sendMail("test@mail.com", "Hello!");
+    $result = await $service->sendMail("test@mail.com", "Hello!");
 </code>
 
 - A method of a class:
 
 <code php>
     $serviceClass = 'Mailer';
-    $result = await($serviceClass)::sendAll();
+    $result = await $serviceClass::sendAll();
 </code>
 
 - A valid expression:
@@ -1181,9 +1217,9 @@ The ''await'' expression can be used just like any other expression together wit
 
 <code php>
 
-    $coroutine = spawn(function() {...}););;
+    $coroutine = spawn {...};
 
-    if(await($coroutine) === true) {
+    if(await $coroutine === true) {
         echo "Success";
     } else {
         echo "Failure";
@@ -1256,14 +1292,14 @@ await all([...]) until timeout(5);
 
 <code php>
     $cancellation = Async\timeout(5000);
-    $result = await($coroutine, $cancellation);
+    $result = await $coroutine until $cancellation;
 </code>
 
 - A function that returns an ''Awaitable'' object
 
 <code php>
     function getCancellation(): \Async\Awaitable {
-        return spawn('sleep', 5);
+        return spawn sleep(5);
     }
 
     $result = await $coroutine until getCancellation();
@@ -1272,7 +1308,7 @@ await all([...]) until timeout(5);
 - A new coroutine
 
 <code php>
-    $result = await $coroutine until spawn('sleep', 5);
+    $result = await $coroutine until spawn sleep(5);
 </code>
 
 === Using Coroutines with ''until'' ===
@@ -1289,7 +1325,7 @@ function cancellationToken(): void {
 }
 
 try {
-    await spawn('sleep', 5) until spawn('cancellationToken', );
+    await spawn sleep(5) until spawn cancellationToken();
 } catch (Exception $exception) {
     echo "Caught exception: ", $exception->getMessage();
 }
@@ -1355,17 +1391,17 @@ to apply context-dependent constraints to them.
 By default, all coroutines are associated with the **Global Coroutine Scope**:
 
 <code php>
-spawn('file_get_contents', 'file1.txt'); // <- global scope
+spawn file_get_contents('file1.txt'); // <- global scope
 
 function readFile(string $file): void {
     return file_get_contents($file); // <- global scope
 }
 
 function mainTask(): void { // <- global scope
-    spawn('readFile', 'file1.txt'); // <- global scope
+    spawn readFile('file1.txt'); // <- global scope
 }
 
-spawn('mainTask', ); // <- global scope
+spawn mainTask(); // <- global scope
 </code>
 
 If an application never creates **custom Scopes**, its behavior is similar to coroutines in ''Go'':
@@ -1384,16 +1420,16 @@ use Async\Scope;
 
 $scope = new Scope();
 
-$scope->spawn(function() { // <- new scope
+spawn with $scope { // <- new scope
 
     echo "Sibling task 1\n";
 
-    spawn(function() { // <- $scope is current scope
+    spawn { // <- $scope is current scope
         echo "Sibling task 2\n";
 
-        spawn(function() { // <- $scope is current scope
+        spawn { // <- $scope is current scope
             echo "Sibling task 3\n";
-        });
+        };
     };
 };
 
@@ -1459,16 +1495,16 @@ use Async\Scope;
 
 $scope = new Scope();
 
-$scope->spawn(function() {
+spawn with $scope {
 
     echo "Sibling task 1\n";
 
-    spawn(function() {
+    spawn {
         echo "Sibling task 2\n";
 
-        spawn(function() {
+        spawn {
             echo "Sibling task 3\n";
-        }););;
+        };
     };
 };
 
@@ -1498,11 +1534,11 @@ use Async\Scope;
 
 $scope = new Scope();
 
-$scope->spawn(function() {
-    spawn(function() {
-        spawn(function() {
+spawn with $scope {
+    spawn {
+        spawn {
             throw new Exception("Error occurred");
-        }););;
+        };
     };
 };
 
@@ -1550,10 +1586,10 @@ use the special method ''awaitAfterCancellation'', which is designed for this ca
 <code php>
 $scope = new Scope();
 
-spawn(function() {
+spawn {
     try {
         $scope->awaitCompletion(Async\signal(SIGTERM));
-    });); catch (\Async\CancellationException $exception) {
+    } catch (\Async\CancellationException $exception) {
         $scope->awaitAfterCancellation();
         echo "Caught exception: ",$exception->getMessage()."\n";
     }
@@ -1721,10 +1757,10 @@ function socketServer(): void
     try {
        // The main coroutine that listens for incoming connections
        // The server runs as long as this coroutine is running.
-       await($scope)->spawn(function() {
+       await spawn with $scope {
            while ($socket = stream_socket_accept($serverSocket, 0)) {
                connectionHandler($socket);
-           });
+           }
        };
     } catch (\Throwable $exception) {
         echo "Server error: ", $exception->getMessage(), "\n";
@@ -1793,16 +1829,16 @@ use function Async\Scope\delay;
 
 $scope = new Scope();
 
-$scope->spawn(function() {
-    spawn(function() {
+spawn with $scope {
+    spawn {
         delay(1000);
         echo "Task 1\n";
-    }););;
+    };
 
-    spawn(function() {
+    spawn {
         delay(2000);
         echo "Task 2\n";
-    }););;
+    };
 };
 
 $scope->cancel();
@@ -1843,15 +1879,15 @@ use function Async\Scope\delay;
 $scope = new Scope();
 
 await spawn in $scope {
-    spawn(function() {
+    spawn {
         delay(1000);
         echo "Task 1\n";
-    }););;
+    };
 
-    spawn(function() {
+    spawn {
         delay(2000);
         echo "Task 2\n";
-    }););;
+    };
 
     echo "Root task\n";
 };
@@ -1888,15 +1924,15 @@ use function Async\Scope\delay;
 $scope = new Scope();
 
 await spawn in $scope {
-    spawn(function() {
+    spawn {
         delay(1000);
         echo "Task 1\n";
-    }););;
+    };
 
-    spawn(function() {
+    spawn {
         delay(2000);
         echo "Task 2\n";
-    }););;
+    };
 
     echo "Root task\n";
 };
@@ -1933,12 +1969,12 @@ class Service
     public function run(): void {
         spawn with $this->scope {
 
-            spawn(function() {
+            spawn {
                 delay(1000);
                 echo "Task 2\n";
                 delay(5000);
                 echo "Task 2 next line never executed\n";
-            }););;
+            };
 
             echo "Task 1\n";
         };
@@ -1989,15 +2025,15 @@ Attempting to launch a coroutine with this Scope will result in a fatal exceptio
 <code php>
 $scope = new Scope();
 
-$scope->spawn(function() {
+spawn with $scope {
     echo "Task 1\n";
-});;
+};
 
 $scope->cancel();
 
-$scope->spawn(function() { // <- Fatal error
+spawn with $scope { // <- Fatal error
     echo "Task 2\n";
-});;
+};
 </code>
 
 ==== Error detection ====
@@ -2021,12 +2057,12 @@ The following scenarios are considered potentially erroneous:
 **PHP** will respond to such situations by issuing **warnings**, including debug information about the involved coroutines.
 Developers are expected to write code in a way that avoids triggering these warnings.
 
-An attempt to use the expression ''await($coroutine)'' from within the same coroutine throws an exception.
+An attempt to use the expression ''await $coroutine'' from within the same coroutine throws an exception.
 
 <code php>
 $coroutine = null;
-$coroutine = spawn('use', &$coroutine) {
-    await($coroutine); // <- Fatal error: A coroutine cannot await itself. Coroutine spawned at ...
+$coroutine = spawn use(&$coroutine) {
+    await $coroutine; // <- Fatal error: A coroutine cannot await itself. Coroutine spawned at ...
 };
 </code>
 
@@ -2134,7 +2170,7 @@ final class ProcessPool
     {
         while (true) {
             try {
-                await($this)->pool;
+                await $this->pool;
             } catch (StopProcessException $exception)  {
                 echo "Process was stopped with message: {$exception->getMessage()}\n";
 
@@ -2194,10 +2230,10 @@ function mergeFiles(string ...$files): string
        spawn with $taskGroup file_get_contents($file);
     }
 
-    return array_merge("\n", await($taskGroup));
+    return array_merge("\n", await $taskGroup);
 }
 
-echo await spawn('mergeFiles', ['file1.txt', 'file2.txt', 'file3.txt']);
+echo await spawn mergeFiles(['file1.txt', 'file2.txt', 'file3.txt']);
 </code>
 
 === Motivation ===
@@ -2248,7 +2284,7 @@ use Async\Scope;
 use Async\TaskGroup;
 
 function task1() {
-    spawn('subtask', );
+    spawn subtask();
 }
 
 $scope = new Scope();
@@ -2286,11 +2322,11 @@ if the reference count to ''$scope'' is greater than one.
 
 The ''TaskGroup'' class implements the ''Awaitable'' interface,
 so it can be used with the ''await'' expression.
-The ''await($taskGroup)'' expression captures both the results of execution
+The ''await $taskGroup'' expression captures both the results of execution
 and any exceptions that occur in the tasks.
 
 If the constructor option ''captureResults: true'' is specified,
-then the ''await($taskGroup)'' expression will return the results of all tasks that were added to the group.
+then the ''await $taskGroup'' expression will return the results of all tasks that were added to the group.
 If the results are no longer needed, the ''TaskGroup::disposeResults()'' method should be used to discard them.
 
 <code php>
@@ -2304,17 +2340,17 @@ function processInBatches(array $files, int $limit): array
         spawn with $taskGroup file_get_contents($file);
 
         if (++$count >= $limit) {
-            $allResults = [...$allResults, ...await($taskGroup)];
+            $allResults = [...$allResults, ...await $taskGroup];
             $taskGroup->disposeResults();
             $count = 0;
         }
     }
 
-    $allResults = [...$allResults, ...await($taskGroup)];
+    $allResults = [...$allResults, ...await $taskGroup];
     return $allResults;
 }
 
-$results = await spawn('processInBatches', ['file1.txt', 'file2.txt', 'file3.txt', 'file4.txt'], limit: 2);
+$results = await spawn processInBatches(['file1.txt', 'file2.txt', 'file3.txt', 'file4.txt'], limit: 2);
 echo implode("\n", $results);
 </code>
 
@@ -2366,9 +2402,9 @@ use Async\TaskGroup;
 
 function targetTask(int $i): void
 {
-    spawn(function() {
+    spawn {
         // subtask should be added to the same scope
-    }););;
+    };
 }
 
 $taskGroup = new TaskGroup(scope: new Scope(), captureResults: true);
@@ -2378,13 +2414,13 @@ for($i = 0; $i < 10; $i++) {
 }
 
 // wait for only the tasks that were added to the TaskGroup
-$results = await($taskGroup);
+$results = await $taskGroup;
 </code>
 
-The expression ''await($taskGroup)'' will wait only for the completion of the target tasks
+The expression ''await $taskGroup'' will wait only for the completion of the target tasks
 that were explicitly added to the ''TaskGroup''.
 
-The result of ''await($taskGroup)'' will include the outcomes of all coroutines from the ''TaskGroup'',
+The result of ''await $taskGroup'' will include the outcomes of all coroutines from the ''TaskGroup'',
 but not of other **implicit** coroutines that were created during the execution of ''targetTask()''.
 
 Once ''$taskGroup'' is destroyed, the ''Scope'' it references will also be disposed of,
@@ -2396,11 +2432,11 @@ The reverse is also true: if the ''Scope'' is disposed, the associated ''TaskGro
 <code php>
 $scope = new Async\Scope();
 $taskGroup = new Async\TaskGroup(scope: $scope, captureResults: false);
-$taskGroup->spawn(function() {
+spawn with $taskGroup {
     // this task will be added to the task group
     Async\delay(1000);
     echo "This line will be executed\n";
-});;
+};
 
 sleep(1);
 $scope->dispose();
@@ -2441,7 +2477,7 @@ function fetchFirstSuccessful(string ...$apiHosts): string
         });
     }
 
-    return await($taskGroup)->race(ignoreErrors: true);
+    return await $taskGroup->race(ignoreErrors: true);
 }
 </code>
 
@@ -2472,18 +2508,18 @@ use Async\Scope;
 
 $taskGroupParent = new TaskGroup(captureResults: false);
 
-$taskGroupParent->spawn(function() {
+spawn with $taskGroupParent {
     $taskGroupChild = new TaskGroup(Scope::inherit(), captureResults: false);
 
-    $taskGroupChild->spawn(function() {
+    spawn with $taskGroupChild {
         // this task will be added to the child task group
-    });;
+    };
 
     // wait for the child task group to finish
-    await($taskGroupChild);
+    await $taskGroupChild;
 };
 
-await($taskGroupParent);
+await $taskGroupParent;
 </code>
 
 **Structure:**
@@ -2509,10 +2545,10 @@ with the only difference being that it allows you to pass a specific exception.
 use Async\TaskGroup;
 
 $taskGroup = new Async\TaskGroup(captureResults: false);
-$taskGroup->spawn(function() {
+spawn with $taskGroup {
     try {
         suspend;
-    }); catch (Throwable $throwable) {
+    } catch (Throwable $throwable) {
         echo "Task was cancelled: ", $throwable->getMessage(), "\n";
     }
 };
@@ -2532,10 +2568,10 @@ Task was cancelled: Custom cancellation message
 === TaskGroup error handling ===
 
 ''TaskGroup'' does not introduce additional logic for handling coroutine exceptions.
-When a developer uses the expression ''await($taskGroup)'', they are capturing the exceptions
+When a developer uses the expression ''await $taskGroup'', they are capturing the exceptions
 of all tasks contained within ''$taskGroup''.
 
-In other words, ''await($taskGroup)'' is equivalent to simultaneously using ''await($coroutine)'' for each task.
+In other words, ''await $taskGroup'' is equivalent to simultaneously using ''await $coroutine'' for each task.
 If no one awaits ''$taskGroup'', the exception handling follows the general ''Flow'',
 and the error will propagate to the ''Scope''.
 
@@ -2559,10 +2595,10 @@ tasks should be filled with ''NULL'' instead.
 
 <code php>
 $taskGroup = new Async\TaskGroup(captureResults: true);
-$taskGroup->spawn(function() {return 'result 1';});
-$taskGroup->spawn(function() {throw new Exception('Error');});
+spawn with $taskGroup {return 'result 1';}
+spawn with $taskGroup {throw new Exception('Error');}
 
-var_dump(await($taskGroup)->all(ignoreErrors: true, nullOnFail: true));
+var_dump(await $taskGroup->all(ignoreErrors: true, nullOnFail: true));
 </code>
 
 **Expected output:**
@@ -2599,16 +2635,16 @@ use Async\TaskGroup;
 
 $taskGroup = new Async\TaskGroup(captureResults: false);
 
-$taskGroup->spawn(function() {
-    spawn(function() { // <- subcoroutine in the same scope
+spawn with $taskGroup {
+    spawn { // <- subcoroutine in the same scope
         throw new Exception('Error in coroutine');
-    }););;
+    };
 
     sleep(1);
 };
 
 try {
-    await($taskGroup);
+    await $taskGroup;
 } catch (Async\CancellationException $exception) {
     echo "Caught exception: ", $exception->getMessage(), "\n";
 }
@@ -2621,7 +2657,7 @@ Caught exception: TaskGroup was cancelled at ...
 </code>
 
 If you need to handle this type of exception, use the ''Scope::setExceptionHandler''
-method before calling ''await($taskGroup)'':
+method before calling ''await $taskGroup'':
 
 <code php>
 use Async\TaskGroup;
@@ -2632,15 +2668,15 @@ $scope->setExceptionHandler(function (Async\Scope $scope, Async\Coroutine $corou
     echo "Caught exception: {$e->getMessage()}\n in coroutine: {$coroutine->getSpawnLocation()}\n";
 });
 
-$taskGroup->spawn(function() {
-    spawn(function() { // <- subcoroutine in the same scope
+spawn with $taskGroup {
+    spawn { // <- subcoroutine in the same scope
         throw new Exception('Error in coroutine');
-    }););;
+    };
 
     sleep(1);
 };
 
-await($taskGroup);
+await $taskGroup;
 </code>
 
 Please see [Error Handling](#error-handling) for more details.
@@ -2716,7 +2752,7 @@ function copyFile(string $sourceFile, string $targetFile): void
             echo "Copy complete.\n";
         };
 
-        await($tasks);
+        await $tasks;
     } finally {
         fclose($source);
         fclose($target);
@@ -2728,7 +2764,7 @@ $copyTasks = new \Async\TaskGroup;
 spawn with $copyTasks copyFile('source.txt', 'target.txt');
 spawn with $copyTasks copyFile('source2.txt', 'target2.txt');
 
-await($copyTasks);
+await $copyTasks;
 </code>
 
 The example creates two task groups: a parent and a child.
@@ -2850,7 +2886,7 @@ function task(): void
 $pdo = new PDO('sqlite::memory:');
 currentContext()->set('pdo', new WeakReference($pdo));
 
-spawn('task', );
+spawn task();
 </code>
 
 ==== Context inheritance ====
@@ -2915,10 +2951,10 @@ function task(): void
 {
     coroutineContext()->set('data', 'This local data');
 
-    spawn(function() {
+    spawn {
          // No data will be found
          echo coroutineContext()->find('data')."\n";
-    }););;
+    };
 }
 </code>
 
@@ -3010,8 +3046,8 @@ function printUser(int $id): void
     print_r($users);
 }
 
-spawn('printUser', 1);
-spawn('printUser', 2);
+spawn printUser(1);
+spawn printUser(2);
 </code>
 
 This code relies on the fact that an instance of the ''ConnectionProxy''
@@ -3040,8 +3076,8 @@ The order of the values matches the order of ''$triggers''.
 use function Async\all;
 
 $results = await all([
-    spawn('fetchUserData', ),
-    spawn('fetchUserSettings', )
+    spawn fetchUserData(),
+    spawn fetchUserSettings()
 ]);
 
 print_r($results);
@@ -3064,9 +3100,9 @@ use function Async\any;
 
 // Returns when at least one API call
 $results = await any([
-    spawn('fetchDataFromAPI1', ),
-    spawn('fetchDataFromAPI2', ),
-    spawn('fetchDataFromAPI3', ),
+    spawn fetchDataFromAPI1(),
+    spawn fetchDataFromAPI2(),
+    spawn fetchDataFromAPI3(),
 ]);
 </code>
 
@@ -3079,9 +3115,9 @@ The ''anyOf'' combinator is used to wait for at least N items from the list:
 <code php>
 // Returns when at least 2 images are loaded
 $results = await Async\anyOf(2, [
-    spawn('loadImage', 'preview.jpg'),
-    spawn('loadImage', 'medium.jpg'),
-    spawn('loadImage', 'full.jpg'),
+    spawn loadImage('preview.jpg'),
+    spawn loadImage('medium.jpg'),
+    spawn loadImage('full.jpg'),
 ]);
 </code>
 
@@ -3096,7 +3132,7 @@ It returns an array with two elements:
 <code php>
 use function Async\captureErrors;
 
-[$result, $errors] = await captureErrors(Async\all([spawn('fetchUserData', ), spawn('fetchUserSettings', )]));
+[$result, $errors] = await captureErrors(Async\all([spawn fetchUserData(), spawn fetchUserSettings()]));
 
 if(empty($errors)) {
     // $result contains successful result
@@ -3115,9 +3151,9 @@ use function Async\ignoreErrors;
 
 // Returns when at least one API call ignores errors
 $results = await ignoreErrors(any([
-    spawn('fetchDataFromAPI1', ),
-    spawn('fetchDataFromAPI2', ),
-    spawn('fetchDataFromAPI3', ),
+    spawn fetchDataFromAPI1(),
+    spawn fetchDataFromAPI2(),
+    spawn fetchDataFromAPI3(),
 ]), fn(Throwable $throwable) => null);
 </code>
 
@@ -3138,7 +3174,7 @@ function getFirstAvailable(array $sources, int $errorTolerance = 0): mixed
 
     while($errors < $errorTolerance) {
         try {
-            return await($trigger);
+            return await $trigger;
         } catch (Exception $e) {
             $errors++;
         }
@@ -3178,10 +3214,10 @@ function processAllUserTasks(int ...$userIds): iterable
 
     while ($taskGroup->isFinished() === false) {
 
-        $user = await($taskGroup)->race();
+        $user = await $taskGroup->race();
 
         foreach ($user['tasks'] ?? [] as $task) {
-            yield spawn('processUserTask', $task);
+            yield spawn processUserTask($task);
         }
     }
 }
@@ -3207,7 +3243,7 @@ use function Async\delay;
 try {
     delay(1000); // suspends the coroutine for 1 second
     // Try to fetch data from the URL within 1 second
-    echo await spawn('file_get_content', 'https://php.net/') until timeout(1000);
+    echo await spawn file_get_content('https://php.net/') until timeout(1000);
 } catch (\Async\AwaitCancelledException) {
     echo "Operation was cancelled by timeout\n";
 } catch (\Async\CancellationException) {
@@ -3245,19 +3281,19 @@ class Supervisor implements Async\SpawnStrategy
 
 $supervisor = new Supervisor();
 
-$supervisor->spawn(function() {
+spawn with $supervisor {
 
-    spawn(function() {
+    spawn {
         echo "This code is not been executed\n";
-    }););
+    }
 
     throw new Exception("Task 1");
 };
 
-$supervisor->spawn(function() {
+spawn with $supervisor {
     // This task will not be canceled
     echo "Task 2\n";
-});;
+};
 </code>
 
 To achieve the desired behavior, the ''Supervisor'' creates each task in a separate child ''Scope''
@@ -3294,9 +3330,9 @@ use Async\Scope;
 
 $scope = new Scope();
 
-$scope->spawn(function() {
+spawn with $scope {
     throw new Exception("Task 1");
-});;
+};
 
 $exception1 = null;
 $exception2 = null;
@@ -3346,9 +3382,9 @@ $scope->setExceptionHandler(function (Async\Scope $scope, Async\Coroutine $corou
     echo "Caught exception: {$e->getMessage()}\n in coroutine: {$coroutine->getSpawnLocation()}\n";
 });
 
-$scope->spawn(function() {
+spawn with $scope {
     throw new Exception("Task 1");
-});;
+};
 
 $scope->awaitCompletion(Async\signal(SIGTERM));
 </code>
@@ -3429,9 +3465,9 @@ A **responsibility point** is code that explicitly waits for the completion of a
 <code php>
 $scope = new Scope();
 
-$scope->spawn(function() {
+spawn with $scope {
   throw new Exception("Task 1");
-});;
+};
 
 try {
     $scope->awaitCompletion(Async\signal(SIGTERM));
@@ -3447,9 +3483,9 @@ The ''Scope'' class provides a method for handling exceptions:
 <code php>
 $scope = new Scope();
 
-$scope->spawn(function() {
+spawn with $scope {
     throw new Exception("Task 1");
-});;
+};
 
 $scope->setExceptionHandler(function (Exception $e) {
     echo "Caught exception: {$e->getMessage()}\n";
@@ -3470,9 +3506,9 @@ This method can be considered a direct analog of ''defer'' in Go.
 <code php>
 $scope = new Scope();
 
-$scope->spawn(function() {
+spawn with $scope {
     throw new Exception("Task 1");
-});;
+};
 
 $scope->onFinally(function () {
     echo "Task 1 completed\n";
@@ -3489,7 +3525,7 @@ function task(): void
     throw new Exception("Task 1");
 }
 
-$coroutine = spawn('task', );
+$coroutine = spawn task();
 
 $coroutine->onFinally(function () {
     echo "Task completed\n";
@@ -3509,7 +3545,7 @@ function task(): void
     throw new Exception("Task 1");
 }
 
-spawn('task', );
+spawn task();
 </code>
 
 ==== Cancellation ====
@@ -3520,7 +3556,7 @@ using the ''cancel()'' method:
 <code php>
 function task(): void {}
 
-$coroutine = spawn('task', );
+$coroutine = spawn task();
 
 // cancel the coroutine
 $coroutine->cancel(new Async\CancellationException('Task was cancelled'));
@@ -3540,10 +3576,10 @@ The ''CancellationException'', if unhandled within a coroutine, is automatically
 <code php>
 $scope = new Scope();
 
-$scope->spawn(function() {
+spawn with $scope {
     sleep(1);
     echo "Task 1\n";
-});;
+};
 
 $scope->cancel(new Async\CancellationException('Task was cancelled'));
 </code>
@@ -3566,17 +3602,17 @@ and the ''finally'' block is the recommended way to execute finalizing code.
 
 <code php>
 try {
-    $coroutine = spawn(function() {
+    $coroutine = spawn {
         sleep(1);
         throw new \Exception("Task 1");
-    }););;
+    };
 
-    spawn('use', $coroutine) {
+    spawn use($coroutine) {
         $coroutine->cancel();
     };
 
     try {
-        await($coroutine);
+        await $coroutine;
     } catch (\Exception $exception) {
         // recommended way to handle exceptions
         echo "Caught exception: {$exception->getMessage()}\n";
@@ -3594,17 +3630,17 @@ The end
 
 <code php>
 try {
-    $coroutine = spawn(function() {
+    $coroutine = spawn {
         sleep(1);
         throw new \Exception("Task 1");
-    }););;
+    };
 
-    spawn('use', $coroutine) {
+    spawn use($coroutine) {
         $coroutine->cancel();
     };
 
     try {
-        await($coroutine);
+        await $coroutine;
     } catch (Async\CancellationException $exception) {
         // not recommended way to handle exceptions
         echo "Caught CancellationException\n";
@@ -3651,7 +3687,7 @@ function task(): void
     Async\protect(fn() => fwrite($file, "Critical data\n"));
 }
 
-spawn('task', );
+spawn task();
 </code>
 
 If a ''CancellationException'' was sent to a coroutine during ''protect()'',
