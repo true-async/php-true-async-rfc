@@ -3027,11 +3027,9 @@ The following functions allow combining ''Awaitable'' objects or capturing error
 | ''all(iterable $triggers)''                               | Triggers when all ''Awaitable'' objects have completed                      |
 | ''anyOf(int $count, iterable $triggers)''                 | Triggers when at least ''$count'' ''Awaitable'' objects have completed        |
 | ''captureErrors(Awaitable $awaitable)''                   | Returns an additional array containing errors                             |
-| ''ignoreErrors(Awaitable $awaitable, callable $handler)'' | Captures errors from ''Awaitable'' and calls ''$handler'' on each error       |
-
 
 The combinators ''any'', ''all'', and ''anyOf'' propagate exceptions from their composite triggers.
-If you need to ignore errors, you should use the ''captureErrors'' or ''ignoreErrors'' combinator.
+If you need to ignore errors, you should use the ''captureErrors'' combinator.
 
 The ''Async\all'' method modifies the execution result and returns an array of values.
 The order of the values matches the order of ''$triggers''.
@@ -3106,21 +3104,6 @@ if(empty($errors)) {
 }
 </code>
 
-The ''ignoreErrors'' combinator also allows you to ignore errors,
-but instead of returning errors, as a result, it sends them to a special handler function.
-
-<code php>
-use function Async\any;
-use function Async\ignoreErrors;
-
-// Returns when at least one API call ignores errors
-$results = await ignoreErrors(any([
-    spawn('fetchDataFromAPI1', ),
-    spawn('fetchDataFromAPI2', ),
-    spawn('fetchDataFromAPI3', ),
-]), fn(Throwable $throwable) => null);
-</code>
-
 Since ''Awaitable'' objects act as triggers rather than futures, their state can change multiple times.
 This can be useful in complex scenarios.
 
@@ -3158,11 +3141,11 @@ In this case, the iterator will be executed in a concurrent environment.
 The iterator can be asynchronous. In this case,
 ''all'' will wait not only for all triggers but also for the iterator to finish.
 
-The ''captureErrors'' and ''ignoreErrors'' combinators do not affect errors
+The ''captureErrors'' combinator do not affect errors
 that occur inside the iterator providing the triggers.
 
 If an exception is thrown inside the iterator,
-it will be passed through ''captureErrors'' or ''ignoreErrors'' further up the call stack.
+it will be passed through ''captureErrors'' further up the call stack.
 
 <code php>
 use function Async\all;
