@@ -126,28 +126,6 @@ Example:
 $results = await(Async\all([spawn(task1(...)), spawn(task2(...))]));
 </code>
 
-=== Non-blocking versions of built-in PHP functions: ===
-<code php>
-spawn(function() {
-    $result = file_get_contents("file.txt");
-
-    if($result === false) {
-        echo "Error reading file.txt\n";
-    }););
-
-    echo "File content: $result\n";
-});
-
-echo "Next line\n";
-</code>
-
-Output:
-
-<code>
-Next line
-File content: ...
-</code>
-
 === Waiting for coroutine results ===
 
 <code php>
@@ -987,7 +965,7 @@ $coroutine = spawn('example', 'World');
 // pass control to the coroutine
 suspend;
 
-$couroutine->cancel();
+$coroutine->cancel();
 </code>
 
 **Expected output:**
@@ -998,52 +976,17 @@ Caught exception: cancelled at ...
 Goodbye, World!
 </code>
 
-==== Input/Output Operations And Implicit Suspension ====
-
-I/O operations invoked within the coroutine's context transfer control implicitly:
-
-<code php>
-spawn function:void {
-    echo "Start reading file1.txt\n";
-    file_get_contents('file1.txt');
-    echo "End reading file1.txt\n";
-}
-spawn function:void {
-    echo "Start reading file2.txt\n";
-    file_get_contents('file2.txt');
-    echo "End readingfile2.txt\n";
-}
-
-echo "Main flow";
-</code>
-
-**Expected output:**
-
-<code>
-Start reading file1.txt
-Start reading file2.txt
-Main flow
-End reading file1.txt
-End reading file2.txt
-</code>
-
-Inside each coroutine,
-there is an illusion that all actions are executed sequentially,
-while in reality, operations occur asynchronously.
-
-This **RFC** proposes support for core ''PHP'' functions that require non-blocking input/output,
-as well as support for ''cURL'', ''Socket'', and other extensions based on the **PHP Stream API**.
-Please see Unaffected PHP Functionality.
-
 ==== Awaitable interface ====
 
 The ''Awaitable'' interface is a contract that allows objects to be used in the ''await'' expression.
 
 The interface does not have any methods on the user-land side
-and is intended for objects implemented as PHP extensions, such as:
+and is intended for objects implemented as **PHP extensions**, such as:
 
 - ''Future''
 - ''Cancellation''
+
+> **Note:** These classes are not part of this **RFC**.
 
 The following classes from this **RFC** also implement this interface:
 
@@ -1062,11 +1005,11 @@ so using them multiple times in an ''await'' expression will always yield the sa
 
 **Comparison of Different Awaitable Classes:**
 
-|                                    | Coroutine | CoroutineGroup | Future | Cancellation |
-| Supports multiple state changes    | No        | Yes       | No     | No           |
-| Multiple await returns same result | Yes       | No        | Yes    | Yes          |
-| Can capture result                 | Yes       | Yes       | Yes    | No           |
-| Can capture exception              | Yes       | Yes       | Yes    | No           |
+|                                    | Coroutine | CoroutineGroup |
+| Supports multiple state changes    | No        | Yes       |
+| Multiple await returns same result | Yes       | No        |
+| Can capture result                 | Yes       | Yes       |
+| Can capture exception              | Yes       | Yes       |
 
 ==== Await ====
 
