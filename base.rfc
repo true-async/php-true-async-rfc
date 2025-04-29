@@ -1610,7 +1610,7 @@ $scope->spawn(function() {
 
 $scope->cancel();
 
-$scope->spawn(function() { // <- Fatal error
+$scope->spawn(function() { // <- AsyncException: Coroutine scope is closed
     echo "Task 2\n";
 });
 </code>
@@ -1641,7 +1641,7 @@ An attempt to use the expression ''await($coroutine)'' from within the same coro
 <code php>
 $coroutine = null;
 $coroutine = spawn(function() use(&$coroutine) {
-    await($coroutine); // <- Fatal error: A coroutine cannot await itself. Coroutine spawned at ...
+    await($coroutine); // <- AsyncException: A coroutine cannot await itself. Coroutine spawned at ...
 });
 </code>
 
@@ -1653,7 +1653,7 @@ This condition makes it impossible to perform the ''$globalScope->awaitCompletio
 $scope = new Scope();
 
 $scope->spawn(function() use($scope) {
-    $scope->awaitCompletion(Async\timeout(1000)); // <- Fatal error: Awaiting a scope from within itself or
+    $scope->awaitCompletion(Async\timeout(1000)); // <- AsyncException: Awaiting a scope from within itself or
                                                   // its child scope would cause a deadlock. Scope created at ...
 });
 </code>
