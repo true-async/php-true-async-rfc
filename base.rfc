@@ -3055,8 +3055,12 @@ None.
 
 This **RFC** assumes the subsequent development of additional RFCs:
 
-* An RFC for a low-level API for C interfaces, which will describe how
-PHP will allow extensions and standard library code to interact with the concurrent environment.
+* Async\Context RFC - Coroutine and Scope Context Management
+* RFC for Non-Blocking Versions of PHP Built-in Functions. The Socket/Curl extensions as well.
+* RFC for Special Async Syntax
+* RFC Context Manager (like in Python)
+* Equivalent of Go's defer expression RFC.
+* Special try cancellation block RFC.
 * An RFC for a set of standard primitives, such as ''Future'', ''Channel'', etc.
 * And possibly others...
 
