@@ -70,7 +70,7 @@ spawn(function() {
     echo "Start";
     suspend;  // Suspend the coroutine
     echo "Resumed";
-}););
+});
 </code>
 
 === Scope ===
@@ -82,7 +82,7 @@ $scope->spawn(function() {
     // Coroutine bound to $scope
     spawn(function() {
         // Coroutine bound to $scope
-    }););;
+    });
 });
 
 // Dispose of the scope after 5 seconds
@@ -1168,11 +1168,11 @@ $scope = new Scope();
 spawn(function() {
     try {
         $scope->awaitCompletion(Async\signal(SIGTERM));
-    });); catch (\Async\CancellationException $exception) {
+    } catch (\Async\CancellationException $exception) {
         $scope->awaitAfterCancellation();
         echo "Caught exception: ",$exception->getMessage()."\n";
     }
-};
+});
 
 $scope->spawn(function() use($scope) {
     $scope->cancel();
@@ -1461,12 +1461,12 @@ await spawn in $scope {
     spawn(function() {
         delay(1000);
         echo "Task 1\n";
-    }););;
+    });
 
     spawn(function() {
         delay(2000);
         echo "Task 2\n";
-    }););;
+    });
 
     echo "Root task\n";
 };
