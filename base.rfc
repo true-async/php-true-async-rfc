@@ -2685,6 +2685,9 @@ the operation of the service as a whole.
 
 {{ :rfc:true_async:supervisor.svg |}}
 
+Please see also [CoroutineGroup scope exception handling](#CoroutineGroup-scope-exception-handling)
+and [CoroutineGroup error handling](#CoroutineGroup-error-handling) sections.
+
 === Responsibility points ===
 
 A **responsibility point** is code that explicitly waits for the completion of a coroutine or a ''Scope'':
