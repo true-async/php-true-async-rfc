@@ -68,7 +68,7 @@ Example:
 <code php>
 spawn(function() {
     echo "Start";
-    suspend;  // Suspend the coroutine
+    suspend();  // Suspend the coroutine
     echo "Resumed";
 });
 </code>
@@ -112,7 +112,7 @@ $coroutine = spawn(function() {
     }
 });
 
-suspend;
+suspend();
 
 $coroutine->cancel();
 </code>
@@ -788,7 +788,7 @@ function example(string $name): void {
     echo "Hello, $name!";
 
     try {
-        suspend;
+        suspend();
     } catch (Exception $e) {
         echo "Caught exception: ", $e->getMessage();
     }
@@ -799,7 +799,7 @@ function example(string $name): void {
 $coroutine = spawn('example', 'World');
 
 // pass control to the coroutine
-suspend;
+suspend();
 
 $coroutine->cancel();
 </code>
@@ -2126,14 +2126,14 @@ use Async\CoroutineGroup;
 $coroutineGroup = new Async\CoroutineGroup(captureResults: false);
 $coroutineGroup->spawn(function() {
     try {
-        suspend;
+        suspend();
     } catch (Throwable $throwable) {
         echo "Task was cancelled: ", $throwable->getMessage(), "\n";
     }
 });
 
 // pass control to the task
-suspend;
+suspend();
 
 $coroutineGroup->cancel(new \Async\CancellationException('Custom cancellation message'));
 </code>
@@ -2306,7 +2306,7 @@ function copyFile(string $sourceFile, string $targetFile): void
                     $buffer = $chunk !== false && $chunk !== '' ? $chunk : null;
                 }
 
-                suspend;
+                suspend();
             }
 
             $buffer = '';
@@ -2324,7 +2324,7 @@ function copyFile(string $sourceFile, string $targetFile): void
                     $buffer = null;
                 }
 
-                suspend;
+                suspend();
             }
 
             echo "Copy complete.\n";
