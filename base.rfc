@@ -129,10 +129,11 @@ spawn(function() {
 </code>
 
 === Combinators ===
-Group awaitable objects like ''any()'', ''all()'', ''ignoreError()''.
+
+Functions that combine multiple awaitable objects: ''awaitAny()'', ''awaitAll()'', ''awaitFirstSuccess()''.
 Example:
 <code php>
-$results = await(Async\all([spawn(task1(...)), spawn(task2(...))]));
+$results = awaitAll([spawn(task1(...)), spawn(task2(...))]);
 </code>
 
 === Waiting for coroutine results ===
@@ -2352,156 +2353,162 @@ The main code will not finish until all copy operations are completed.
 
 ==== Async combinators ====
 
-The following functions allow combining ''Awaitable'' objects or capturing errors from ''Awaitable'' objects:
+Async combinators are functions that combine multiple awaitable objects into complex execution patterns.
+The API provides both error-propagating and error-collecting variants for different use cases.
 
-| Function                                                  | Description                                                               |
-| ''any(iterable $triggers)''                               | Triggers if at least one ''Awaitable'' completes successfully             |
-| ''all(iterable $triggers)''                               | Triggers when all ''Awaitable'' objects have completed                    |
-| ''anyOf(int $count, iterable $triggers)''                 | Triggers when at least ''$count'' ''Awaitable'' objects have completed    |
-| ''captureErrors(Awaitable $awaitable)''                   | Returns an additional array containing errors                             |
+=== Basic Combinators ===
 
-The combinators ''any'', ''all'', and ''anyOf'' propagate exceptions from their composite triggers.
-If you need to ignore errors, you should use the ''captureErrors'' combinator.
+| Function                                                                    | Description                                                               |
+| ''await(Awaitable $awaitable, ?Awaitable $cancellation = null)''           | Waits for a single awaitable to complete                                 |
+| ''awaitAny(iterable $triggers, ?Awaitable $cancellation = null)''           | Returns result of the first completed awaitable                          |
+| ''awaitAll(iterable $triggers, ?Awaitable $cancellation = null)''           | Waits for all awaitables to complete, returns array of results           |
 
-The ''Async\all'' method modifies the execution result and returns an array of values.
-The order of the values matches the order of ''$triggers''.
+=== Error-Collecting Combinators ===
+
+| Function                                                                    | Description                                                               |
+| ''awaitFirstSuccess(iterable $triggers, ?Awaitable $cancellation = null)'' | Returns first successful result, collects errors from failures           |
+| ''awaitAllWithErrors(iterable $triggers, ?Awaitable $cancellation = null)''| Waits for all, returns both results and errors separately                |
+
+=== Counted Combinators ===
+
+| Function                                                                                  | Description                                                     |
+| ''awaitAnyOf(int $count, iterable $triggers, ?Awaitable $cancellation = null)''          | Waits for specified number of awaitables to complete           |
+| ''awaitAnyOfWithErrors(int $count, iterable $triggers, ?Awaitable $cancellation = null)''| Same as awaitAnyOf but collects errors                         |
+
+=== Error Propagation vs Error Collection ===
+
+**Error-Propagating Functions** (''awaitAny'', ''awaitAll'', ''awaitAnyOf''):
+* Stop execution on first exception
+* Throw the exception immediately
+* Cancel remaining coroutines
+
+**Error-Collecting Functions** (''awaitFirstSuccess'', ''awaitAllWithErrors'', ''awaitAnyOfWithErrors''):
+* Continue execution despite exceptions
+* Return results and errors separately as ''[results, errors]''
+* Allow partial success scenarios
+
+=== awaitAll() - Parallel Execution ===
 
 <code php>
-use function Async\all;
-
-$results = await all([
+$results = awaitAll([
     spawn('fetchUserData'),
-    spawn('fetchUserSettings')
+    spawn('fetchUserSettings'),
+    spawn('fetchUserPreferences')
 ]);
 
-print_r($results);
+// $results = [userData, userSettings, userPreferences]
+// Order matches input order
 </code>
 
-Expected output:
-
-<code>text
-Array
-(
-    [0] => ... // result of fetchUserData()
-    [1] => ... // result of fetchUserSettings()
-)
-</code>
-
-''Any'' returns a trigger that fires as soon as at least one item from the list has completed:
+=== awaitAny() - Race Condition ===
 
 <code php>
-use function Async\any;
-
-// Returns when at least one API call
-$results = await any([
-    spawn(fetchDataFromAPI1(...)),
-    spawn(fetchDataFromAPI2(...)),
-    spawn(fetchDataFromAPI3(...)),
+// Returns result from fastest source
+$data = awaitAny([
+    spawn('fetchFromCache'),
+    spawn('fetchFromDatabase'), 
+    spawn('fetchFromAPI')
 ]);
 </code>
 
-The ''any'' trigger can be invoked multiple times, and each time
-it will respond to the completion of the next item from the list.
-This allows you to organize a loop of calls.
-
-The ''anyOf'' combinator is used to wait for at least N items from the list:
+=== awaitFirstSuccess() - Fault Tolerance ===
 
 <code php>
-// Returns when at least 2 images are loaded
-$results = await Async\anyOf(2, [
-    spawn('loadImage', 'preview.jpg'),
-    spawn('loadImage', 'medium.jpg'),
-    spawn('loadImage', 'full.jpg'),
+[$result, $errors] = awaitFirstSuccess([
+    spawn('callUnreliableAPI1'),
+    spawn('callUnreliableAPI2'), 
+    spawn('callUnreliableAPI3')
 ]);
-</code>
 
-The ''captureErrors'' combinator ignores trigger errors and waits for the first successful execution.
-Use it together with ''any'', ''all'', or ''anyOf'' to wait for events while ignoring errors.
-
-The ''captureErrors'' combinator modifies the trigger results.
-It returns an array with two elements:
-* the first element is the operation result
-* the second element is an array of errors
-
-<code php>
-use function Async\captureErrors;
-
-[$result, $errors] = await(captureErrors(Async\all([spawn(fetchUserData(...)), spawn(fetchUserSettings(...))])));
-
-if(empty($errors)) {
-    // $result contains successful result
+if ($result !== null) {
+    echo "Got result: $result\n";
 } else {
-    // $result contains null
-    // $errors contains an exception or empty array
+    echo "All calls failed. Errors: " . count($errors) . "\n";
 }
 </code>
 
-Since ''Awaitable'' objects act as triggers rather than futures, their state can change multiple times.
-This can be useful in complex scenarios.
-
-**For example:**
+=== awaitAllWithErrors() - Complete Data Collection ===
 
 <code php>
-function getFirstAvailable(array $sources, int $errorTolerance = 0): mixed
-{
-    if($errorTolerance <= 0) {
-        $errorTolerance = count($sources) / 2;
-    }
+[$results, $errors] = awaitAllWithErrors([
+    spawn('processFile', 'file1.txt'),
+    spawn('processFile', 'file2.txt'),
+    spawn('processFile', 'corrupted.txt') // might fail
+]);
 
-    $errors     = 0;
-    $trigger    = Async\any($sources);
+// $results = ["result1", "result2", null]
+// $errors = [2 => Exception("corrupted file")]
+</code>
 
-    while($errors < $errorTolerance) {
-        try {
-            return await($trigger);
-        } catch (Exception $e) {
-            $errors++;
-        }
-    }
+=== awaitAnyOf() - Partial Completion ===
 
-    throw new Exception("sources failed: {$errors} errors");
+<code php>
+// Wait for first 3 downloads to complete
+$completedDownloads = awaitAnyOf(3, [
+    spawn('downloadFile', 'file1.zip'),
+    spawn('downloadFile', 'file2.zip'), 
+    spawn('downloadFile', 'file3.zip'),
+    spawn('downloadFile', 'file4.zip'),
+    spawn('downloadFile', 'file5.zip')
+]);
+
+// Returns associative array: [1 => "file2.zip", 0 => "file1.zip", 4 => "file5.zip"]
+// Keys preserve original array indices
+</code>
+
+=== Cancellation Support ===
+
+All combinators support cancellation through the optional ''$cancellation'' parameter:
+
+<code php>
+try {
+    $results = awaitAll($tasks, Async\timeout(30000)); // 30 second timeout
+} catch (Async\AwaitCancelledException $e) {
+    echo "Operation timed out\n";
 }
 </code>
 
-The function will return the first successful value with error tolerance,
-which by default is set to 50% of the total number of ''$sources''.
+=== Advanced Patterns ===
 
-=== Iterable triggers ===
-
-The combinators ''any'', ''all'', and ''anyOf'' can accept an iterator as a source of triggers.
-In this case, the iterator will be executed in a concurrent environment.
-The iterator can be asynchronous. In this case,
-''all'' will wait not only for all triggers but also for the iterator to finish.
-
-The ''captureErrors'' combinator do not affect errors
-that occur inside the iterator providing the triggers.
-
-If an exception is thrown inside the iterator,
-it will be passed through ''captureErrors'' further up the call stack.
-
+**Retry with Multiple Strategies:**
 <code php>
-use function Async\all;
-use function Async\captureErrors;
-
-function processAllUserTasks(int ...$userIds): iterable
+function fetchWithRetry(string $url): string
 {
-    $coroutineGroup = new Async\CoroutineGroup(captureResults: true);
-
-    foreach ($userIds as $userId) {
-        $coroutineGroup->spawn(getUser(...), $userId);
-    }
-
-    while ($coroutineGroup->isFinished() === false) {
-
-        $user = await($coroutineGroup->race());
-
-        foreach ($user['tasks'] ?? [] as $task) {
-            yield spawn('processUserTask', $task);
+    for ($attempt = 1; $attempt <= 3; $attempt++) {
+        [$result, $errors] = awaitFirstSuccess([
+            spawn('fetchFromCDN', $url),
+            spawn('fetchFromOrigin', $url),
+            spawn('fetchFromBackup', $url)
+        ]);
+        
+        if ($result !== null) {
+            return $result;
         }
+        
+        echo "Attempt $attempt failed, retrying...\n";
+        Async\delay(1000 * $attempt); // exponential backoff
     }
+    
+    throw new Exception("All retry attempts failed");
 }
+</code>
 
-$results = await(all(processAllUserTasks()));
+**Batch Processing with Concurrency Control:**
+<code php>
+function processBatch(array $items, int $batchSize = 10): array
+{
+    $allResults = [];
+    
+    for ($i = 0; $i < count($items); $i += $batchSize) {
+        $batch = array_slice($items, $i, $batchSize);
+        $tasks = array_map(fn($item) => spawn('processItem', $item), $batch);
+        
+        $batchResults = awaitAll($tasks);
+        $allResults = array_merge($allResults, $batchResults);
+    }
+    
+    return $allResults;
+}
 </code>
 
 ==== Timer functions ====
