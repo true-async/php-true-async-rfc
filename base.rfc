@@ -2733,6 +2733,13 @@ the exception propagation algorithm will continue.
 The ''onFinally'' method allows defining a callback function that will be invoked when a coroutine or scope completes.
 This method can be considered a direct analog of ''defer'' in Go.
 
+> ⚠️ **Important:** All ''onFinally'' handlers are executed concurrently in separate coroutines.
+> This ensures that slow handlers do not block the completion of other handlers or the main execution flow.
+
+=== Scope::onFinally ===
+
+For ''Scope'', the callback receives the completed scope as a parameter:
+
 <code php>
 $scope = new Scope();
 
@@ -2740,14 +2747,16 @@ $scope->spawn(function() {
     throw new Exception("Task 1");
 });
 
-$scope->onFinally(function () {
-    echo "Task 1 completed\n";
+$scope->onFinally(function (Scope $completedScope) {
+    echo "Scope " . spl_object_id($completedScope) . " completed\n";
 });
 
 $scope->awaitCompletion(Async\signal(SIGTERM));
 </code>
 
-Or for coroutines:
+=== Coroutine::onFinally ===
+
+For ''Coroutine'', the callback receives the completed coroutine as a parameter:
 
 <code php>
 function task(): void
@@ -2757,8 +2766,8 @@ function task(): void
 
 $coroutine = spawn('task');
 
-$coroutine->onFinally(function () {
-    echo "Task completed\n";
+$coroutine->onFinally(function (Coroutine $completedCoroutine) {
+    echo "Coroutine " . spl_object_id($completedCoroutine) . " completed\n";
 });
 
 </code>
