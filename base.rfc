@@ -5,7 +5,7 @@
   * Author: Edmond [HT], edmondifthen@proton.me
   * Status: Under discussion
   * First Published at: http://wiki.php.net/rfc/true_async
-  * Git: https://github.com/EdmondDantes/php-true-async-rfc
+  * Git: https://github.com/true-async
 
 ===== Introduction =====
 For several years, **PHP** has been attempting to carve out a niche in the development of long-running applications, where concurrent code execution becomes particularly useful. Production-ready solutions such as **Swoole**, **AMPHP**, **ReactPHP**, and others have emerged.
@@ -3100,16 +3100,16 @@ Yes or no vote.  2/3 required to pass.
 
 ===== Patches and Tests =====
 
-* Proof of concept: https://github.com/EdmondDantes/php-src/tree/async/ext/async
-
-This code is an attempt to implement logic using Fiber. Most of it can be used to create the next version.
-I would be happy if someone would like to join me in this project!
+* Current implementation: https://github.com/true-async
 
 ===== References =====
 Links to external references, discussions or RFCs
 
     * **First Discussion** - https://externals.io/message/126402
     * **Second Discussion** - https://externals.io/message/126537
+    * **Third Discussion** - https://externals.io/message/127120
+
+		* **TrueAsync API RFC** - https://github.com/true-async/php-true-async-rfc/blob/main/true-async-api-rfc.md
 
 Additional links:
 
