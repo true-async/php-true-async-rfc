@@ -192,7 +192,7 @@ function mergeFiles(string ...$files): string
        $coroutineGroup->spawn(file_get_contents(...), $file);
     }
 
-    return array_merge("\n", await($coroutineGroup));
+    return implode("\n", await($coroutineGroup));
 }
 </code>
 
@@ -219,14 +219,14 @@ function getUserProfile(int $userId): array
         });
 
         // Start fetching extended details in parallel
-        spawn with $profileTasks use ($userId) {
+        $profileTasks->spawn(function() use ($userId): array {
             // Subtask group for supplementary information
             $orderTasks = new CoroutineGroup(Scope::inherit(), captureResults: true);
 
             // Request user orders with 2-second timeout
             $orderTasks->spawn(function() use ($userId): array {
                 try {
-                    return ['orders' => await(spawn('fetchUserOrders', $userId), timeout(2000)]);
+                    return ['orders' => await(spawn('fetchUserOrders', $userId), Async\timeout(2000)]);
                 } catch (AwaitCancelledException) {
                     return ['orders' => ['status' => 'timeout']];
                 }
@@ -235,7 +235,7 @@ function getUserProfile(int $userId): array
             // Request API2 user orders with 2-second timeout
             $orderTasks->spawn(function() use ($userId): array {
                 try {
-                    return ['orders2' => await(spawn('fetchUserOrdersAPI2', $userId), timeout(2000)]);
+                    return ['orders2' => await(spawn('fetchUserOrdersAPI2', $userId), Async\timeout(2000)]);
                 } catch (AwaitCancelledException) {
                     return ['orders2' => ['status' => 'timeout']];
                 }
@@ -243,12 +243,12 @@ function getUserProfile(int $userId): array
 
             // Wait for all order tasks to complete
             return array_merge(...await($orderTasks));
-        };
+        });
 
         // Request user settings
-        spawn with $profileTasks use ($userId): array {
+        $profileTasks->spawn(function() use ($userId): array {
           return ['settings' => await(spawn('fetchUserSettings', $userId))];
-        };
+        });
 
         // Merge all results into a single profile
         return array_merge(...await($profileTasks));
@@ -261,7 +261,7 @@ function getUserProfile(int $userId): array
 }
 
 // Usage
-$profile = await(spawn(getUserProfile(), 123));
+$profile = await(spawn(getUserProfile(...), 123));
 var_dump($profile);
 </code>
 
@@ -304,7 +304,7 @@ class HttpClient
 
     public function request(array $data): \Async\Awaitable
     {
-        return $this->scope->spawn(function use($data) {
+        return $this->scope->spawn(function() use ($data) {
             // This coroutine is bound to the MyClass instance
         });
     }
@@ -509,11 +509,11 @@ For example, such a class is ''CoroutineGroup''.
 $scope = new Async\Scope();
 $coroutineGroup = new Async\CoroutineGroup($scope);
 
-$coroutine = spawnWith($scope, function use():string {
+$coroutine = spawnWith($scope, function() use ():string {
     return gethostbyname('php.net');
 });
 
-$coroutine = spawnWith($coroutineGroup, function use():string {
+$coroutine = spawnWith($coroutineGroup, function() use ():string {
     return gethostbyname('php.net');
 });
 
@@ -530,11 +530,11 @@ You can also use the ''spawn'' method, which is available for the ''Scope'' and 
 <code php>
 $scope = new Async\Scope();
 $coroutineGroup = new Async\CoroutineGroup($scope);
-$coroutine = $scope->spawn(function use():string {
+$coroutine = $scope->spawn(function() use ():string {
 		return gethostbyname('php.net');
 });
 
-$coroutine = $coroutineGroup->spawn(function use():string {
+$coroutine = $coroutineGroup->spawn(function() use ():string {
 		return gethostbyname('php.net');
 });
 
@@ -603,7 +603,7 @@ This allows you to spawn coroutines into the task group using:
 <code php>
 $coroutineGroup->spawn(function() {
     // This coroutine is bound to the CoroutineGroup's scope
-});;
+});
 </code>
 
 === ''SpawnStrategy'' Interface ===
@@ -662,7 +662,7 @@ $customCoroutineGroup = new CustomCoroutineGroup();
 
 $customCoroutineGroup->spawn(function() {
     // This coroutine will be automatically added to the custom task group
-});;
+});
 </code>
 
 The ''beforeCoroutineEnqueue()'' method is called after the coroutine has been created,
@@ -980,7 +980,7 @@ function mainTask(): void { 			  	   // <- global scope
     spawn('readFile', 'file1.txt'); 		 // <- global scope
 }
 
-spawn('mainTask', ); 										 // <- global scope
+spawn('mainTask'); 										 // <- global scope
 </code>
 
 If an application never creates **custom Scopes**, its behavior is similar to coroutines in ''Go'':
@@ -1174,7 +1174,7 @@ spawn(function() {
     }
 });
 
-$scope->spawn(function() use($scope) {
+$scope->spawn(function() use ($scope) {
     $scope->cancel();
 
     try {
@@ -1286,7 +1286,7 @@ function connectionHandler($socket): void
     // In this way, we create a coroutine-closure that acts as a Point of Responsibility.
     // This code is one example of how to implement Points of Responsibility.
     //
-    $scope->spawn(function() use($socket, $scope) {
+    $scope->spawn(function() use ($socket, $scope) {
 
         $limiterScope = Scope::inherit(); // child scope for connectionLimiter and connectionChecker
 
@@ -1321,7 +1321,7 @@ function socketServer(): void
     // Note that we are passing ''$scope'' to another function!
     // This is acceptable here because the code is within a single visual block,
     // and the risk of an error due to oversight is minimal.
-    $scope->spawn(function() use($scope) {
+    $scope->spawn(function() use ($scope) {
         try {
             // Note: The ''signal'' function is not part of this RFC,
             // but it may be implemented in the standard library in the future.
@@ -1410,12 +1410,12 @@ $scope = new Scope();
 
 $scope->spawn(function() {
     spawn(function() {
-        delay(1000);
+        Async\delay(1000);
         echo "Task 1\n";
     });
 
     spawn(function() {
-        delay(2000);
+        Async\delay(2000);
         echo "Task 2\n";
     });
 });
@@ -1457,19 +1457,19 @@ use function Async\Scope\delay;
 
 $scope = new Scope();
 
-await spawn in $scope {
+await($scope->spawn(function() {
     spawn(function() {
-        delay(1000);
+        Async\delay(1000);
         echo "Task 1\n";
     });
 
     spawn(function() {
-        delay(2000);
+        Async\delay(2000);
         echo "Task 2\n";
     });
 
     echo "Root task\n";
-};
+}));
 
 $scope->disposeSafely();
 </code>
@@ -1504,12 +1504,12 @@ $scope = new Scope();
 
 await($scope->spawn(function() {
     spawn(function() {
-        delay(1000);
+        Async\delay(1000);
         echo "Task 1\n";
     });
 
     spawn(function() {
-        delay(2000);
+        Async\delay(2000);
         echo "Task 2\n";
     });
 
@@ -1549,9 +1549,9 @@ class Service
         $this->scope->spawn(function() {
 
             spawn(function() {
-                delay(1000);
+                Async\delay(1000);
                 echo "Task 2\n";
-                delay(5000);
+                Async\delay(5000);
                 echo "Task 2 next line never executed\n";
             });
 
@@ -1640,7 +1640,7 @@ An attempt to use the expression ''await($coroutine)'' from within the same coro
 
 <code php>
 $coroutine = null;
-$coroutine = spawn(function() use(&$coroutine) {
+$coroutine = spawn(function() use (&$coroutine) {
     await($coroutine); // <- AsyncException: A coroutine cannot await itself. Coroutine spawned at ...
 });
 </code>
@@ -1652,7 +1652,7 @@ This condition makes it impossible to perform the ''$globalScope->awaitCompletio
 <code php>
 $scope = new Scope();
 
-$scope->spawn(function() use($scope) {
+$scope->spawn(function() use ($scope) {
     $scope->awaitCompletion(Async\timeout(1000)); // <- AsyncException: Awaiting a scope from within itself or
                                                   // its child scope would cause a deadlock. Scope created at ...
 });
@@ -1734,7 +1734,7 @@ final class ProcessPool
         $this->watcherScope->spawn($this->processWatcher(...));
 
         for ($i = 0; $i < $this->min; $i++) {
-            $coroutineGroup->add(spawn with $this->poolScope $this->startProcess());
+            $coroutineGroup->add($this->poolScope->spawn($this->startProcess(...)));
         }
     }
 
@@ -1809,7 +1809,7 @@ function mergeFiles(string ...$files): string
        $coroutineGroup->spawn(file_get_contents(...), $file);
     }
 
-    return array_merge("\n", await($coroutineGroup));
+    return implode("\n", await($coroutineGroup));
 }
 
 echo await(spawn(mergeFiles(...), ['file1.txt', 'file2.txt', 'file3.txt']));
@@ -1863,7 +1863,7 @@ use Async\Scope;
 use Async\CoroutineGroup;
 
 function task1() {
-    spawn('subtask', );
+    spawn('subtask');
 }
 
 $scope = new Scope();
@@ -2015,7 +2015,7 @@ $coroutineGroup->spawn(function() {
     // this task will be added to the task group
     Async\delay(1000);
     echo "This line will be executed\n";
-});;
+});
 
 sleep(1);
 $scope->dispose();
@@ -2299,7 +2299,7 @@ function copyFile(string $sourceFile, string $targetFile): void
         $tasks = new \Async\CoroutineGroup(Scope::inherit());
 
         // Read data from the source file
-        $tasks->spawn(function() use(&$buffer, $source) {
+        $tasks->spawn(function() use (&$buffer, $source) {
             while (!feof($source)) {
                 if ($buffer === null) {
                     $chunk = fread($source, 1024);
@@ -2313,7 +2313,7 @@ function copyFile(string $sourceFile, string $targetFile): void
         });
 
         // Write data to the target file
-        $tasks->spawn(function() use(&$buffer, $target) {
+        $tasks->spawn(function() use (&$buffer, $target) {
             while (true) {
                 if (is_string($buffer)) {
                     if ($buffer === '') {
@@ -2370,8 +2370,8 @@ The order of the values matches the order of ''$triggers''.
 use function Async\all;
 
 $results = await all([
-    spawn('fetchUserData', ),
-    spawn('fetchUserSettings', )
+    spawn('fetchUserData'),
+    spawn('fetchUserSettings')
 ]);
 
 print_r($results);
@@ -2520,9 +2520,9 @@ use function Async\timeout;
 use function Async\delay;
 
 try {
-    delay(1000); // suspends the coroutine for 1 second
+    Async\delay(1000); // suspends the coroutine for 1 second
     // Try to fetch data from the URL within 1 second
-    echo await(spawn('file_get_content', 'https://php.net/'), timeout(1000));
+    echo await(spawn('file_get_content', 'https://php.net/'), Async\timeout(1000));
 } catch (\Async\AwaitCancelledException) {
     echo "Operation was cancelled by timeout\n";
 } catch (\Async\CancellationException) {
@@ -2559,14 +2559,14 @@ $scope = new Scope();
 
 $scope->spawn(function() {
     throw new Exception("Task 1");
-});;
+});
 
 $exception1 = null;
 $exception2 = null;
 
 $scope2 = new Scope();
 
-$scope2->spawn(function() use($scope, &$exception1) {
+$scope2->spawn(function() use ($scope, &$exception1) {
     try {
         $scope->awaitCompletion(Async\signal(SIGTERM));
     } catch (Exception $e) {
@@ -2575,7 +2575,7 @@ $scope2->spawn(function() use($scope, &$exception1) {
     }
 });
 
-$scope2->spawn(function() use($scope, &$exception2) {
+$scope2->spawn(function() use ($scope, &$exception2) {
     try {
         $scope->awaitCompletion(Async\signal(SIGTERM));
     } catch (Exception $e) {
@@ -2650,7 +2650,7 @@ final class Service
 
     public function start(): void
     {
-        spawn with $this->scope $this->run();
+        $this->scope->spawn($this->run(...));
     }
 
     public function stop(): void
@@ -2755,7 +2755,7 @@ function task(): void
     throw new Exception("Task 1");
 }
 
-$coroutine = spawn('task', );
+$coroutine = spawn('task');
 
 $coroutine->onFinally(function () {
     echo "Task completed\n";
@@ -2775,7 +2775,7 @@ function task(): void
     throw new Exception("Task 1");
 }
 
-spawn('task', );
+spawn('task');
 </code>
 
 ==== Cancellation ====
@@ -2837,7 +2837,7 @@ try {
         throw new \Exception("Task 1");
     });
 
-    spawn(function() use($coroutine) {
+    spawn(function() use ($coroutine) {
         $coroutine->cancel();
     });
 
@@ -2865,7 +2865,7 @@ try {
         throw new \Exception("Task 1");
     });
 
-    spawn(function() use($coroutine) {
+    spawn(function() use ($coroutine) {
         $coroutine->cancel();
     });
 
