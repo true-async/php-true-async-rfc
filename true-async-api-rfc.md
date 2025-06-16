@@ -62,14 +62,9 @@ catch blocks don't accidentally intercept cancellation signals.
 Defined in core because fundamental engine functions assume all throwable types are known at startup.
 
 ## Impact on Core
-The `API` maintains separation between the `Zend Engine` and specific async implementations. Extensions implement async features using their preferred libraries (`libuv`, etc.) and register them during initialization. The engine interacts only through standardized interfaces, keeping implementation details isolated.
-
-**Core Changes**:
-- New async `API` files integrated into the engine
-- Async-aware garbage collection improvements
-- Network function wrappers for async delegation
-- Registration interface for extension backends
-- and more...
+The `API` maintains separation between the `Zend Engine` and specific async implementations. 
+Extensions implement async features using their preferred libraries (`libuv`, etc.) and register them during initialization. 
+The engine interacts only through standardized interfaces, keeping implementation details isolated.
 
 ## Backward Compatibility
 Full backward compatibility is maintained:
