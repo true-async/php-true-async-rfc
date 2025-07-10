@@ -2358,57 +2358,142 @@ The API provides both error-propagating and error-collecting variants for differ
 
 === Basic Combinators ===
 
-| Function                                                                    | Description                                                               |
-| ''await(Awaitable $awaitable, ?Awaitable $cancellation = null)''           | Waits for a single awaitable to complete                                 |
-| ''awaitAny(iterable $triggers, ?Awaitable $cancellation = null)''           | Returns result of the first completed awaitable                          |
-| ''awaitAll(iterable $triggers, ?Awaitable $cancellation = null)''           | Waits for all awaitables to complete, returns array of results           |
+| Function                                                                    | Description                                                              |
+| ''await(Awaitable $awaitable, ?Awaitable $cancellation = null)''            | Waits for a single awaitable to complete                                 |
 
-=== Error-Collecting Combinators ===
+=== Error-Collecting Combinators (Default/Safe) ===
 
-| Function                                                                    | Description                                                               |
+| Function                                                                   | Description                                                              |
+| ''awaitAll(iterable $triggers, ?Awaitable $cancellation = null, bool $preserveKeyOrder = true, bool $fillNull = false)'' | Waits for all, returns both results and errors separately [results, errors] |
+| ''awaitAny(iterable $triggers, ?Awaitable $cancellation = null)''         | Returns first successful result, collects errors from failures           |
 | ''awaitFirstSuccess(iterable $triggers, ?Awaitable $cancellation = null)'' | Returns first successful result, collects errors from failures           |
-| ''awaitAllWithErrors(iterable $triggers, ?Awaitable $cancellation = null)''| Waits for all, returns both results and errors separately                |
+
+=== Error-Propagating Combinators (Fail-Fast) ===
+
+| Function                                                                   | Description                                                              |
+| ''awaitAllOrFail(iterable $triggers, ?Awaitable $cancellation = null, bool $preserveKeyOrder = true)'' | Waits for all awaitables to complete, throws on first error             |
+| ''awaitAnyOrFail(iterable $triggers, ?Awaitable $cancellation = null)''   | Returns result of the first completed awaitable, throws on error        |
 
 === Counted Combinators ===
 
-| Function                                                                                  | Description                                                     |
-| ''awaitAnyOf(int $count, iterable $triggers, ?Awaitable $cancellation = null)''          | Waits for specified number of awaitables to complete           |
-| ''awaitAnyOfWithErrors(int $count, iterable $triggers, ?Awaitable $cancellation = null)''| Same as awaitAnyOf but collects errors                         |
+| Function                                                                                 | Description                                                    |
+| ''awaitAnyOf(int $count, iterable $triggers, ?Awaitable $cancellation = null, bool $preserveKeyOrder = true, bool $fillNull = false)'' | Waits for specified number of awaitables, collects errors      |
+| ''awaitAnyOfOrFail(int $count, iterable $triggers, ?Awaitable $cancellation = null, bool $preserveKeyOrder = true)'' | Waits for specified number of awaitables, throws on first error |
 
 === Error Propagation vs Error Collection ===
 
-**Error-Propagating Functions** (''awaitAny'', ''awaitAll'', ''awaitAnyOf''):
-* Stop execution on first exception
-* Throw the exception immediately
-* Cancel remaining coroutines
-
-**Error-Collecting Functions** (''awaitFirstSuccess'', ''awaitAllWithErrors'', ''awaitAnyOfWithErrors''):
+**Error-Collecting Functions (Default)** (''awaitAll'', ''awaitAny'', ''awaitAnyOf'', ''awaitFirstSuccess''):
 * Continue execution despite exceptions
 * Return results and errors separately as ''[results, errors]''
 * Allow partial success scenarios
+* Safe by default - no work is lost
 
-=== awaitAll() - Parallel Execution ===
+**Error-Propagating Functions (Fail-Fast)** (''awaitAllOrFail'', ''awaitAnyOrFail'', ''awaitAnyOfOrFail''):
+* Stop execution on first exception
+* Throw the exception immediately
+* Cancel remaining coroutines
+* Use when you need strict error handling
+
+=== Function Parameters ===
+
+==== preserveKeyOrder (bool, default: true) ====
+Controls whether the result array maintains the same key order as the input iterable.
+
+* **true**: Results array has same keys/indices as input array
+* **false**: Results array is re-indexed with sequential numeric keys (0, 1, 2...)
 
 <code php>
-$results = awaitAll([
+// With preserveKeyOrder = true (default)
+[$results, $errors] = awaitAll([
+    'user' => spawn('fetchUser'),
+    'settings' => spawn('fetchSettings')
+]);
+// $results = ['user' => userData, 'settings' => settingsData]
+
+// With preserveKeyOrder = false  
+[$results, $errors] = awaitAll([
+    'user' => spawn('fetchUser'),
+    'settings' => spawn('fetchSettings')
+], preserveKeyOrder: false);
+// $results = [0 => userData, 1 => settingsData]
+</code>
+
+==== fillNull (bool, default: false) ====
+Controls how failed tasks are represented in the results array (only for error-collecting functions).
+
+* **false**: Failed tasks are omitted from results array
+* **true**: Failed tasks are represented as null in results array
+
+<code php>
+// With fillNull = false (default)
+[$results, $errors] = awaitAll([
+    spawn('successfulTask'),  // succeeds
+    spawn('failingTask'),     // fails  
+    spawn('anotherSuccess')   // succeeds
+]);
+// $results = [0 => successResult, 2 => anotherResult]
+// $errors = [1 => Exception]
+
+// With fillNull = true
+[$results, $errors] = awaitAll([
+    spawn('successfulTask'),  // succeeds
+    spawn('failingTask'),     // fails
+    spawn('anotherSuccess')   // succeeds  
+], fillNull: true);
+// $results = [0 => successResult, 1 => null, 2 => anotherResult]
+// $errors = [1 => Exception]
+</code>
+
+=== awaitAll() - Parallel Execution with Error Collection ===
+
+<code php>
+[$results, $errors] = awaitAll([
+    spawn('fetchUserData'),
+    spawn('fetchUserSettings'),
+    spawn('fetchUserPreferences')
+]);
+
+// $results = [userData, userSettings, userPreferences] or null for failed
+// $errors = [index => Exception] for any failures
+// Order matches input order
+// All tasks complete even if some fail
+</code>
+
+=== awaitAllOrFail() - Strict Parallel Execution ===
+
+<code php>
+$results = awaitAllOrFail([
     spawn('fetchUserData'),
     spawn('fetchUserSettings'),
     spawn('fetchUserPreferences')
 ]);
 
 // $results = [userData, userSettings, userPreferences]
-// Order matches input order
+// Throws exception and cancels all on first failure
 </code>
 
-=== awaitAny() - Race Condition ===
+=== awaitAny() - First Success Race ===
 
 <code php>
-// Returns result from fastest source
+// Returns first successful result, continues until success
 $data = awaitAny([
+    spawn('fetchFromCache'),      // might fail
+    spawn('fetchFromDatabase'),   // might fail
+    spawn('fetchFromAPI')         // fallback
+]);
+// Returns first successful result, collects all errors
+</code>
+
+=== awaitAnyOrFail() - Fast Race Condition ===
+
+<code php>
+// Returns result from fastest completion (success or failure)
+$data = awaitAnyOrFail([
     spawn('fetchFromCache'),
     spawn('fetchFromDatabase'), 
     spawn('fetchFromAPI')
 ]);
+// Throws exception if first completed task fails
 </code>
 
 === awaitFirstSuccess() - Fault Tolerance ===
@@ -2427,24 +2512,24 @@ if ($result !== null) {
 }
 </code>
 
-=== awaitAllWithErrors() - Complete Data Collection ===
+=== awaitAll() with fillNull - Complete Data Collection ===
 
 <code php>
-[$results, $errors] = awaitAllWithErrors([
+[$results, $errors] = awaitAll([
     spawn('processFile', 'file1.txt'),
     spawn('processFile', 'file2.txt'),
     spawn('processFile', 'corrupted.txt') // might fail
-]);
+], fillNull: true);
 
 // $results = ["result1", "result2", null]
 // $errors = [2 => Exception("corrupted file")]
 </code>
 
-=== awaitAnyOf() - Partial Completion ===
+=== awaitAnyOf() - Partial Completion with Error Collection ===
 
 <code php>
-// Wait for first 3 downloads to complete
-$completedDownloads = awaitAnyOf(3, [
+// Wait for first 3 downloads to complete (including failures)
+[$results, $errors] = awaitAnyOf(3, [
     spawn('downloadFile', 'file1.zip'),
     spawn('downloadFile', 'file2.zip'), 
     spawn('downloadFile', 'file3.zip'),
@@ -2452,8 +2537,25 @@ $completedDownloads = awaitAnyOf(3, [
     spawn('downloadFile', 'file5.zip')
 ]);
 
-// Returns associative array: [1 => "file2.zip", 0 => "file1.zip", 4 => "file5.zip"]
+// $results = [1 => "file2.zip", 0 => "file1.zip", 4 => "file5.zip"]
+// $errors = [] (if all successful) or [index => Exception]
 // Keys preserve original array indices
+</code>
+
+=== awaitAnyOfOrFail() - Strict Partial Completion ===
+
+<code php>
+// Wait for first 3 downloads to complete, fail fast on errors
+$completedDownloads = awaitAnyOfOrFail(3, [
+    spawn('downloadFile', 'file1.zip'),
+    spawn('downloadFile', 'file2.zip'), 
+    spawn('downloadFile', 'file3.zip'),
+    spawn('downloadFile', 'file4.zip'),
+    spawn('downloadFile', 'file5.zip')
+]);
+
+// Returns array: [1 => "file2.zip", 0 => "file1.zip", 4 => "file5.zip"] 
+// Throws exception if any of the first 3 downloads fail
 </code>
 
 === Cancellation Support ===
