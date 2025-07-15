@@ -85,6 +85,7 @@ It is proposed to approve the principles of this `RFC` for the next `PHP` versio
 the `PHP` changes as separate `PRs`, the order of which will be determined by agreement.
 
 ## References
+- Current diff: https://github.com/php/php-src/compare/master...true-async:php-src:true-async-api-stable
 - Zend Async API implementation files: https://github.com/true-async/php-src/tree/true-async-api
 - General changes to PHP functions + Async API: https://github.com/true-async/php-src/tree/true-async
 - An extension that implements the API: https://github.com/true-async/php-async
