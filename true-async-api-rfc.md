@@ -1,20 +1,23 @@
-# TrueAsync API RFC
+# TrueAsync engine API RFC
 
 * Version: 1.0
-* Date: 2025-06-16
+* Date: 2025-07-15
 * Author: Edmond [HT], edmondifthen@proton.me
 * Status: Under discussion
-* First Published at: 2025-06-16 
+* First Published at: 2025-07-15 
 * Git: https://github.com/true-async
 * Related RFC: https://wiki.php.net/rfc/true_async
 
 ## Introduction
-The **TrueAsync API** introduces a pluggable framework for asynchronous programming in `PHP`. 
-It allows extensions to register their own scheduler, reactor and thread pool implementations while keeping 
+The **TrueAsync engine API** introduces a pluggable framework for asynchronous programming in `PHP`. 
+It allows extensions to register their own `scheduler`, `reactor` and `thread pool` implementations while keeping 
 the `Zend Engine` independent of any particular event loop library. 
 
 The primary goal is to separate the core `PHP` functions from any specific asynchronous backend 
 so that alternative implementations can be swapped in without modifying the engine.
+
+This is effectively the first step toward bringing userland async capabilities to `PHP`, 
+which will require a separate `RFC`.
 
 ## Motivation
 `PHP` currently lacks a unified asynchronous interface, creating significant challenges for the ecosystem:
@@ -28,7 +31,7 @@ are inherently blocking and cannot be made async without core-level modification
 **Garbage Collection Issues**: Since the garbage collector calls destructors during the collection cycle, 
 and a destructor in PHP userland may trigger a context switch, the garbage collector must be adapted to support coroutines.
 
-The `TrueAsync API` addresses these problems by providing standardized async primitives in the core. 
+The `TrueAsync engine API` addresses these problems by providing standardized async primitives in the core. 
 The `API` is part of the `Zend Engine` for the following reasons:
 
 1. **Early Initialization**: As a core module it is available before extension initialization, 
@@ -47,7 +50,7 @@ file operations, and process management need async variants.
 ## Specification
 
 ### API Architecture
-The `TrueAsync API` defines a pluggable interface that enables different async backends to be registered by extensions while maintaining implementation flexibility. The core provides standardized async primitives without mandating specific implementations.
+The `TrueAsync engine API` defines a pluggable interface that enables different async backends to be registered by extensions while maintaining implementation flexibility. The core provides standardized async primitives without mandating specific implementations.
 
 **Key Components**:
 - **Events**: Low-level representation of sockets, timers and other readiness sources
@@ -73,16 +76,6 @@ Full backward compatibility is maintained:
 - Existing extensions remain unaffected unless they opt-in to async functionality
 - `CancellationException` is a new root exception, not extending `Exception`, 
 ensuring it does not interfere with existing code.
-
-## API Evolution
-The implementation details of the `True Async API` are not fixed upon the acceptance of this `RFC` 
-and are governed by a separate policy.
-
-The `True Async API`, as a **binary interface**, may be changed in accordance with PHP's release
-cycles until this status is explicitly revised by a separate policy.
-
-Once the `True Async API` receives a fixed binary version, 
-subsequent changes will be governed by a separate document.
 
 ## Proposed PHP Version(s)
 
