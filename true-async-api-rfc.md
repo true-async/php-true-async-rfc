@@ -16,8 +16,8 @@ the `Zend Engine` independent of any particular event loop library.
 The primary goal is to separate the core `PHP` functions from any specific asynchronous backend 
 so that alternative implementations can be swapped in without modifying the engine.
 
-This is effectively the first step toward bringing userland async capabilities to `PHP`, 
-which will require a separate `RFC`.
+This is effectively the **first step** toward bringing userland async capabilities to `PHP`, 
+which will require a separate `RFC` aimed at `PHP` 8.5 or higher.
 
 ## Motivation
 `PHP` currently lacks a unified asynchronous interface, creating significant challenges for the ecosystem:
@@ -71,7 +71,7 @@ The engine interacts only through standardized interfaces, keeping implementatio
 
 ## Backward Compatibility
 Full backward compatibility is maintained:
-- `API` is disabled by default — no behavior changes without explicit backend registration
+- The `API` is always available and does not change PHP’s behavior if the extension is not activated and not used. 
 - No new special functions are being added to PHP 
 - Existing extensions remain unaffected unless they opt-in to async functionality
 - `CancellationException` is a new root exception, not extending `Exception`, 
