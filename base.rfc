@@ -1,7 +1,7 @@
 ====== PHP True Async ======
 
-  * Version: 1.2
-  * Date: 2025-04-16
+  * Version: 1.4
+  * Date: 2025-09-30
   * Author: Edmond [HT], edmondifthen@proton.me
   * Status: Under discussion
   * First Published at: http://wiki.php.net/rfc/true_async
@@ -55,12 +55,10 @@ Please use the diagrams from the table to simplify understanding.
 | Term                       | Description                                                                    | Section                                     |
 | **Coroutine**              | An executable unit of code that can be suspended and resumed                   | Launching any function in non-blocking mode |
 | **Scope**                  | A container for managing the lifecycle of coroutines                           | Scope                                       |
-| **CoroutineGroup**         | A container for managing a group of tasks with the ability to retrieve results | CoroutineGroup                              |
 | **Zombie coroutine**       | A coroutine that continues execution after its Scope has been destroyed        | Scope disposal                              |
-| **Context**                | A data storage associated with a coroutine or Scope                            | Context API                                 |
-| **CancellationException**  | A mechanism for cooperative canceling coroutine execution                      | Cancellation                                |
+| **CancellationError**      | A mechanism for cooperative canceling coroutine execution                      | Cancellation                                |
 
-This **RFC** describes the **API** and **new syntax** for writing concurrent code in PHP, which includes:
+This **RFC** describes the **API** for writing concurrent code in PHP, which includes:
 
 === Coroutine ===
 A lightweight execution thread that can be suspended (''suspend'') and resumed.
@@ -90,16 +88,6 @@ sleep(5);
 $scope->disposeSafely();
 </code>
 
-=== CoroutineGroup ===
-Explicit group of coroutines with centralized result/error handling.
-Example:
-<code php>
-$coroutineGroup = new Async\CoroutineGroup(captureResults: true);
-$coroutineGroup->spawn(task1(...));
-$coroutineGroup->spawn(task2(...));
-[$result1, $result2] = await($coroutineGroup);
-</code>
-
 === Cooperative cancellation ===
 A special exception that implements cooperative cancellation:
 Example:
@@ -107,7 +95,7 @@ Example:
 $coroutine = spawn(function() {
     try {
         Async\delay(1000);
-    } catch (Async\CancellationException $e) {
+    } catch (Async\CancellationError $e) {
         echo "Coroutine cancelled";
     }
 });
@@ -115,25 +103,6 @@ $coroutine = spawn(function() {
 suspend();
 
 $coroutine->cancel();
-</code>
-
-=== Context ===
-Coroutine/Scope-associated data storage.
-Example:
-<code php>
-currentContext()->set('user_id', 123);
-spawn(function() {
-    $userId = currentContext()->get("user_id");
-    echo "User ID: $userId"; // 123
-});
-</code>
-
-=== Combinators ===
-
-Functions that combine multiple awaitable objects: ''awaitAny()'', ''awaitAll()'', ''awaitFirstSuccess()''.
-Example:
-<code php>
-$results = awaitAll([spawn(task1(...)), spawn(task2(...))]);
 </code>
 
 === Waiting for coroutine results ===
@@ -150,6 +119,15 @@ function fetchData(string $file): string
     return $result;
 }
 echo await(spawn(fetchData(...), "file.txt"));
+</code>
+
+=== Wait utilities ===
+
+A set of functions that enables synchronization of execution with multiple awaitable objects:
+''awaitAny()'', ''awaitAll()'', ''awaitFirstSuccess()''.
+Example:
+<code php>
+$results = awaitAll([spawn(task1(...)), spawn(task2(...))]);
 </code>
 
 === Awaiting a result with cancellation ===
@@ -180,21 +158,6 @@ Output:
 Hello, World
 Next line
 Goodbye, World
-</code>
-
-=== Working with a group of concurrent tasks. ===
-
-<code php>
-function mergeFiles(string ...$files): string
-{
-    $coroutineGroup = new Async\CoroutineGroup(captureResults: true);
-
-    foreach ($files as $file) {
-       $coroutineGroup->spawn(file_get_contents(...), $file);
-    }
-
-    return implode("\n", await($coroutineGroup));
-}
 </code>
 
 === Structured concurrency ===
@@ -266,128 +229,6 @@ $profile = await(spawn(getUserProfile(...), 123));
 var_dump($profile);
 </code>
 
-=== Await all child tasks. ===
-
-<code php>
-function processBackgroundJobs(string ...$jobs): array
-{
-    $scope = new Scope();
-
-    foreach ($jobs as $job) {
-        $scope->spawn(processJob(...), $job);
-    }
-
-    // Waiting for all child tasks throughout the entire depth of the hierarchy.
-    $scope->awaitCompletion(Async\timeout(300 * 1000));
-}
-
-function processJob(mixed $job): void {
-    $scope = \Async\Scope::inherit();
-    $scope->spawn(task1(...), $job);
-    $scope->spawn(task2(...), $job);
-
-    // Waiting for all child tasks in the current scope.
-    $scope->awaitCompletion(Async\timeout(300 * 1000));
-}
-</code>
-
-=== Binding Coroutines to a PHP Object ===
-
-<code php>
-class HttpClient
-{
-    private Scope $scope;
-
-    public function __construct()
-    {
-        $this->scope = new Scope();
-    }
-
-    public function request(array $data): \Async\Awaitable
-    {
-        return $this->scope->spawn(function() use ($data) {
-            // This coroutine is bound to the MyClass instance
-        });
-    }
-}
-
-$service = new HttpClient;
-$service->request(['login' => 'admin', 'password' => '1234']);
-// HttpClient instance will stop all coroutines bound to it.
-unset($service);
-</code>
-
-=== Tasks race ===
-
-<code php>
-use Async\CoroutineGroup;
-
-function fetchFirstSuccessful(string ...$apiHosts): string
-{
-    $coroutineGroup = new Async\CoroutineGroup(captureResults: false);
-
-    foreach ($apiHosts as $host) {
-        $coroutineGroup->spawn(file_get_contents(...), $host);
-    }
-
-    // Get the first successful result
-    return await($coroutineGroup->race(ignoreErrors: true));
-}
-</code>
-
-==== Implementation requirements ====
-
-The implementation of this **RFC** should be carried out in a way that minimizes changes to the **PHP core**.
-
-The proposed changes include:
-* syntax modifications to the language,
-* interfaces without implementations for ''Reactor'' and ''Scheduler'',
-* an internal interface for the ''Scope'' class.
-
-All other classes and functions from this **RFC** will be moved to a separate module,
-which will become part of the standard library.
-However, this module can be replaced with a different one if necessary.
-
-The ''Coroutine'', ''Scope'' and ''CoroutineGroup'' classes are not part of the **PHP** core.
-
-The behavior of functions such as ''spawn()'', ''await()'', and ''suspend()'' is not defined in the core,
-and can be overridden by an extension, which must adhere to the logic defined in this **RFC**.
-
-==== Scheduler and Reactor ====
-
-**Scheduler** and **Reactor** must be implemented as **PHP** extensions that implement low-level interfaces.
-
-The **Scheduler** and **Reactor** interfaces are part of the implementation of this **RFC**.
-
-The behavior of **Scheduler** and **Reactor** must not contradict the logic of the **RFC**.
-Components cannot override the logic of expressions such as spawn, async, suspend, and so on.
-However, this **RFC** does not impose any restrictions on extending functionality.
-
-It is allowed to use the **Async** namespace for new functions or objects in **Scheduler** and **Reactor**.
-
-> ⚠️ **Warning:** Users should not make assumptions about the execution order of coroutines unless
-> this is a specific goal of a particular **Scheduler** implementation.
-
-The **Reactor** is a component that implements the **Event Loop**.
-It may be exposed as a separate API in **PHP-land**,
-but its behavior is not defined within this **RFC**.
-
-==== Preemptive Multitasking ====
-
-**PHP** allows for the implementation of forced coroutine suspension,
-which can be used in a preemptive multitasking algorithm.
-
-This capability is particularly implemented in **Swoole**.
-However, the current **RFC** rejects **preemptive multitasking** due to the unpredictable behavior
-of code during context switches.
-
-A coroutine can lose control literally at any PHP opcode,
-which can significantly affect the outcome and contradict the programmer's expectations.
-Writing code that can lose control at any moment is a complex domain where PHP does not seem like an adequate tool.
-
-This **RFC** considers a scenario where a coroutine is abruptly stopped only in one case:
-if the **Scheduler** implements a runtime control mechanism similar to ''max_execution_time''.
-
 ==== Cancellable by design ====
 
 This **RFC** is based on the principle of **"Cancellable by design"**, which can be described as follows:
@@ -399,10 +240,10 @@ This **RFC** is based on the principle of **"Cancellable by design"**, which can
 
 > If a coroutine’s lifetime needs to be controlled — it **MUST** be done **EXPLICITLY**!
 
-In practice, this means that if a coroutine is created using the expression ''spawn <callable>'',
+In practice, this means that if a **coroutine** is created without specifying a ''Scope'',
 the developer treats it as non-critical in terms of data integrity.
-If the developer needs to manage the coroutine’s lifetime, they will use the expression ''spawn with''.
-In other words, the developer must take extra steps to explicitly extend the coroutine's lifetime.
+If it is necessary to manage the coroutine’s lifetime, a ''Scope'' **MUST** be defined.
+In other words, the developer must take extra steps to explicitly extend the coroutine’s lifetime.
 
 ==== Namespace ====
 
@@ -1169,7 +1010,7 @@ $scope = new Scope();
 spawn(function() {
     try {
         $scope->awaitCompletion(Async\signal(SIGTERM));
-    } catch (\Async\CancellationException $exception) {
+    } catch (\Async\CancellationError $exception) {
         $scope->awaitAfterCancellation();
         echo "Caught exception: ",$exception->getMessage()."\n";
     }
@@ -1255,7 +1096,7 @@ a child relative to the coroutines in the parent ''Scope''.
 
 <code php>
 use Async\Scope;
-use Async\CancellationException;
+use Async\CancellationError;
 
 function connectionChecker($socket, callable $cancelToken): void
 {
@@ -1265,7 +1106,7 @@ function connectionChecker($socket, callable $cancelToken): void
             return;
         }
 
-        Async\delay(1000); // throw CancellationException if canceled
+        Async\delay(1000); // throw CancellationError if canceled
     }
 }
 
@@ -1292,7 +1133,7 @@ function connectionHandler($socket): void
         $limiterScope = Scope::inherit(); // child scope for connectionLimiter and connectionChecker
 
         // We do not provide direct access to the Scope object in other functions, because this is an antipattern!
-        $cancelToken = fn(string $message) => $scope->cancel(new CancellationException($message));
+        $cancelToken = fn(string $message) => $scope->cancel(new CancellationError($message));
 
         // Limiter coroutine
         $limiterScope->spawn(connectionLimiter(...), $cancelToken);
@@ -1330,7 +1171,7 @@ function socketServer(): void
             // The ''signal'' function returns a trigger ''Awaitable''.
             await Async\signal(SIGINT);
         } finally {
-            $scope->cancel(new CancellationException('Server shutdown'));
+            $scope->cancel(new CancellationError('Server shutdown'));
         }
     }
 
@@ -2136,7 +1977,7 @@ $coroutineGroup->spawn(function() {
 // pass control to the task
 suspend();
 
-$coroutineGroup->cancel(new \Async\CancellationException('Custom cancellation message'));
+$coroutineGroup->cancel(new \Async\CancellationError('Custom cancellation message'));
 </code>
 
 **Expected output:**
@@ -2206,7 +2047,7 @@ but does not belong to a ''CoroutineGroup'' throws an exception?
 1. If the exception is not handled, it will propagate to the ''Scope''.
 2. If a ''Scope'' has no exception handler, it invokes the ''dispose()'' strategy,
 which cancels all coroutines, including any ''CoroutineGroup'' associated with the ''Scope''.
-In this case, the ''await'' point of the ''CoroutineGroup'' will receive a ''CancellationException''.
+In this case, the ''await'' point of the ''CoroutineGroup'' will receive a ''CancellationError''.
 
 **Example:**
 
@@ -2225,7 +2066,7 @@ $coroutineGroup->spawn(function() {
 
 try {
     await($coroutineGroup);
-} catch (Async\CancellationException $exception) {
+} catch (Async\CancellationError $exception) {
     echo "Caught exception: ", $exception->getMessage(), "\n";
 }
 </code>
@@ -2634,7 +2475,7 @@ try {
     echo await(spawn('file_get_content', 'https://php.net/'), Async\timeout(1000));
 } catch (\Async\AwaitCancelledException) {
     echo "Operation was cancelled by timeout\n";
-} catch (\Async\CancellationException) {
+} catch (\Async\CancellationError) {
     echo "Operation was cancelled by user\n";
 }
 </code>
@@ -2907,7 +2748,7 @@ function task(): void {}
 $coroutine = spawn(task(...));
 
 // cancel the coroutine
-$coroutine->cancel(new Async\CancellationException('Task was cancelled'));
+$coroutine->cancel(new Async\CancellationError('Task was cancelled'));
 </code>
 
 The cancellation operation is implemented as follows:
@@ -2916,9 +2757,9 @@ The cancellation operation is implemented as follows:
 2. If a coroutine is suspended, its execution will resume with an exception.
 3. If a coroutine has already completed, nothing happens.
 
-The ''CancellationException'', if unhandled within a coroutine, is automatically suppressed after the coroutine completes.
+The ''CancellationError'', if unhandled within a coroutine, is automatically suppressed after the coroutine completes.
 
-> ⚠️ **Warning:** You should not attempt to suppress ''CancellationException'' exception,
+> ⚠️ **Warning:** You should not attempt to suppress ''CancellationError'' exception,
 > as it may cause application malfunctions.
 
 <code php>
@@ -2929,22 +2770,22 @@ $scope->spawn(function() {
     echo "Task 1\n";
 });
 
-$scope->cancel(new Async\CancellationException('Task was cancelled'));
+$scope->cancel(new Async\CancellationError('Task was cancelled'));
 </code>
 
 Canceling a ''Scope'' triggers the cancellation of all coroutines
 within that ''Scope'' and all child ''Scopes'' in hierarchical order.
 
 >
-> **Note:** ''CancellationException'' can be extended by the user
+> **Note:** ''CancellationError'' can be extended by the user
 > to add metadata that can be used for debugging purposes.
 >
 
-==== CancellationException handling ====
+==== CancellationError handling ====
 
-In the context of coroutines, it is not recommended to use ''catch \Throwable'' or ''catch CancellationException''.
+In the context of coroutines, it is not recommended to use ''catch \Throwable'' or ''catch CancellationError''.
 
-Since ''CancellationException'' does not extend the ''\Exception'' class,
+Since ''CancellationError'' does not extend the ''\Exception'' class,
 using ''catch \Exception'' is a safe way to handle exceptions,
 and the ''finally'' block is the recommended way to execute finalizing code.
 
@@ -2989,9 +2830,9 @@ try {
 
     try {
         await($coroutine);
-    } catch (Async\CancellationException $exception) {
+    } catch (Async\CancellationError $exception) {
         // not recommended way to handle exceptions
-        echo "Caught CancellationException\n";
+        echo "Caught CancellationError\n";
         throw $exception;
     }
 } finally {
@@ -3002,27 +2843,27 @@ try {
 Expected output:
 
 <code>
-Caught CancellationException
+Caught CancellationError
 The end
 </code>
 
-=== CancellationException propagation ===
+=== CancellationError propagation ===
 
-The ''CancellationException'' affects **PHP** standard library functions differently.
+The ''CancellationError'' affects **PHP** standard library functions differently.
 If it is thrown inside one of these functions that previously did not throw exceptions,
 the PHP function will terminate with an error.
 
 In other words, the ''cancel()'' mechanism does not alter the existing function contract.
 PHP standard library functions behave as if the operation had failed.
 
-Additionally, the ''CancellationException'' will not appear in ''get_last_error()'',
+Additionally, the ''CancellationError'' will not appear in ''get_last_error()'',
 but it may trigger an ''E_WARNING'' to maintain compatibility with expected behavior
 for functions like ''fwrite'' (if such behavior is specified in the documentation).
 
 ==== Critical section ====
 
 Sometimes it's necessary to execute a **critical section** of code
-that must not be cancelled via ''CancellationException''.
+that must not be cancelled via ''CancellationError''.
 
 For example, this could be a sequence of write operations or a transaction.
 
@@ -3038,7 +2879,7 @@ function task(): void
 spawn(task(...));
 </code>
 
-If a ''CancellationException'' was sent to a coroutine during ''protect()'',
+If a ''CancellationError'' was sent to a coroutine during ''protect()'',
 the exception will be thrown immediately after the execution of ''protect()'' completes.
 
 The use of loops or unsafe operations inside a critical section can be checked by static analyzers.
@@ -3081,7 +2922,7 @@ which can be an external system and is beyond the scope of this **RFC**.
 The **Graceful Shutdown** mode can also be triggered using the function:
 
 <code php>
-Async\gracefulShutdown(?CancellationException $cancellationException = null): void {}
+Async\gracefulShutdown(?CancellationError $CancellationError = null): void {}
 </code>
 
 from anywhere in the application.
@@ -3126,7 +2967,6 @@ The ''Async\getCoroutines()'' method returns an array of all coroutines in the a
   * [Coroutine](https://github.com/EdmondDantes/php-true-async-rfc/tree/main/examples/Async/Coroutine.php)
   * [Coroutine Context](https://github.com/EdmondDantes/php-true-async-rfc/tree/main/examples/Async/Context.php)
   * [Coroutine Scope](https://github.com/EdmondDantes/php-true-async-rfc/tree/main/examples/Async/Scope.php)
-  * [Task Group](https://github.com/EdmondDantes/php-true-async-rfc/tree/main/examples/Async/CoroutineGroup.php)
 
 ===== Backward Incompatible Changes =====
 
