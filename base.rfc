@@ -47,6 +47,8 @@ for demonstration purposes only to better illustrate the content of the **RFC**.
 | **Scope**                  | A container for managing the lifecycle of coroutines                           | Scope                                       |
 | **Zombie coroutine**       | A coroutine that continues execution after its Scope has been destroyed        | Scope disposal                              |
 | **CancellationError**      | A mechanism for cooperative canceling coroutine execution                      | Cancellation                                |
+| **Scheduler**              | A component that manages coroutine execution and switching                     | Coroutine lifecycle                         |
+| **Reactor**                | An event loop that handles I/O events and timers                               | Coroutine lifecycle                         |
 
 This **RFC** describes the **API** for writing concurrent code in PHP, which includes:
 
@@ -198,7 +200,7 @@ Isolated execution contexts make it possible to switch between coroutines and ex
 
 Any function can be executed as a coroutine without any changes to the code.
 
-A coroutine can stop itself bypassing control to the ''Scheduler''.
+A coroutine can stop itself bypassing control to the ''scheduler''.
 However, it cannot be stopped externally.
 
 > ⚠️ **Warning:**
@@ -207,7 +209,7 @@ However, it cannot be stopped externally.
 > 	* To enforce an active execution time limit.
 
 A suspended coroutine can be resumed at any time.
-The ''Scheduler'' component is responsible for the coroutine resumption algorithm.
+The ''scheduler'' component is responsible for the coroutine resumption algorithm.
 
 A coroutine can be resumed with an **exception**, in which case an exception
 will be thrown from the suspension point.
@@ -2103,7 +2105,7 @@ rollback strategies—and may require blocking the function being cancelled.
 
 Intentionally stopping coroutines that are in the cancellation state is a dangerous operation
 that can lead to data loss. To avoid overcomplicating this **RFC**,
-it is proposed to delegate the responsibility for such logic to the ''Scheduler'' implementation.
+it is proposed to delegate the responsibility for such logic to the ''scheduler'' implementation.
 
 === exit and die keywords ===
 
