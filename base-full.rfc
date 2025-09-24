@@ -38,6 +38,16 @@ Code examples that involve PHP built-in stream functions, such as ''file_get_con
 as well as ''sleep'', ''usleep'', and PHP Socket functions are provided
 for demonstration purposes only to better illustrate the content of the **RFC**.
 
+==== 📚 Diagrams Overview ====
+
+This **RFC** is quite complex due to the number of logical connections.
+Please use the diagrams from the table to simplify understanding.
+
+| Diagram Name                                                  																						| Description                                                                                  |
+| [[https://github.com/EdmondDantes/php-true-async-rfc/blob/main/diagrams/mind-map.svg]]                    | A mind map showing the relationship between key features and problems solved by the **RFC**. |
+| [[https://github.com/EdmondDantes/php-true-async-rfc/blob/main/diagrams/feature-to-requirement.svg]]	    | Maps features to the requirements that generated them.                                       |
+| https://github.com/EdmondDantes/php-true-async-rfc/blob/main/diagrams/decision-tree.svg                   | A decision tree that guides developers on which API to use depending on the situation.       |
+
 ==== Overview ====
 
 === Short glossary ===
@@ -129,7 +139,7 @@ echo await(spawn('fetchData', "https://php.net/"), spawn('sleep', 2));
 
 === Suspend ===
 
-Transferring control from the coroutine to the other coroutines.:
+Transferring control from the coroutine to the ''Scheduler'':
 
 <code php>
 function myFunction(): void {
@@ -154,17 +164,69 @@ Goodbye, World
 
 <code php>
 use Async\Scope;
+use Async\CoroutineGroup;
+use Async\AwaitCancelledException;
 
-function getUserProfile(int $userId): array {
-    $scope = new Scope();
-    $tasks = [];
+/**
+ * Retrieves user profile data from different sources
+ */
+function getUserProfile(int $userId): array
+{
+    // Main task group with result capturing
+    $profileTasks = new CoroutineGroup(captureResults: true);
 
-    $tasks[] = $scope->spawn(fetchUserData(...), $userId);
-    $tasks[] = $scope->spawn(fetchUserOrders(...), $userId);
-    $tasks[] = $scope->spawn(fetchUserSettings(...), $userId);
+    try {
+        // Start fetching basic user information
+        $profileTasks->spawn(function() use ($userId):array {
+            $userData = await(spawn('fetchUserData', $userId));
+            return ['basic' => $userData];
+        });
 
-    return awaitAllOrFail($tasks);
+        // Start fetching extended details in parallel
+        $profileTasks->spawn(function() use ($userId): array {
+            // Subtask group for supplementary information
+            $orderTasks = new CoroutineGroup(Scope::inherit(), captureResults: true);
+
+            // Request user orders with 2-second timeout
+            $orderTasks->spawn(function() use ($userId): array {
+                try {
+                    return ['orders' => await(spawn('fetchUserOrders', $userId), Async\timeout(2000)]);
+                } catch (AwaitCancelledException) {
+                    return ['orders' => ['status' => 'timeout']];
+                }
+            });
+
+            // Request API2 user orders with 2-second timeout
+            $orderTasks->spawn(function() use ($userId): array {
+                try {
+                    return ['orders2' => await(spawn('fetchUserOrdersAPI2', $userId), Async\timeout(2000)]);
+                } catch (AwaitCancelledException) {
+                    return ['orders2' => ['status' => 'timeout']];
+                }
+            });
+
+            // Wait for all order tasks to complete
+            return array_merge(...await($orderTasks));
+        });
+
+        // Request user settings
+        $profileTasks->spawn(function() use ($userId): array {
+          return ['settings' => await(spawn('fetchUserSettings', $userId))];
+        });
+
+        // Merge all results into a single profile
+        return array_merge(...await($profileTasks));
+
+    } catch (Exception $e) {
+        // Error handling
+        error_log("Error fetching user profile: " . $e->getMessage());
+        return ['error' => $e->getMessage()];
+    }
 }
+
+// Usage
+$profile = await(spawn(getUserProfile(...), 123));
+var_dump($profile);
 </code>
 
 ==== Cancellable by design ====
@@ -275,12 +337,46 @@ This code:
 
 === Spawn with scope ===
 
-You can use the ''spawn'' method, which is available for the ''Scope'' class:
+''spawnWith(Async\ScopeProvider $scope, callable $callable, mixed ...$args)'' allows launching a coroutine
+with a specific ''Scope''.
+
+The parameter can be either an ''Async\Scope'' object or a class
+that implements the ''Async\ScopeProvider'' interface.
+For example, such a class is ''CoroutineGroup''.
+
+> Note: The non-blocking version of the ''gethostbyname'' function is not part
+> of this RFC and is provided for demonstration purposes only.
 
 <code php>
 $scope = new Async\Scope();
+$coroutineGroup = new Async\CoroutineGroup($scope);
 
+$coroutine = spawnWith($scope, function() use ():string {
+    return gethostbyname('php.net');
+});
+
+$coroutine = spawnWith($coroutineGroup, function() use ():string {
+    return gethostbyname('php.net');
+});
+
+function defineTargetIpV4(string $host): string {
+    return gethostbyname($host);
+}
+
+spawnWith($scope, defineTargetIpV4(...), $host);
+spawnWith($coroutineGroup, defineTargetIpV4(...), $host);
+</code>
+
+You can also use the ''spawn'' method, which is available for the ''Scope'' and ''CoroutineGroup'' classes:
+
+<code php>
+$scope = new Async\Scope();
+$coroutineGroup = new Async\CoroutineGroup($scope);
 $coroutine = $scope->spawn(function() use ():string {
+		return gethostbyname('php.net');
+});
+
+$coroutine = $coroutineGroup->spawn(function() use ():string {
 		return gethostbyname('php.net');
 });
 
@@ -289,7 +385,188 @@ function defineTargetIpV4(string $host): string {
 }
 
 $coroutine = $scope->spawn(defineTargetIpV4(...), $host);
+
+$coroutine = $coroutineGroup->spawn(defineTargetIpV4(...), $host);
+
 </code>
+
+=== ''ScopeProvider'' Interface ===
+
+The ''ScopeProvider'' interface allows objects to provide an ''Async\Scope'' instance that can be used
+in a ''spawnWith'' function.
+
+This is useful when you want to abstract the scope management logic,
+letting higher-level structures (like a task group or a custom container)
+expose a scope without directly exposing internal details.
+
+<code php>
+declare(strict_types=1);
+
+namespace Async;
+
+interface ScopeProvider
+{
+    /**
+     * Returns the associated Scope instance.
+     *
+     * This scope will be used when spawning a coroutine via ''spawn with $provider''.
+     *
+     * @return Scope|null
+     */
+    public function provideScope(): ?Scope;
+}
+</code>
+
+> The ''provideScope'' method may return ''NULL''; in this case, the current **Scope** will be used.
+
+**Example Use Case:**
+
+A task group can implement this interface to automatically provide its internal scope to ''spawn with'':
+
+<code php>
+class CustomCoroutineGroup implements ScopeProvider
+{
+    private Scope $scope;
+
+    public function __construct()
+    {
+        $this->scope = new Scope();
+    }
+
+    public function provideScope(): ?Scope
+    {
+        return $this->scope;
+    }
+}
+</code>
+
+This allows you to spawn coroutines into the task group using:
+
+<code php>
+$coroutineGroup->spawn(function() {
+    // This coroutine is bound to the CoroutineGroup's scope
+});
+</code>
+
+=== ''SpawnStrategy'' Interface ===
+
+The ''SpawnStrategy'' interface allows attaching a newly spawned coroutine
+to a custom user-defined context immediately after the ''spawn with'' expression is evaluated.
+
+This is useful for scenarios where the coroutine should be registered, tracked,
+or logically grouped within a context (e.g., a ''CoroutineGroup'' or a custom task manager).
+
+<code php>
+interface SpawnStrategy extends ScopeProvider
+{
+    /**
+     * Called before a coroutine is spawned, before it is enqueued.
+     *
+     * @param   Coroutine   $coroutine  The coroutine to be spawned.
+     * @param   Scope       $scope      The Scope instance.
+     *
+     */
+    public function beforeCoroutineEnqueue(Coroutine $coroutine, Scope $scope): array;
+
+    /**
+     * Called after a coroutine is spawned, enqueued.
+     *
+     * @param Coroutine $coroutine
+     * @param Scope     $scope
+     */
+    public function afterCoroutineEnqueue(Coroutine $coroutine, Scope $scope): void;
+}
+</code>
+
+If the ''$scope'' object in a ''spawn with'' expression implements the ''SpawnStrategy'' interface,
+then the ''acceptCoroutine'' method will be called immediately after the coroutine is created.
+
+**Example:**
+
+A class like ''CustomCoroutineGroup'' might implement this interface
+to automatically collect all spawned coroutines under its management:
+
+<code php>
+class CustomCoroutineGroup implements Async\SpawnStrategy
+{
+    private array $coroutines = [];
+
+    public function afterCoroutineEnqueue(Coroutine $coroutine, Scope $scope): void
+    {
+        $this->coroutines[] = $coroutine;
+        echo "Coroutine added to the group as ".$coroutine->getSpawnLocation()."\n";
+    }
+
+    // Additional methods for managing the group...
+}
+
+$customCoroutineGroup = new CustomCoroutineGroup();
+
+$customCoroutineGroup->spawn(function() {
+    // This coroutine will be automatically added to the custom task group
+});
+</code>
+
+The ''beforeCoroutineEnqueue()'' method is called after the coroutine has been created,
+but before it is added to the queue.
+It allows for additional operations to be performed with the coroutine and its context,
+and it returns an optional list of options for the ''Scheduler''.
+
+> The list of options for the Scheduler is not part of this **RFC**
+> and is defined by the ''Scheduler'' implementation.
+
+<code php>
+class HiPriorityStrategy implements Async\SpawnStrategy
+{
+    public function beforeCoroutineEnqueue(Coroutine $coroutine, Scope $scope): array
+    {
+        // Mark the coroutine as high priority before it is enqueued
+        $coroutine->asHiPriority();
+
+        return [];
+    }
+
+    // Additional methods ...
+}
+
+spawnWith(new HiPriorityStrategy(), function() {
+    // This coroutine will be marked as high priority
+});
+</code>
+
+=== ''hiPriority'' strategy ===
+
+The ''Async\hiPriority(?Scope $scope = null)'' function allows launching a coroutine with high priority:
+
+<code php>
+use function Async\hiPriority;
+
+spawn(function() {
+    echo "normal priority\n";
+});
+
+spawnWith(hiPriority(), function {
+    echo "high priority\n";
+});
+</code>
+
+**Expected output:**
+
+<code>
+high priority
+normal priority
+</code>
+
+If the ''$scope'' parameter is not specified, the current ''Scope'' will be used for launching.
+
+The ''hiPriority'' strategy marks the ''coroutine'' as high-priority using the ''Coroutine::asHiPriority()'' method.
+
+This action serves as a recommendation for the ''Scheduler'', suggesting that the coroutine should be placed as
+close to the front of the queue as possible. However, the programmer **MUST NOT** rely on this outcome.
+
+''hiPriority'' can be useful in situations where resources need to be released as quickly as possible
+or when a critical section of code must be executed promptly. The programmer should not overuse it,
+as this may negatively affect the application's performance.
 
 ==== Suspension ====
 
@@ -386,13 +663,13 @@ and is intended for objects implemented as **PHP extensions**, such as:
 
 - ''Future''
 - ''Cancellation''
-- ''CoroutineGroup''
 
 > **Note:** These classes are not part of this **RFC**.
 
 The following classes from this **RFC** also implement this interface:
 
 - ''Coroutine''
+- ''CoroutineGroup''
 
 Unlike ''Future'', the ''Awaitable'' interface does not impose limitations on the number of state changes,
 which is why the ''Future'' contract is considered a special case of the ''Awaitable'' contract.
@@ -486,13 +763,18 @@ try {
 
 ==== Edge Behavior ====
 
-The use of ''spawn''/''await''/''suspend'' is allowed in any part of a PHP program.
+The use of ''spawn''/''await''/''suspend'' is allowed in almost any part of a PHP program.
 This is possible because the PHP script entry point forms the **main execution thread**,
 which is also considered a coroutine.
 
 As a result, operations like ''suspend'' and ''currentCoroutine()'' will behave the same way as in other cases.
 
-Asynchronous code will work as expected, including inside ''register_shutdown_function''.
+If only **one coroutine** exists in the system, calling ''suspend'' will immediately return control.
+
+The ''register_shutdown_function'' handler operates in synchronous mode,
+after asynchronous handlers have already been destroyed.
+Therefore, the ''register_shutdown_function'' code should not use the concurrency API.
+The ''suspend'' keyword will have no effect, and the ''spawn'' operation will not be executed at all.
 
 ==== Coroutine Scope ====
 
@@ -504,7 +786,7 @@ Sometimes it is necessary to gain control not only over a currently running coro
 but also over all coroutines that will be launched within a new one — without having direct access to them.
 This could be the case for web server code that handles requests in separate coroutines
 and does not know how many additional coroutines will be launched,
-or a ''JobExecutor'' that wants to manage the lifecycle of running jobs.
+or a JobExecutor that wants to manage the lifecycle of running jobs.
 
 Without such control, the application code loses the ability to resist runtime errors,
 which increases the risk of a complete service failure.
@@ -518,7 +800,7 @@ The main use cases for ''Scope'' are:
 3. Binding the lifetime of the scope's coroutines to the lifetime of a **PHP object**
 4. Creating a hierarchy of scopes to manage coroutines in a structured way
 
-Binding ''Scope'' to objects is a good practice that has proven effective in **Kotlin**.
+Binding Scope to objects is a good practice that has proven effective in **Kotlin**.
 By allowing coroutines to be tied to an object (this could be a ''Screen'' or a ''ViewModel''),
 it is possible to avoid the error where coroutines outlive the object that manages them.
 
@@ -540,14 +822,14 @@ function mainTask(): void { 			  	   // <- global scope
     spawn('readFile', 'file1.txt'); 		 // <- global scope
 }
 
-spawn('mainTask'); 										   // <- global scope
+spawn('mainTask'); 										 // <- global scope
 </code>
 
 If an application never creates **custom Scopes**, its behavior is similar to coroutines in ''Go'':
   * Coroutines are not explicitly linked to each other.
   * The lifetime of coroutines is not limited.
 
-The method ''Scope::spawn'' creates a **new coroutine** bound to the specified scope.
+The function ''spawnWith'' creates a **new coroutine** bound to the specified scope.
 Scope is propagated between coroutines.
 If a coroutine is launched within a specific Scope, that Scope is considered the current one.
 The function like ''spawn(<callable>)'' will create a coroutine within the current Scope.
@@ -593,7 +875,7 @@ main()                          ← defines a $scope
     ├── task3()                 ← runs in the $scope
 </code>
 
-Thus, the method ''Scope::spawn'' creates a new branch of sibling coroutines,
+Thus, the function ''spawnWith()'' or method ''Scope::spawn'' creates a new branch of sibling coroutines,
 where the new coroutine exists at the same level as all subsequent ones.
 
 The code that owns a ''Scope'' object becomes the **Point of responsibility**
@@ -606,6 +888,8 @@ for all coroutines executed within that Scope.
 > use ''Async\ScopeProvider'' containers or other appropriate mechanisms.
 
 === Scope waiting ===
+
+> **Warning:** In general, it is strongly discouraged to wait on a ''Scope''; instead, prefer using a ''CoroutineGroup''.
 
 The ''Scope'' class does not implement the ''Awaitable'' interface,
 and therefore cannot be used in an ''await'' expression.
@@ -658,6 +942,8 @@ Sibling task 3
 
 The ''Scope'' awaiting methods do not capture any task results,
 so they cannot be used to await return values.
+
+> ℹ️ **Note:** If you need to retrieve the result of a group of tasks, use the ''Async\CoroutineGroup'' class.
 
 The ''awaitCompletion'' method can only be used with an explicitly defined cancellation token.
 This requirement helps prevent indefinite waiting.
@@ -1186,7 +1472,8 @@ The following scenarios are considered potentially erroneous:
   4. An attempt to await a coroutine from within itself.
   5. Awaiting ''$scope'' from within itself or from one of its child scopes.
   6. Stuck tasks in the cancellation state.
-  7. Deadlocks caused by circular dependencies between coroutines.
+  7. Using ''CoroutineGroup'' with a result capturing without an ''await'' expression.
+  8. Deadlocks caused by circular dependencies between coroutines.
 
 **PHP** will respond to such situations by issuing **warnings**, including debug information about the involved coroutines.
 Developers are expected to write code in a way that avoids triggering these warnings.
@@ -1249,12 +1536,13 @@ To avoid accidentally hanging coroutines whose lifetimes were not correctly limi
 namespace ProcessPool;
 
 use Async\Scope;
+use Async\CoroutineGroup;
 
 final class ProcessPool
 {
     private Scope $watcherScope;
     private Scope $jobsScope;
-    private Scope $pool;
+    private CoroutineGroup $pool;
 
     /**
      * List of pipes for each process.
@@ -1273,7 +1561,7 @@ final class ProcessPool
         // Define the coroutine scopes for the pool, watcher, and jobs
         $this->watcherScope = new Scope();
         $this->jobsScope = new Scope();
-        $this->pool = new Scope();
+        $this->pool = new CoroutineGroup(captureResults: false);
     }
 
     public function __destruct()
@@ -1288,7 +1576,7 @@ final class ProcessPool
         $this->watcherScope->spawn($this->processWatcher(...));
 
         for ($i = 0; $i < $this->min; $i++) {
-            $this->pool->spawn($this->startProcess(...));
+            $coroutineGroup->add($this->poolScope->spawn($this->startProcess(...)));
         }
     }
 
@@ -1303,7 +1591,7 @@ final class ProcessPool
     {
         while (true) {
             try {
-                $this->pool->awaitCompletion(Async\signal(SIGTERM));
+                await($this->pool);
             } catch (StopProcessException $exception)  {
                 echo "Process was stopped with message: {$exception->getMessage()}\n";
 
@@ -1319,11 +1607,11 @@ final class ProcessPool
 The example above demonstrates how splitting coroutines into
 Scopes helps manage their interaction and reduces the likelihood of errors.
 
-Here, ''watcherScope'' monitors tasks in ''pool''.
+Here, ''watcherScope'' monitors tasks in ''poolScope''.
 When a process finishes, the watcher detects this event and, if necessary, starts a new process or not.
 The monitoring logic is completely separated from the process startup logic.
 
-The lifetime of ''watcherScope'' matches that of ''pool'', but not longer than the lifetime of the watcher itself.
+The lifetime of ''watcherScope'' matches that of ''poolScope'', but not longer than the lifetime of the watcher itself.
 
 The overall lifetime of all coroutines in the ''ProcessPool'' is determined by the lifetime of the ''ProcessPool''
 object or by the moment the ''stop()'' method is explicitly called.
@@ -1349,6 +1637,482 @@ a constant in the ''php.ini'' file: ''async.zombie_coroutine_timeout'', which is
 
 If a coroutine is created within a user-defined ''Scope'', the programmer
 can set a custom timeout for that specific ''Scope'' using the ''Scope::disposeAfterTimeout(int $ms)'' method.
+
+==== CoroutineGroup ====
+
+> ''Async\CoroutineGroup'' is a container for controlling a group of coroutines.
+
+<code php>
+function mergeFiles(string ...$files): string
+{
+    $coroutineGroup = new Async\CoroutineGroup(captureResults: true);
+
+    foreach ($files as $file) {
+       $coroutineGroup->spawn(file_get_contents(...), $file);
+    }
+
+    return implode("\n", await($coroutineGroup));
+}
+
+echo await(spawn(mergeFiles(...), ['file1.txt', 'file2.txt', 'file3.txt']));
+</code>
+
+=== Motivation ===
+
+''CoroutineGroup'' is an explicit and safe way to manage a group of tasks.
+
+Using the ''Scope'' class and the ''spawn'' expression, you can create groups of coroutines.
+However, the code that creates ''$scope'' and/or awaits it might not be aware of which coroutines will be added.
+Moreover, the wait strategy of ''$scope'' can lead to resource leaks
+if a programmer mistakenly uses the ''spawn <callable>'' expression
+and adds a coroutine to the ''Scope'' that lives indefinitely.
+
+The ''CoroutineGroup'' class is an explicit pattern for managing a group of coroutines.
+Unlike ''Scope'', tasks cannot be added to it accidentally.
+
+In a ''CoroutineGroup'', a task can only be added **explicitly**, using the ''spawn with'' expression.
+A ''CoroutineGroup'' is not propagated through the execution context by child coroutines.
+
+And unlike ''Scope'', ''CoroutineGroup'' can capture the results of tasks, which makes it convenient for awaiting results.
+
+If ''Scope'' is used to create a shared space for coroutines,
+then ''CoroutineGroup'' is intended for explicit control over child tasks.
+In this role, ''CoroutineGroup'' serves as a complement to the logic of ''Scope''.
+
+=== CoroutineGroup usage ===
+
+The ''CoroutineGroup'' constructor accepts several parameters:
+
+1. ''$scope'' – the ''Scope'' in which the tasks will be executed.
+    If this parameter is not provided, a new, separate ''Scope'' will be created.
+2. ''$captureResults'' – an option to capture the results of the tasks.
+3. ''$bounded'' – an option to ''Scope::dispose'' all Scope tasks when the ''CoroutineGroup'' is disposed.
+
+Once a ''$coroutineGroup'' is created, it can be used in a ''spawn with $coroutineGroup'' expression,
+which has an additional effect for task groups: a coroutine is created within the ''CoroutineGroup'''s ''$scope'',
+and the coroutine is added to the task group.
+
+A ''CoroutineGroup'' holds a reference to the ''Scope'' in which the tasks will be executed.
+If this is the only reference to the ''Scope'', the ''CoroutineGroup'' will automatically call ''Scope::dispose()''
+as soon as the ''CoroutineGroup::dispose'' or ''CoroutineGroup::cancel'' method is invoked.
+
+The expression ''spawn with $coroutineGroup'' creates a coroutine in the ''$scope'' specified in the ''CoroutineGroup'',
+and additionally adds the task to the group. If child coroutines create other coroutines using the ''spawn'' expression,
+they will be added to the ''CoroutineGroup'''s scope, but not to the task group itself.
+
+<code php>
+use Async\Scope;
+use Async\CoroutineGroup;
+
+function task1() {
+    spawn('subtask');
+}
+
+$scope = new Scope();
+$coroutineGroup1 = new CoroutineGroup($scope);
+$coroutineGroup2 = new CoroutineGroup($scope);
+
+$coroutineGroup1->spawn(task1(...));
+$coroutineGroup2->spawn(task2(...));
+
+$scope->awaitCompletion(Async\signal(SIGTERM));
+</code>
+
+**Structure:**
+
+<code>
+main()                             ← defines a $scope
+└── $scope = new Scope()
+    ├── task1()                    ← runs in the $scope
+    ├── subtask()                  ← runs in the $scope
+    ├── task2()                    ← runs in the $scope
+└── $coroutineGroup1 = new CoroutineGroup($scope)
+    ├── task1()                    ← runs in the $scope
+└── $coroutineGroup2 = new CoroutineGroup($scope)
+    ├── task2()                    ← runs in the $scope
+</code>
+
+The tasks ''task1()'' and ''task2()'' belong to different groups but are in the same ''Scope''.
+The coroutine ''subtask()'', which was launched from ''task1()'', does not belong to any group.
+
+If ''$scope'' is disposed, all task groups will be cancelled.
+However, cancelling a task group will not cancel tasks in the ''Scope''
+if the reference count to ''$scope'' is greater than one.
+
+=== Await CoroutineGroup ===
+
+The ''CoroutineGroup'' class implements the ''Awaitable'' interface,
+so it can be used with the ''await'' expression.
+The ''await($coroutineGroup)'' expression captures both the results of execution
+and any exceptions that occur in the tasks.
+
+If the constructor option ''captureResults: true'' is specified,
+then the ''await($coroutineGroup)'' expression will return the results of all tasks that were added to the group.
+If the results are no longer needed, the ''CoroutineGroup::disposeResults()'' method should be used to discard them.
+
+<code php>
+function processInBatches(array $files, int $limit): array
+{
+    $allResults = [];
+    $coroutineGroup  = new Async\CoroutineGroup(captureResults: true);
+    $count      = 0;
+
+    foreach ($files as $file) {
+        $coroutineGroup->spawn(file_get_contents(...), $file);
+
+        if (++$count >= $limit) {
+            $allResults = [...$allResults, ...await($coroutineGroup)];
+            $coroutineGroup->disposeResults();
+            $count = 0;
+        }
+    }
+
+    $allResults = [...$allResults, ...await($coroutineGroup)];
+    return $allResults;
+}
+
+$results = await(spawn(processInBatches(...), ['file1.txt', 'file2.txt', 'file3.txt', 'file4.txt'], limit: 2));
+echo implode("\n", $results);
+</code>
+
+The ''$coroutineGroup'' object can be used in an ''await'' expression multiple times.
+If the ''captureResults'' mode is not enabled, the ''await'' expression will always return ''NULL''.
+
+> Be careful when capturing coroutine results, as this may cause memory leaks or keep large amounts of data in memory.
+> Plan the waiting process wisely, and use the ''CoroutineGroup::disposeResults()'' method.
+
+=== CoroutineGroup ''dispose'' ===
+
+When a ''CoroutineGroup'' is disposed,
+all tasks belonging to it will be cancelled using ''cancel'',
+without issuing any warnings. No tasks will turn into **zombie coroutines**.
+
+This behavior is consistent with ''Scope::cancel()''.
+
+The reason for this behavior lies in the fact that ''CoroutineGroup'' only keeps track of explicitly added tasks.
+If a task group is being disposed, it means the user clearly understands
+that all coroutines launched within it should also be terminated.
+
+=== CoroutineGroup and Scope ===
+
+''CoroutineGroup'' is designed to complement the behavior of ''Scope'' where needed.
+Although a single ''Scope'' can have multiple ''CoroutineGroup''s, in most cases
+it is reasonable to create a ''CoroutineGroup'' along with a unique ''Scope'' that belongs only to it.
+This leads to clear and memorable behavior: **the lifetime of a ''CoroutineGroup'' equals the lifetime of its ''Scope''**.
+
+If this rule is followed, then an exception in a coroutine will lead to the cancellation of the ''Scope'',
+which is required before the cancellation operation, and will trigger ''CoroutineGroup::dispose''.
+On the other hand, releasing a ''CoroutineGroup'' object automatically leads to the disposal of its ''Scope''.
+This architecture helps reduce the likelihood of resource leakage errors.
+
+The ''CoroutineGroup'' class allows for implementing a pattern in which tasks are divided into two groups:
+* explicit (or target) tasks, whose results are needed
+* implicit (or secondary) tasks, which are created within explicit tasks and whose results are not needed.
+
+**Explicit tasks** belong directly to the ''CoroutineGroup'' and are created using the ''spawn with $coroutineGroup'' expression.
+All other tasks are considered as **secondary**.
+
+This separation helps produce code that manages resources more efficiently
+than code that waits for the completion of all child coroutines within a ''Scope''.
+
+The following code demonstrates this idea:
+
+<code php>
+use Async\Scope;
+use Async\CoroutineGroup;
+
+function targetTask(int $i): void
+{
+    spawn(function() {
+        // subtask should be added to the same scope
+    });
+}
+
+$coroutineGroup = new CoroutineGroup(scope: new Scope(), captureResults: true);
+
+for($i = 0; $i < 10; $i++) {
+    $coroutineGroup->spawn(targetTask(...), $i);
+}
+
+// wait for only the tasks that were added to the CoroutineGroup
+$results = await($coroutineGroup);
+</code>
+
+The expression ''await($coroutineGroup)'' will wait only for the completion of the target tasks
+that were explicitly added to the ''CoroutineGroup''.
+
+The result of ''await($coroutineGroup)'' will include the outcomes of all coroutines from the ''CoroutineGroup'',
+but not of other **implicit** coroutines that were created during the execution of ''targetTask()''.
+
+Once ''$coroutineGroup'' is destroyed, the ''Scope'' it references will also be disposed of,
+which means all other **implicit** coroutines will be cancelled using one of
+the three strategies (see the corresponding section).
+
+The reverse is also true: if the ''Scope'' is disposed, the associated ''CoroutineGroup''s will be disposed as well.
+
+<code php>
+$scope = new Async\Scope();
+$coroutineGroup = new Async\CoroutineGroup(scope: $scope, captureResults: false);
+$coroutineGroup->spawn(function() {
+    // this task will be added to the task group
+    Async\delay(1000);
+    echo "This line will be executed\n";
+});
+
+sleep(1);
+$scope->dispose();
+</code>
+
+**Expected output:**
+
+<code>
+</code>
+
+There are no warnings about **zombie coroutines** in the output
+because the task was canceled using ''$coroutineGroup->dispose()''.
+
+However, if the ''Scope'' contains other coroutines that were created outside the ''CoroutineGroup'',
+they will follow the general rules. In the case of the ''Scope::disposeSafely()'' strategy,
+a warning will be issued if unfinished tasks are detected, as they would become **zombie coroutines**.
+
+=== CoroutineGroup Race ===
+
+The ''CoroutineGroup'' class allows you to wait for the first task to complete using the ''race()'' method.
+
+<code php>
+use Async\CoroutineGroup;
+
+function fetchFirstSuccessful(string ...$apiHosts): string
+{
+    $coroutineGroup = new Async\CoroutineGroup(captureResults: false);
+
+    foreach ($apiHosts as $host) {
+        $coroutineGroup->spawn(function() use ($host) {
+            $response = file_get_contents($host);
+
+            if($response === false) {
+                throw new Exception("Failed to fetch data from $host");
+            }
+
+            return $response;
+        });
+    }
+
+    return await($coroutineGroup->race(ignoreErrors: true));
+}
+</code>
+
+The ''CoroutineGroup::race()'' method returns an ''Awaitable'' trigger
+that can be used multiple times to obtain the first completed task.
+The ''race()'' trigger clears the internal result storage after completion,
+so you won't be able to retrieve the same result twice.
+
+If you need to get the first available result, use the ''firstResult()'' method.
+The ''CoroutineGroup::firstResult()'' trigger returns the first available result.
+Even if it is called repeatedly, the result
+will remain the same until the ''CoroutineGroup::disposeResults()'' method cancels the previous values.
+
+The ''ignoreErrors'' parameter specifies the error ignoring mode.
+If it is set to ''true'', exceptions from tasks will be ignored, and the ''race()''/''firstResult()''
+triggers will return the first successful task.
+
+The ''CoroutineGroup::getErrors()'' method will return an array of exceptions.
+
+=== CoroutineGroup hierarchy ===
+
+You can combine ''CoroutineGroup'' with ''Scope::inherit()'' to create a task group within a child ''Scope'',
+thereby forming a hierarchy between groups:
+
+<code php>
+use Async\CoroutineGroup;
+use Async\Scope;
+
+$coroutineGroupParent = new CoroutineGroup(captureResults: false);
+
+$coroutineGroupParent->spawn(function() {
+    $coroutineGroupChild = new CoroutineGroup(Scope::inherit(), captureResults: false);
+
+    $coroutineGroupChild->spawn(function() {
+        // this task will be added to the child task group
+    });
+
+    // wait for the child task group to finish
+    await($coroutineGroupChild);
+};
+
+await($coroutineGroupParent);
+</code>
+
+**Structure:**
+
+<code>
+main()
+└── $coroutineGroupParent = new CoroutineGroup()                          <- parent task group scope
+    ├── $coroutineGroupChild = new CoroutineGroup(Scope::inherit())       <- child task group scope
+</code>
+
+Since each ''CoroutineGroup'' is associated with its own ''Scope'',
+and ''Scope'' instances are connected through parent-child relationships,
+cancelling a parent ''CoroutineGroup'' will automatically cancel the entire hierarchy.
+
+=== CoroutineGroup cancellation ===
+
+The ''CoroutineGroup'' class allows you to cancel all tasks in the group using the ''CoroutineGroup::cancel()'' method.
+
+This method behaves the same way as ''CoroutineGroup::dispose'',
+with the only difference being that it allows you to pass a specific exception.
+
+<code php>
+use Async\CoroutineGroup;
+
+$coroutineGroup = new Async\CoroutineGroup(captureResults: false);
+$coroutineGroup->spawn(function() {
+    try {
+        suspend();
+    } catch (Throwable $throwable) {
+        echo "Task was cancelled: ", $throwable->getMessage(), "\n";
+    }
+});
+
+// pass control to the task
+suspend();
+
+$coroutineGroup->cancel(new \Async\CancellationError('Custom cancellation message'));
+</code>
+
+**Expected output:**
+
+<code>
+Task was cancelled: Custom cancellation message
+</code>
+
+=== CoroutineGroup error handling ===
+
+''CoroutineGroup'' does not introduce additional logic for handling coroutine exceptions.
+When a developer uses the expression ''await($coroutineGroup)'', they are capturing the exceptions
+of all tasks contained within ''$coroutineGroup''.
+
+In other words, ''await($coroutineGroup)'' is equivalent to simultaneously using ''await($coroutine)'' for each task.
+If no one awaits ''$coroutineGroup'', the exception handling follows the general ''Flow'',
+and the error will propagate to the ''Scope''.
+
+An additional method ''CoroutineGroup::all(bool $ignoreErrors = false, $nullOnFail = false): Awaitable {}'' provides a trigger
+that fires when all tasks in the group have completed.
+
+At the same time, it captures any errors, which can be retrieved using ''CoroutineGroup::getErrors()''.
+
+<code php>
+// Returns an array of all tasks with their results ignoring errors
+return $coroutineGroup->all(ignoreErrors: true);
+</code>
+
+The trigger ''CoroutineGroup::all()'' returns an array of results with numeric indices,
+where each index corresponds to the ordinal number of the task.
+
+If a task completed with an error, its numeric index is missing from the array.
+
+Using the option ''$nullOnFail'', you can specify that the results of failed
+tasks should be filled with ''NULL'' instead.
+
+<code php>
+$coroutineGroup = new Async\CoroutineGroup(captureResults: true);
+$coroutineGroup->spawn(function() {return 'result 1';});
+$coroutineGroup->spawn(function() {throw new Exception('Error');});
+
+var_dump(await($coroutineGroup->all(ignoreErrors: true, nullOnFail: true)));
+</code>
+
+**Expected output:**
+
+<code php>
+array(2) {
+  [0]=>
+  string(8) "result 1"
+  [1]=>
+  NULL
+}
+</code>
+
+The method ''CoroutineGroup::getErrors()'' returns an array with numeric indices and exceptions,
+where each index corresponds to the ordinal number of the task.
+
+> **Note:** The method ''CoroutineGroup::disposeResults'' clears all results and errors at the moment it is called.
+> Coroutines then reset their ordinal indices starting from zero.
+
+=== CoroutineGroup scope exception handling ===
+
+What happens when a coroutine that belongs to a ''Scope''
+but does not belong to a ''CoroutineGroup'' throws an exception?
+
+1. If the exception is not handled, it will propagate to the ''Scope''.
+2. If a ''Scope'' has no exception handler, it invokes the ''dispose()'' strategy,
+which cancels all coroutines, including any ''CoroutineGroup'' associated with the ''Scope''.
+In this case, the ''await'' point of the ''CoroutineGroup'' will receive a ''CancellationError''.
+
+**Example:**
+
+<code php>
+use Async\CoroutineGroup;
+
+$coroutineGroup = new Async\CoroutineGroup(captureResults: false);
+
+$coroutineGroup->spawn(function() {
+    spawn(function() { // <- subcoroutine in the same scope
+        throw new Exception('Error in coroutine');
+    });
+
+    sleep(1);
+};
+
+try {
+    await($coroutineGroup);
+} catch (Async\CancellationError $exception) {
+    echo "Caught exception: ", $exception->getMessage(), "\n";
+}
+</code>
+
+**Expected output:**
+
+<code>
+Caught exception: CoroutineGroup was cancelled at ...
+</code>
+
+If you need to handle this type of exception, use the ''Scope::setExceptionHandler''
+method before calling ''await($coroutineGroup)'':
+
+<code php>
+use Async\CoroutineGroup;
+
+$scope = new Async\Scope();
+$coroutineGroup = new Async\CoroutineGroup(scope: $scope, captureResults: false);
+$scope->setExceptionHandler(function (Async\Scope $scope, Async\Coroutine $coroutine, Throwable $e) {
+    echo "Caught exception: {$e->getMessage()}\n in coroutine: {$coroutine->getSpawnLocation()}\n";
+});
+
+$coroutineGroup->spawn(function() {
+    spawn(function() { // <- subcoroutine in the same scope
+        throw new Exception('Error in coroutine');
+    });
+
+    sleep(1);
+});
+
+await($coroutineGroup);
+</code>
+
+Please see [Error Handling](#error-handling) for more details.
+
+=== CoroutineGroup vs Scope ===
+
+| Feature                             | CoroutineGroup                                 | Scope                                              |
+| **Purpose**                         | Manages a group of explicitly added tasks      | Manages lifetime and hierarchy of all child tasks  |
+| **Task Addition**                   | Only via ''spawn with $coroutineGroup''        | Any coroutine in current scope is added implicitly |
+| **Result Capturing**                | Can capture task results (optional)            | Does not capture results                           |
+| **Implements Awaitable**            | Yes, can be used with ''await''                | No, must use ''awaitCompletion()''                 |
+| **Used for Structured Concurrency** | Yes, in grouped execution                      | Yes, in hierarchy and parent-child relationships   |
+| **Cancelling Behavior**             | Cancels only its own tasks                     | Cancels all tasks in the scope and children Scope  |
+| **Automatic Disposal**              | Disposes its scope if owns it                  | ''disposeSafly'', ''dispose'', ''cancel''          |
+| **Usage Recommendation**            | Prefer for result-driven parallel logic        | Prefer for lifecycle and hierarchical control      |
 
 === Structured concurrency ===
 
@@ -1415,12 +2179,12 @@ function copyFile(string $sourceFile, string $targetFile): void
     }
 }
 
-$copyTasks = new \Async\Scope();
+$copyTasks = new \Async\CoroutineGroup;
 
 $copyTasks->spawn(copyFile(...), 'source.txt', 'target.txt');
 $copyTasks->spawn(copyFile(...), 'source2.txt', 'target2.txt');
 
-$copyTasks->awaitCompletion(Async\signal(SIGTERM));
+await($copyTasks);
 </code>
 
 The example creates two task groups: a parent and a child.
@@ -1428,30 +2192,30 @@ The parent task group handles the copy operations directly, while the child task
 File descriptors will not be closed until all child copy tasks have completed.
 The main code will not finish until all copy operations are completed.
 
-==== Wait utilities ====
+==== Async combinators ====
 
-Async utilities are functions that combine multiple awaitable objects into complex execution patterns.
+Async combinators are functions that combine multiple awaitable objects into complex execution patterns.
 The API provides both error-propagating and error-collecting variants for different use cases.
 
-=== Basic ===
+=== Basic Combinators ===
 
 | Function                                                                    | Description                                                              |
 | ''await(Awaitable $awaitable, ?Awaitable $cancellation = null)''            | Waits for a single awaitable to complete                                 |
 
-=== Error-Collecting Utilities (Default/Safe) ===
+=== Error-Collecting Combinators (Default/Safe) ===
 
 | Function                                                                   | Description                                                              |
 | ''awaitAll(iterable $triggers, ?Awaitable $cancellation = null, bool $preserveKeyOrder = true, bool $fillNull = false)'' | Waits for all, returns both results and errors separately [results, errors] |
-| ''awaitAny(iterable $triggers, ?Awaitable $cancellation = null)''          | Returns first successful result, collects errors from failures           |
+| ''awaitAny(iterable $triggers, ?Awaitable $cancellation = null)''         | Returns first successful result, collects errors from failures           |
 | ''awaitFirstSuccess(iterable $triggers, ?Awaitable $cancellation = null)'' | Returns first successful result, collects errors from failures           |
 
-=== Error-Propagating Utilities (Fail-Fast) ===
+=== Error-Propagating Combinators (Fail-Fast) ===
 
 | Function                                                                   | Description                                                              |
 | ''awaitAllOrFail(iterable $triggers, ?Awaitable $cancellation = null, bool $preserveKeyOrder = true)'' | Waits for all awaitables to complete, throws on first error             |
 | ''awaitAnyOrFail(iterable $triggers, ?Awaitable $cancellation = null)''   | Returns result of the first completed awaitable, throws on error        |
 
-=== Counted Utilities ===
+=== Counted Combinators ===
 
 | Function                                                                                 | Description                                                    |
 | ''awaitAnyOf(int $count, iterable $triggers, ?Awaitable $cancellation = null, bool $preserveKeyOrder = true, bool $fillNull = false)'' | Waits for specified number of awaitables, collects errors      |
@@ -1637,7 +2401,7 @@ $completedDownloads = awaitAnyOfOrFail(3, [
 
 === Cancellation Support ===
 
-All Utilities support cancellation through the optional ''$cancellation'' parameter:
+All combinators support cancellation through the optional ''$cancellation'' parameter:
 
 <code php>
 try {
@@ -2302,7 +3066,6 @@ Links to external references, discussions or RFCs
     * **First Discussion** - https://externals.io/message/126402
     * **Second Discussion** - https://externals.io/message/126537
     * **Third Discussion** - https://externals.io/message/127120
-    * **Fourth Discussion** -
 
 		* **TrueAsync API RFC** - https://github.com/true-async/php-true-async-rfc/blob/main/true-async-api-rfc.md
 
