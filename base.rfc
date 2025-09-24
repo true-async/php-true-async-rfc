@@ -191,6 +191,13 @@ All functions, classes, and constants defined in this **RFC** are located in the
 Extensions are allowed to extend this namespace with functions and classes,
 provided that they are directly related to concurrency functionality.
 
+==== Scheduler and Reactor ====
+
+**Scheduler** and **Reactor** are internal components:
+
+  - The **scheduler** is responsible for the execution order of coroutines.
+  - The **reactor** is responsible for input/output events.
+
 ==== Coroutine ====
 
 > A ''Coroutine'' is an ''execution container'', transparent to the code,
@@ -1956,6 +1963,13 @@ None.
 ===== Unaffected PHP Functionality =====
 
   * Fiber API.
+
+===== Future Scope =====
+
+=== Reactor ===
+
+At the moment, the Reactor component uses the ''LibUV'' library.
+It might make sense to create a clean implementation without support for additional libraries.
 
 === Integration with Pipe ===
 
