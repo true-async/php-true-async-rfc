@@ -188,7 +188,7 @@ In other words, the developer must take extra steps to explicitly extend the cor
 ==== Namespace ====
 
 All functions, classes, and constants defined in this **RFC** are located in the ''Async'' namespace.
-Extensions for **Scheduler/Reactor** are allowed to extend this namespace with functions and classes,
+Extensions are allowed to extend this namespace with functions and classes,
 provided that they are directly related to concurrency functionality.
 
 ==== Coroutine ====
