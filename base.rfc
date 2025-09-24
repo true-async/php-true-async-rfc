@@ -150,13 +150,22 @@ use Async\Scope;
 
 function getUserProfile(int $userId): array {
     $scope = new Scope();
-    $tasks = [];
+    $profile = [];
 
-    $tasks[] = $scope->spawn(fetchUserData(...), $userId);
-    $tasks[] = $scope->spawn(fetchUserOrders(...), $userId);
-    $tasks[] = $scope->spawn(fetchUserSettings(...), $userId);
+    $scope->spawn(function() use ($userId, &$profile) {
+        $profile['data'] = fetchUserData($userId);
+    });
 
-    return awaitAllOrFail($tasks); // TODO: need to refactor
+    $scope->spawn(function() use ($userId, &$profile) {
+        $profile['orders'] = fetchUserOrders($userId);
+    });
+
+    $scope->spawn(function() use ($userId, &$profile) {
+        $profile['settings'] = fetchUserSettings($userId);
+    });
+
+    $scope->awaitCompletion(Async\timeout(30000));
+    return $profile;
 }
 </code>
 
