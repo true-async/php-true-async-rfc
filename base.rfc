@@ -549,7 +549,7 @@ $scope->spawn(function() { // <- new scope
     });
 });
 
-$scope->awaitCompletion(Async\signal(SIGTERM));
+$scope->awaitCompletion(Async\timeout(60000));
 </code>
 
 **Expected output:**
@@ -622,7 +622,7 @@ $scope->spawn(function() {
     });
 });
 
-$scope->awaitCompletion(Async\signal(SIGTERM));
+$scope->awaitCompletion(Async\timeout(60000));
 </code>
 
 **Expected output:**
@@ -655,7 +655,7 @@ $scope->spawn(function() {
 });
 
 try {
-    $scope->awaitCompletion(Async\signal(SIGTERM));
+    $scope->awaitCompletion(Async\timeout(60000));
 } catch (Exception $exception) {
     echo $exception->getMessage()."\n";
 }
@@ -678,7 +678,7 @@ try {
     $scope->spawn(task2(...));
     $scope->cancel();
     // Wait all tasks
-    $scope->awaitCompletion(Async\signal(SIGTERM));
+    $scope->awaitCompletion(Async\timeout(60000));
 } catch (Exception $exception) {
     echo "Caught exception: ",$exception->getMessage()."\n";
 }
@@ -690,7 +690,7 @@ try {
 Caught exception: cancelled at ...
 </code>
 
-In this example, ''$scope->awaitCompletion(Async\signal(SIGTERM));'' will immediately throw an exception.
+In this example, ''$scope->awaitCompletion(Async\timeout(60000));'' will immediately throw an exception.
 
 If you need to wait for the ''Scope'' to complete after it has been cancelled,
 use the special method ''awaitAfterCancellation'', which is designed for this case.
@@ -700,7 +700,7 @@ $scope = new Scope();
 
 spawn(function() {
     try {
-        $scope->awaitCompletion(Async\signal(SIGTERM));
+        $scope->awaitCompletion(Async\timeout(60000));
     } catch (\Async\CancellationError $exception) {
         $scope->awaitAfterCancellation();
         echo "Caught exception: ",$exception->getMessage()."\n";
@@ -856,11 +856,7 @@ function socketServer(): void
     // and the risk of an error due to oversight is minimal.
     $scope->spawn(function() use ($scope) {
         try {
-            // Note: The ''signal'' function is not part of this RFC,
-            // but it may be implemented in the standard library in the future.
-            // This example shows how such a function could be used.
-            // The ''signal'' function returns a trigger ''Awaitable''.
-            await Async\signal(SIGINT);
+            // await for a shutdown signal
         } finally {
             $scope->cancel(new CancellationError('Server shutdown'));
         }
@@ -928,9 +924,6 @@ that should be cancelled when the request is completed. This approach minimizes 
 
 On the other hand, if the server receives a shutdown signal,
 all child ''Scopes'' will be cancelled because the main ''Scope'' will be cancelled as well.
-
-Note that the coroutine waiting on ''await Async\signal(SIGINT)'' will not remain hanging in memory
-if the server shuts down in another way, because ''$scope'' will be explicitly closed in the ''finally'' block.
 
 === Scope cancellation ===
 
@@ -1280,7 +1273,7 @@ final class ProcessPool
     {
         while (true) {
             try {
-                $this->pool->awaitCompletion(Async\signal(SIGTERM));
+                $this->pool->awaitCompletion(Async\timeout(60000));
             } catch (StopProcessException $exception)  {
                 echo "Process was stopped with message: {$exception->getMessage()}\n";
 
@@ -1397,7 +1390,7 @@ $copyTasks = new \Async\Scope();
 $copyTasks->spawn(copyFile(...), 'source.txt', 'target.txt');
 $copyTasks->spawn(copyFile(...), 'source2.txt', 'target2.txt');
 
-$copyTasks->awaitCompletion(Async\signal(SIGTERM));
+$copyTasks->awaitCompletion(Async\timeout(60000));
 </code>
 
 The example creates two task groups: a parent and a child.
@@ -1731,7 +1724,7 @@ $scope2 = new Scope();
 
 $scope2->spawn(function() use ($scope, &$exception1) {
     try {
-        $scope->awaitCompletion(Async\signal(SIGTERM));
+        $scope->awaitCompletion(Async\timeout(60000));
     } catch (Exception $e) {
         $exception1 = $e;
         echo "Caught exception1: {$e->getMessage()}\n";
@@ -1740,14 +1733,14 @@ $scope2->spawn(function() use ($scope, &$exception1) {
 
 $scope2->spawn(function() use ($scope, &$exception2) {
     try {
-        $scope->awaitCompletion(Async\signal(SIGTERM));
+        $scope->awaitCompletion(Async\timeout(60000));
     } catch (Exception $e) {
         $exception2 = $e;
         echo "Caught exception2: {$e->getMessage()}\n";
     }
 });
 
-$scope2->awaitCompletion(Async\signal(SIGTERM));
+$scope2->awaitCompletion(Async\timeout(60000));
 
 echo $exception1 === $exception2 ? "The same exception\n" : "Different exceptions\n";
 </code>
@@ -1776,7 +1769,7 @@ $scope->spawn(function() {
     throw new Exception("Task 1");
 });
 
-$scope->awaitCompletion(Async\signal(SIGTERM));
+$scope->awaitCompletion(Async\timeout(60000));
 </code>
 
 Using these handlers,
@@ -1863,7 +1856,7 @@ $scope->spawn(function() {
 });
 
 try {
-    $scope->awaitCompletion(Async\signal(SIGTERM));
+    $scope->awaitCompletion(Async\timeout(60000));
 } catch (\Throwable $e) {
      echo "Caught exception: {$e->getMessage()}\n";
 }
@@ -1884,7 +1877,7 @@ $scope->setExceptionHandler(function (Exception $e) {
     echo "Caught exception: {$e->getMessage()}\n";
 });
 
-$scope->awaitCompletion(Async\signal(SIGTERM));
+$scope->awaitCompletion(Async\timeout(60000));
 </code>
 
 An exception handler has the right to suppress the exception.
@@ -1914,7 +1907,7 @@ $scope->onFinally(function (Scope $completedScope) {
     echo "Scope " . spl_object_id($completedScope) . " completed\n";
 });
 
-$scope->awaitCompletion(Async\signal(SIGTERM));
+$scope->awaitCompletion(Async\timeout(60000));
 </code>
 
 === Coroutine::onFinally ===
