@@ -381,36 +381,11 @@ Goodbye, World!
 
 The ''Awaitable'' interface is a contract that allows objects to be used in the ''await'' expression.
 
-The interface does not have any methods on the user-land side
-and is intended for objects implemented as **PHP extensions**, such as:
-
-- ''Future''
-- ''Cancellation''
-- ''CoroutineGroup''
-
-> **Note:** These classes are not part of this **RFC**.
-
-The following classes from this **RFC** also implement this interface:
-
-- ''Coroutine''
-
-Unlike ''Future'', the ''Awaitable'' interface does not impose limitations on the number of state changes,
-which is why the ''Future'' contract is considered a special case of the ''Awaitable'' contract.
+The ''Awaitable'' interface does not impose limitations on the number of state changes.
 
 In the general case, objects implementing the ''Awaitable'' interface can act as triggers — that is,
 they can change their state an unlimited number of times.
 This means that multiple calls to ''await <Awaitable>'' may produce different results.
-
-In contrast, ''Coroutine'', ''Future'' and ''Cancellation'' objects change their state only once,
-so using them multiple times in an ''await'' expression will always yield the same result.
-
-**Comparison of Different Awaitable Classes:**
-
-|                                    | Coroutine | CoroutineGroup |
-| Supports multiple state changes    | No        | Yes            |
-| Multiple await returns same result | Yes       | No             |
-| Can capture result                 | Yes       | Yes            |
-| Can capture exception              | Yes       | Yes            |
 
 ==== Await ====
 
@@ -2247,27 +2222,6 @@ None.
 ===== Unaffected PHP Functionality =====
 
   * Fiber API.
-
-===== Future Scope =====
-
-This **RFC** assumes the subsequent development of additional RFCs:
-
-* Async\Context RFC - Coroutine and Scope Context Management
-* RFC for Non-Blocking Versions of PHP Built-in Functions. The Socket/Curl extensions as well.
-* RFC for Special Async Syntax
-* RFC Context Manager (like in Python)
-* Equivalent of Go's defer expression RFC.
-* Special try cancellation block RFC.
-* An RFC for a set of standard primitives, such as ''Future'', ''Channel'', etc.
-* And possibly others...
-
-This RFC provides for the subsequent expansion of functionality to achieve
-a complete toolkit for working with concurrent logic.
-It proposes development in areas:
-  * **Support for Pipe**
-  * **Development of new and revision of existing extensions**
-  * **Refactoring of input-output code** to improve performance and better integration with the Event Loop
-  * Functions for **collecting metrics**
 
 === Integration with Pipe ===
 
