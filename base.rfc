@@ -1969,7 +1969,7 @@ None.
 === Reactor ===
 
 At the moment, the Reactor component uses the ''LibUV'' library.
-It might make sense to create a clean implementation without support for additional libraries.
+This component should be implemented as a separate extension.
 
 === Integration with Pipe ===
 
