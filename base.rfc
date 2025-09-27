@@ -2076,7 +2076,10 @@ Static analyzers will need to implement new checks for safe async/await usage:
 2. **CancellationError suppression detection:**
    * ''catch (\Throwable)'' that may hide CancellationError
 
+**Libraries Using Fiber:**
 
+Libraries that use the Fiber API will continue to work as expected,
+but cannot be used simultaneously with ''True Async''.
 
 ==== php.ini Defaults ====
 
