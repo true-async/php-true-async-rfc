@@ -1827,7 +1827,6 @@ $scope = new Scope();
 $scope->spawn(function() use ($scope) {
     $scope->cancel(new \Async\CancellationError("Scope cancelled"));
     echo "This executes\n";
-    suspend(); // This will throw CancellationError
     echo "This will not execute\n";
 });
 </code>
