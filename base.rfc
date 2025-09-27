@@ -359,6 +359,15 @@ Goodbye, World!
 Goodbye, Universe!
 </code>
 
+With ''suspend()'', a coroutine yields control to the ''Scheduler'', which decides what to do next.
+The exact decision made by the ''Scheduler'' is not part of this **RFC**,
+and the scheduling algorithm may change at any moment
+(this algorithm may also be modified by a third-party extension).
+
+> A developer **MUST NOT** try to guess when a coroutine will resume execution or which other coroutine will be scheduled!
+> Even if such information is obtained through testing or by reading the current implementation of the ''Scheduler'',
+> the behavior may change at any moment!
+
 **Basic usage:**
 
 <code php>
