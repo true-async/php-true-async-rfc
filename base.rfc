@@ -343,11 +343,11 @@ You can use the ''spawn'' method, which is available for the ''Scope'' class:
 $scope = new Async\Scope();
 
 $coroutine = $scope->spawn(function() use ():string {
-		return gethostbyname('php.net');
+    return gethostbyname('php.net');
 });
 
 function defineTargetIpV4(string $host): string {
-		return gethostbyname($host);
+    return gethostbyname($host);
 }
 
 $coroutine = $scope->spawn(defineTargetIpV4(...), $host);
@@ -532,25 +532,26 @@ As soon as the $cancellation is triggered, execution is interrupted with an exce
 <code php>
 use function Async\spawn;
 use function Async\await;
+use function Async\timeout;
+use Async\AwaitCancelledException;
 
 function readFile(string $fileName):string
 {
-		$result = file_get_contents($fileName);
+    $result = file_get_contents($fileName);
 
-		if($result === false) {
-				throw new Exception("Error reading file1.txt");
-		}
+    if($result === false) {
+        throw new Exception("Error reading file1.txt");
+    }
 
-		return $result;
+    return $result;
 }
 
 try {
-		// Wait for the coroutine to finish or for the cancellation to occur
-		echo await(spawn(readFile(...), 'file1.txt'), Async\timeout(2000));
+    // Wait for the coroutine to finish or for the cancellation to occur
+    echo await(spawn(readFile(...), 'file1.txt'), timeout(2000));
 } catch (AwaitCancelledException $e) {
-		echo "Caught exception: ", $e->getMessage();
+    echo "Caught exception: ", $e->getMessage();
 }
-
 </code>
 
 ==== Edge Behavior ====
@@ -604,14 +605,14 @@ use function Async\spawn;
 spawn('file_get_contents', 'file1.txt'); // <- global scope
 
 function readFile(string $file): void {
-    return file_get_contents($file); 		 // <- global scope
+    return file_get_contents($file); // <- global scope
 }
 
-function mainTask(): void { 			  	   // <- global scope
-    spawn('readFile', 'file1.txt'); 		 // <- global scope
+function mainTask(): void { // <- global scope
+    spawn('readFile', 'file1.txt'); // <- global scope
 }
 
-spawn('mainTask'); 										   // <- global scope
+spawn('mainTask'); // <- global scope
 </code>
 
 If an application never creates **custom Scopes**, its behavior is similar to coroutines in ''Go'':
