@@ -492,10 +492,10 @@ This is why the **Coroutine Scope** pattern is of critical importance in the con
 
 The main use cases for ''Scope'' are:
 
-1. Controlling the lifetime of coroutines created within a single scope (**Point of responsibility**)
-2. Handling errors from all coroutines within the scope
-3. Binding the lifetime of the scope's coroutines to the lifetime of a **PHP object**
-4. Creating a hierarchy of scopes to manage coroutines in a structured way
+  - Controlling the lifetime of coroutines created within a single scope (**Point of responsibility**)
+  - Handling errors from all coroutines within the scope
+  - Binding the lifetime of the scope's coroutines to the lifetime of a **PHP object**
+  - Creating a hierarchy of scopes to manage coroutines in a structured way
 
 Binding ''Scope'' to objects is a good practice that has proven effective in **Kotlin**.
 By allowing coroutines to be tied to an object (this could be a ''Screen'' or a ''ViewModel''),
@@ -589,8 +589,9 @@ and therefore cannot be used in an ''await'' expression.
 Awaiting a ''Scope'' is a potentially **dangerous operation** that should be performed consciously, not accidentally.
 
 There are several Use-Cases where waiting for a ''Scope'' might be necessary:
-* Structured concurrency: when a parent awaits the completion of all child coroutines.
-* Waiting for Scope tasks to complete the cancellation process.
+
+  * Structured concurrency: when a parent awaits the completion of all child coroutines.
+  * Waiting for Scope tasks to complete the cancellation process.
 
 The structured concurrency pattern with waiting for all child coroutines can be useful
 for applications whose lifetime is explicitly limited by external conditions.
@@ -598,8 +599,8 @@ For example, the user might stop a console application.
 
 To support a task awaiting in a controlled manner, ''Scope'' provides two specific methods:
 
-- ''public function awaitCompletion(Awaitable $cancellation): void {}''
-- ''public function awaitAfterCancellation(?callable $errorHandler = null, ?Awaitable $cancellation = null): void {}''
+  * ''public function awaitCompletion(Awaitable $cancellation): void {}''
+  * ''public function awaitAfterCancellation(?callable $errorHandler = null, ?Awaitable $cancellation = null): void {}''
 
 The ''awaitCompletion'' method blocks the execution flow until all tasks within the scope are completed.
 The ''awaitAfterCancellation'' method does the same but is intended to be called only after the scope has been cancelled.
@@ -891,14 +892,12 @@ function socketServer(): void
 </code>
 Let's examine how this example works.
 
-1. ''socketServer'' creates a new ''Scope'' for coroutines that will handle all connections.
-2. Each new connection is processed using ''connectionHandler()'' in a separate ''Scope'',
-   which is inherited from the main one.
-3. ''connectionHandler'' creates a new ''Scope'' for the ''connectionLimiter'' and ''connectionChecker'' coroutines.
-4. ''connectionHandler'' creates coroutine: ''connectionLimiter()'' to limit the processing time of the request.
-5. ''connectionHandler'' creates coroutine, ''connectionChecker()'', to monitor the connection's activity.
-   As soon as the client disconnects, ''connectionChecker'' will cancel all coroutines related to the request.
-6. If the main ''Scope'' is closed, all coroutines handling requests will also be canceled.
+  - ''socketServer'' creates a new ''Scope'' for coroutines that will handle all connections.
+  - Each new connection is processed using ''connectionHandler()'' in a separate ''Scope'', which is inherited from the main one.
+  - ''connectionHandler'' creates a new ''Scope'' for the ''connectionLimiter'' and ''connectionChecker'' coroutines.
+  - ''connectionHandler'' creates coroutine: ''connectionLimiter()'' to limit the processing time of the request.
+  - ''connectionHandler'' creates coroutine, ''connectionChecker()'', to monitor the connection's activity. As soon as the client disconnects, ''connectionChecker'' will cancel all coroutines related to the request.
+  - If the main ''Scope'' is closed, all coroutines handling requests will also be canceled.
 
 <code>
 GLOBAL <- globalScope
@@ -974,7 +973,7 @@ However, each method approaches this task slightly differently.
 The ''disposeSafely'' method is used by default in the destructor of the ''Async\Scope'' class.
 Its key feature is transitioning coroutines into a **zombie coroutine** state.
 A **zombie coroutine** continues execution but is tracked by the system differently than regular coroutines.
-(See section: [Zombie coroutine policy](#zombie-coroutine-policy)).
+(See section: [[#zombie_coroutine_policy|Zombie coroutine policy]]).
 
 A warning is issued when a **zombie coroutine** is detected.
 
@@ -1325,7 +1324,7 @@ to manage their lifetime or exception handling.
 The parent task is required to take responsibility for its child tasks and
 must not complete before the children have finished their execution.
 
-To implement structured concurrency, it is recommended to use the ''CoroutineGroup'' class.
+To implement structured concurrency, it is recommended to use the ''Scope'' class with proper hierarchy management.
 
 The following code implements this idea:
 
@@ -1426,19 +1425,13 @@ try {
 
 An uncaught exception in a coroutine follows this flow:
 
-1. If the coroutine is awaited using the ''await'' keyword,
-   the exception is propagated to the awaiting points.
-   If multiple points are awaiting, each will receive the same exception
-   (**Each await point will receive the exact same exception object, not cloned**).
-2. The exception is passed to the ''Scope''.
-3. If the ''Scope'' has an exception handler defined, it will be invoked.
-4. If the ''Scope'' does not have an exception handler, the ''cancel()'' method is called,
-   canceling all coroutines in this scope, including all child scopes.
-5. If the ''Scope'' has responsibility points, i.e., the construction ''Scope::awaitCompletion'',
-   all responsibility points receive the exception.
-6. Otherwise, the exception is passed to the parent scope if it is defined.
-7. If there is no parent scope, the exception falls into ''globalScope'',
-   where the same rules apply as for a regular scope.
+  - If the coroutine is awaited using the ''await'' keyword, the exception is propagated to the awaiting points. If multiple points are awaiting, each will receive the same exception (**Each await point will receive the exact same exception object, not cloned**).
+  - The exception is passed to the ''Scope''.
+  - If the ''Scope'' has an exception handler defined, it will be invoked.
+  - If the ''Scope'' does not have an exception handler, the ''cancel()'' method is called, canceling all coroutines in this scope, including all child scopes.
+  - If the ''Scope'' has responsibility points, i.e., the construction ''Scope::awaitCompletion'', all responsibility points receive the exception.
+  - Otherwise, the exception is passed to the parent scope if it is defined.
+  - If there is no parent scope, the exception falls into ''globalScope'', where the same rules apply as for a regular scope.
 
 {{ :rfc:true_async:exception_flow.svg |}}
 
@@ -1577,8 +1570,6 @@ the operation of the service as a whole.
 
 {{ :rfc:true_async:supervisor.svg |}}
 
-Please see also [CoroutineGroup scope exception handling](#CoroutineGroup-scope-exception-handling)
-and [CoroutineGroup error handling](#CoroutineGroup-error-handling) sections.
 
 === Responsibility points ===
 
@@ -1695,9 +1686,9 @@ $coroutine->cancel(new Async\CancellationError('Task was cancelled'));
 
 The cancellation operation is implemented as follows:
 
-1. If a coroutine has not started, it will never start.
-2. If a coroutine is suspended, its execution will resume with an exception.
-3. If a coroutine has already completed, nothing happens.
+  - If a coroutine has not started, it will never start.
+  - If a coroutine is suspended, its execution will resume with an exception.
+  - If a coroutine has already completed, nothing happens.
 
 The ''CancellationError'', if unhandled within a coroutine, is automatically suppressed after the coroutine completes.
 
