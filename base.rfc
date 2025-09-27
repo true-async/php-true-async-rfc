@@ -1806,6 +1806,32 @@ within that ''Scope'' and all child ''Scopes'' in hierarchical order.
 > to add metadata that can be used for debugging purposes.
 >
 
+==== Self-cancellation ====
+
+A coroutine can attempt to cancel itself by calling its own ''cancel()'' method. However, **nothing happens immediately** - the coroutine continues executing normally until it naturally completes, but is marked as cancelled and stores the ''CancellationError'' as its final result:
+
+<code php>
+$coroutine = spawn(function() use (&$coroutine) {
+    $coroutine->cancel(new \Async\CancellationError("Self-cancelled"));
+    echo "This still executes\n"; // Will execute
+    return "completed";
+});
+
+// await() will throw CancellationError despite normal completion
+</code>
+
+A coroutine can also cancel its own ''Scope'', which **does** affect execution by cancelling all coroutines in the scope, including itself:
+
+<code php>
+$scope = new Scope();
+$scope->spawn(function() use ($scope) {
+    $scope->cancel(new \Async\CancellationError("Scope cancelled"));
+    echo "This executes\n";
+    suspend(); // This will throw CancellationError
+    echo "This will not execute\n";
+});
+</code>
+
 ==== CancellationError handling ====
 
 In the context of coroutines, it is not recommended to use ''catch \Throwable'' or ''catch CancellationError''.
