@@ -174,16 +174,26 @@ function getUserProfile(int $userId): array {
 This **RFC** is based on the principle of **"Cancellable by design"**, which can be described as follows:
 
 > By default, coroutines **should be** designed in such a way that their
-> cancellation at any moment does not compromise data integrity.
+> cancellation at any moment does not compromise data integrity (for example, the Database).
 
-> Coroutines launched without a defined ''Scope'' or lifetime **must** adhere to the "Cancellable by design" principle.
+In other words, by default, I/O operations or others awaiting operations,
+can be cancelled by code **outside** the coroutine at **any moment**.
 
-> If a coroutine’s lifetime needs to be controlled — it **MUST** be done **EXPLICITLY**!
+To properly complete transactions and release resources,
+coroutine code **MUST** handle the cancellation exception ''CancellationError''.
 
-In practice, this means that if a **coroutine** is created without specifying a ''Scope'',
-the developer treats it as non-critical in terms of data integrity.
-If it is necessary to manage the coroutine’s lifetime, a ''Scope'' **MUST** be defined.
-In other words, the developer must take extra steps to explicitly extend the coroutine’s lifetime.
+==== Coroutine lifetime ====
+
+> A coroutine launched without an **explicitly defined** Scope has an **unknown** lifetime.
+
+A coroutine created with spawn inherits the current Scope and its lifetime.
+If code calls a third-party library function (or another module) that uses ''spawn()'' internally,
+the library ends up creating a coroutine whose lifetime is unknown to it.
+The programmer **should carefully** consider such situations
+and determine whether an undefined coroutine lifetime is what they expect in that context.
+
+If the coroutine lifetime matters, it is recommended to explicitly define a ''Scope''
+to clearly manage coroutine lifetimes.
 
 ==== Namespace ====
 
