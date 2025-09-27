@@ -48,6 +48,9 @@ This **RFC** describes the **API** for writing concurrent code in PHP, which inc
 A lightweight execution thread that can be suspended (''suspend'') and resumed.
 Example:
 <code php>
+use function Async\spawn;
+use function Async\suspend;
+
 spawn(function() {
     echo "Start";
     suspend();  // Suspend the coroutine
@@ -59,6 +62,8 @@ spawn(function() {
 A container that manages coroutine lifetimes.
 Example:
 <code php>
+use function Async\spawn;
+
 $scope = new Async\Scope();
 $scope->spawn(function() {
     // Coroutine bound to $scope
@@ -76,6 +81,9 @@ $scope->disposeSafely();
 A special exception that implements cooperative cancellation:
 Example:
 <code php>
+use function Async\spawn;
+use function Async\suspend;
+
 $coroutine = spawn(function() {
     try {
         Async\delay(1000);
@@ -93,6 +101,9 @@ $coroutine->cancel();
 === Waiting for coroutine results ===
 
 <code php>
+use function Async\spawn;
+use function Async\await;
+
 function fetchData(string $file): string
 {
     $result = file_get_contents($file);
@@ -109,6 +120,9 @@ echo await(spawn(fetchData(...), "file.txt"));
 === Awaiting a result with cancellation ===
 
 <code php>
+use function Async\spawn;
+use function Async\await;
+
 echo await(spawn(file_get_contents(...), "https://php.net/"), Async\timeout(2000));
 echo await(spawn(file_get_contents(...), "https://php.net/"), spawn('sleep', 2));
 </code>
@@ -118,13 +132,16 @@ echo await(spawn(file_get_contents(...), "https://php.net/"), spawn('sleep', 2))
 Transferring control from the coroutine to the other coroutines.:
 
 <code php>
+use function Async\spawn;
+use function Async\suspend;
+
 function myFunction(): void {
     echo "Hello, World!\n";
-    Async\suspend();
+    suspend();
     echo "Goodbye, World!\n";
 }
 
-Async\spawn(myFunction(...));
+spawn(myFunction(...));
 echo "Next line\n";
 </code>
 
@@ -255,6 +272,9 @@ These items are visible to the garbage collector.
 **Destructors can contain async operations** and execute asynchronously:
 
 <code php>
+use function Async\spawn;
+use function Async\suspend;
+
 class AsyncResource {
     public function __destruct() {
         // Destructors can spawn coroutines
@@ -304,6 +324,8 @@ This code:
   2. then executes the ''echo'' statement.
 
 <code php>
+use function Async\spawn;
+
 $coroutine = spawn('file_get_contents', 'https://php.net');
 echo "next line".__LINE__."\n";
 </code>
@@ -336,9 +358,12 @@ $coroutine = $scope->spawn(defineTargetIpV4(...), $host);
 A coroutine can suspend itself at any time using the ''suspend'' keyword:
 
 <code php>
+use function Async\spawn;
+use function Async\suspend;
+
 function example(string $name): void {
     echo "Hello, $name!";
-    Async\suspend();
+    suspend();
     echo "Goodbye, $name!";
 }
 
@@ -367,22 +392,27 @@ and the scheduling algorithm may change at any moment
 **Basic usage:**
 
 <code php>
-    Async\suspend();
+use function Async\suspend;
+
+suspend();
 </code>
 
 The ''suspend'' can be used in any function including from the **main execution flow**:
 
 <code php>
+use function Async\spawn;
+use function Async\suspend;
+
 function example(string $name): void {
     echo "Hello, $name!";
-    Async\suspend();
+    suspend();
     echo "Goodbye, $name!";
 }
 
 $coroutine = spawn(example(...), 'World');
 
 // suspend the main flow
-Async\suspend();
+suspend();
 
 echo "Back to the main flow";
 </code>
@@ -446,6 +476,9 @@ The ''await'' function is used to wait for the completion of another coroutine
 or any object that implements the ''Awaitable'' interface.:
 
 <code php>
+use function Async\spawn;
+use function Async\await;
+
 function readFile(string $fileName):string
 {
     $result = file_get_contents($fileName);
@@ -474,6 +507,9 @@ the awaited one returns a final result or completes with an exception.
 > throw the same exception.
 
 <code php>
+use function Async\spawn;
+use function Async\await;
+
 function testException(): void {
     throw new Exception("Error");
 }
@@ -494,6 +530,9 @@ The $cancellation argument limits the waiting time for the first argument.
 As soon as the $cancellation is triggered, execution is interrupted with an exception ''AwaitCancelledException''.
 
 <code php>
+use function Async\spawn;
+use function Async\await;
+
 function readFile(string $fileName):string
 {
 		$result = file_get_contents($fileName);
@@ -560,6 +599,8 @@ to apply context-dependent constraints to them.
 By default, all coroutines are associated with the **Global Coroutine Scope**:
 
 <code php>
+use function Async\spawn;
+
 spawn('file_get_contents', 'file1.txt'); // <- global scope
 
 function readFile(string $file): void {
@@ -585,6 +626,7 @@ The function like ''spawn(<callable>)'' will create a coroutine within the curre
 Coroutines created during the execution of this **new coroutine** will become **sibling tasks**:
 
 <code php>
+use function Async\spawn;
 use Async\Scope;
 
 $scope = new Scope();
@@ -651,8 +693,11 @@ For example, a programmer explicitly defines a ''$scope'',
 and then inside a coroutine that belongs to this ''$scope'' calls a function
 from a third-party library, which in turn uses ''spawn()''.
 
-<code>
-$scope = new Async\Scope();
+<code php>
+use function Async\spawn;
+use Async\Scope;
+
+$scope = new Scope();
 
 $scope->spawn(function() {
     // Call to third-party library function
@@ -694,6 +739,7 @@ The ''awaitCompletion'' method blocks the execution flow until all tasks within 
 The ''awaitAfterCancellation'' method does the same but is intended to be called only after the scope has been cancelled.
 
 <code php>
+use function Async\spawn;
 use Async\Scope;
 
 $scope = new Scope();
@@ -760,6 +806,8 @@ Calling the ''awaitCompletion()'' method after the ''Scope'' has been cancelled
 will immediately throw a cancellation exception.
 
 <code php>
+use Async\Scope;
+
 $scope = new Scope();
 
 try {
@@ -785,6 +833,9 @@ If you need to wait for the ''Scope'' to complete after it has been cancelled,
 use the special method ''awaitAfterCancellation'', which is designed for this case.
 
 <code php>
+use function Async\spawn;
+use Async\Scope;
+
 $scope = new Scope();
 
 spawn(function() {
@@ -875,6 +926,7 @@ a child relative to the coroutines in the parent ''Scope''.
 **An example:**
 
 <code php>
+use function Async\await;
 use Async\Scope;
 use Async\CancellationError;
 
@@ -1017,7 +1069,8 @@ all child ''Scopes'' will be cancelled because the main ''Scope'' will be cancel
 The ''cancel'' method cancels all child coroutines and all child ''Scopes'' of the current ''Scope''.:
 
 <code php>
-use function Async\Scope\delay;
+use function Async\spawn;
+use Async\Scope;
 
 $scope = new Scope();
 
@@ -1066,7 +1119,9 @@ A **zombie coroutine** continues execution but is tracked by the system differen
 A warning is issued when a **zombie coroutine** is detected.
 
 <code php>
-use function Async\Scope\delay;
+use function Async\spawn;
+use function Async\await;
+use Async\Scope;
 
 $scope = new Scope();
 
@@ -1110,8 +1165,9 @@ When coroutines are detected as unfinished, a warning is issued.
 **Example:**
 
 <code php>
-
-use function Async\Scope\delay;
+use function Async\spawn;
+use function Async\await;
+use Async\Scope;
 
 $scope = new Scope();
 
@@ -1215,6 +1271,8 @@ When the ''cancel()'' or ''dispose()'' method is called, the ''Scope'' is marked
 Attempting to launch a coroutine with this Scope will result in a fatal exception.
 
 <code php>
+use Async\Scope;
+
 $scope = new Scope();
 
 $scope->spawn(function() {
@@ -1248,6 +1306,9 @@ Developers are expected to write code in a way that avoids triggering these warn
 An attempt to use the expression ''await($coroutine)'' from within the same coroutine throws an exception.
 
 <code php>
+use function Async\spawn;
+use function Async\await;
+
 $coroutine = null;
 $coroutine = spawn(function() use (&$coroutine) {
     await($coroutine); // <- AsyncException: A coroutine cannot await itself. Coroutine spawned at ...
@@ -1259,6 +1320,8 @@ to one of its child scopes will throw a fatal exception.
 This condition makes it impossible to perform the ''$globalScope->awaitCompletion'' call.
 
 <code php>
+use Async\Scope;
+
 $scope = new Scope();
 
 $scope->spawn(function() use ($scope) {
@@ -1495,13 +1558,15 @@ Unlike ''usleep'', the ''delay'' function will throw a cancellation exception if
 The ''timeout'' function is similar to ''delay'', but it returns an ''Awaitable'' object:
 
 <code php>
+use function Async\spawn;
+use function Async\await;
 use function Async\timeout;
 use function Async\delay;
 
 try {
-    Async\delay(1000); // suspends the coroutine for 1 second
+    delay(1000); // suspends the coroutine for 1 second
     // Try to fetch data from the URL within 1 second
-    echo await(spawn('file_get_content', 'https://php.net/'), Async\timeout(1000));
+    echo await(spawn('file_get_content', 'https://php.net/'), timeout(1000));
 } catch (\Async\AwaitCancelledException) {
     echo "Operation was cancelled by timeout\n";
 } catch (\Async\CancellationError) {
@@ -1682,6 +1747,8 @@ try {
 The ''Scope'' class provides a method for handling exceptions:
 
 <code php>
+use Async\Scope;
+
 $scope = new Scope();
 
 $scope->spawn(function() {
@@ -1712,6 +1779,8 @@ This method can be considered a direct analog of ''defer'' in Go.
 For ''Scope'', the callback receives the completed scope as a parameter:
 
 <code php>
+use Async\Scope;
+
 $scope = new Scope();
 
 $scope->spawn(function() {
@@ -1730,6 +1799,9 @@ $scope->awaitCompletion(Async\timeout(60000));
 For ''Coroutine'', the callback receives the completed coroutine as a parameter:
 
 <code php>
+use function Async\spawn;
+use Async\Coroutine;
+
 function task(): void
 {
     throw new Exception("Task 1");
@@ -1784,6 +1856,8 @@ The ''CancellationError'', if unhandled within a coroutine, is automatically sup
 > as it may cause application malfunctions.
 
 <code php>
+use Async\Scope;
+
 $scope = new Scope();
 
 $scope->spawn(function() {
@@ -1807,6 +1881,8 @@ within that ''Scope'' and all child ''Scopes'' in hierarchical order.
 A coroutine can attempt to cancel itself by calling its own ''cancel()'' method. However, **nothing happens immediately** - the coroutine continues executing normally until it naturally completes, but is marked as cancelled and stores the ''CancellationError'' as its final result:
 
 <code php>
+use function Async\spawn;
+
 $coroutine = spawn(function() use (&$coroutine) {
     $coroutine->cancel(new \Async\CancellationError("Self-cancelled"));
     echo "This still executes\n"; // Will execute
@@ -1819,6 +1895,8 @@ $coroutine = spawn(function() use (&$coroutine) {
 A coroutine can also cancel its own ''Scope'', which **does** affect execution by cancelling all coroutines in the scope, including itself:
 
 <code php>
+use Async\Scope;
+
 $scope = new Scope();
 $scope->spawn(function() use ($scope) {
     $scope->cancel(new \Async\CancellationError("Scope cancelled"));
@@ -1835,6 +1913,9 @@ using ''catch \Exception'' is a safe way to handle exceptions,
 and the ''finally'' block is the recommended way to execute finalizing code.
 
 <code php>
+use function Async\spawn;
+use function Async\await;
+
 try {
     $coroutine = spawn(function() {
         sleep(1);
@@ -1916,6 +1997,8 @@ For this purpose, the ''Async\protect'' function is used,
 which allows executing a closure in a non-cancellable (silent) mode.
 
 <code php>
+use function Async\spawn;
+
 function task(): void
 {
     Async\protect(fn() => fwrite($file, "Critical data\n"));
@@ -2020,6 +2103,8 @@ Simultaneous use of the **True Async API** and the **Fiber API** is not possible
 If you try to create a ''Fiber'' inside a coroutine, you will get a ''FiberError'':
 
 <code php>
+use function Async\spawn;
+
 spawn(function() {
     // This will throw FiberError
     $fiber = new Fiber(function() {
