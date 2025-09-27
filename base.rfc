@@ -471,6 +471,12 @@ echo await(spawn(readFile(...), 'file2.txt'));
 ''await'' suspends the execution of the current coroutine until
 the awaited one returns a final result or completes with an exception.
 
+> **Coroutines behave like Futures:**
+> once a coroutine completes (successfully, with an exception, or through cancellation),
+> it preserves its final state.
+> Multiple calls to ''await()'' on the same coroutine will always return the same result or
+> throw the same exception.
+
 <code php>
 function testException(): void {
     throw new Exception("Error");
@@ -1776,7 +1782,7 @@ The cancellation operation is implemented as follows:
   - If a coroutine is suspended, its execution will resume with an exception.
   - If a coroutine has already completed, nothing happens.
 
-The ''CancellationError'', if unhandled within a coroutine, is automatically suppressed after the coroutine completes.
+The ''CancellationError'', if unhandled within a coroutine, is automatically suppressed after the coroutine completes. However, the coroutine preserves its cancellation state, and any ''await()'' operation on this coroutine will throw the ''CancellationError''.
 
 > ⚠️ **Warning:** You should not attempt to suppress ''CancellationError'' exception,
 > as it may cause application malfunctions.
