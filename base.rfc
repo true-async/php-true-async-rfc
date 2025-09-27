@@ -81,6 +81,7 @@ $coroutine = spawn(function() {
         Async\delay(1000);
     } catch (Async\CancellationError $e) {
         echo "Coroutine cancelled";
+        throw $e; // Re-throw to propagate cancellation
     }
 });
 
@@ -108,8 +109,8 @@ echo await(spawn(fetchData(...), "file.txt"));
 === Awaiting a result with cancellation ===
 
 <code php>
-echo await(spawn('fetchData', "https://php.net/"), Async\timeout(2000));
-echo await(spawn('fetchData', "https://php.net/"), spawn('sleep', 2));
+echo await(spawn(file_get_contents(...), "https://php.net/"), Async\timeout(2000));
+echo await(spawn(file_get_contents(...), "https://php.net/"), spawn('sleep', 2));
 </code>
 
 === Suspend ===
