@@ -630,6 +630,11 @@ for all coroutines executed within that Scope.
 > A good practice is to ensure that a Scope object has **only ONE owner**.
 > Passing ''$scope'' as a parameter to other functions or assigning it to multiple objects
 > is a **potentially dangerous** operation that can lead to complex bugs.
+> When a ''$scope'' is owned by multiple modules/classes,
+> there is a risk that they may either accidentally extend the Scope’s lifetime
+> or accidentally call ''scope::dispose()'' and disrupt its lifecycle.
+> Because the code is asynchronous, finding the real cause in such cases is much harder than
+> if the Scope had only a single owner.
 
 === Scope waiting ===
 
