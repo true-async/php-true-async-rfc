@@ -18,7 +18,7 @@ The goal of this **RFC** is to establish a standard for writing concurrent code 
 
 The **True Async** project pursues the following goals and values:
 
-  * From a PHP developer's perspective, the **main value** of this implementation is that they DO NOT NEED to change existing code (or if changes are required, they should be minimal) to enable concurrency. Unlike explicit async models, this approach lets developers reuse existing synchronous code inside fibers without modification.
+  * From a PHP developer's perspective, the **main value** of this implementation is that they DO NOT NEED to change existing code (or if changes are required, they should be minimal) to enable concurrency. Unlike explicit async models, this approach lets developers reuse existing synchronous code inside coroutines without modification.
 
   * Code that was originally written and intended to run outside of a Coroutine must work **EXACTLY THE SAME** inside a Coroutine without modifications.
 
@@ -250,9 +250,12 @@ This state diagram illustrates the lifecycle of a coroutine, showing how it tran
 
 **Coroutines** and **Scopes** participate in PHP's standard garbage collection system:
 
-  * **Unreferenced coroutines** can be collected by the garbage collector, like Fibers
+  * **Unreferenced coroutines** can be collected by the garbage collector
   * **Circular references** between objects and coroutines are properly detected and resolved
   * **Active coroutines** (running or suspended) are protected from collection while they have pending operations
+
+Coroutines retain either the execution result or the exception that occurred.
+These items are visible to the garbage collector.
 
 ==== Destructors and Async Operations ====
 
@@ -2021,8 +2024,21 @@ The ''Async\getCoroutines()'' method returns an array of all coroutines in the a
 
 Simultaneous use of the **True Async API** and the **Fiber API** is not possible.
 
-  - If ''new Fiber()'' is called first, the ''Async\spawn'' function will fail with an error.
-  - If ''Async\spawn'' is called first, any attempt to create a **Fiber** will result in an error.
+If you try to create a ''Fiber'' inside a coroutine, you will get a ''FiberError'':
+
+<code php>
+spawn(function() {
+    // This will throw FiberError
+    $fiber = new Fiber(function() {
+        echo "This won't work\n";
+    });
+});
+</code>
+
+Error message: "Cannot create a fiber while an True Async is active"
+
+  - If ''new Fiber()'' is called first, subsequent ''Async\spawn'' calls will fail
+  - If ''Async\spawn'' is called first, any attempt to create a **Fiber** throws ''FiberError''
 
 ===== Proposed PHP Version(s) =====
 
@@ -2050,16 +2066,24 @@ Does not affect.
 
 No new constants are introduced.
 
+==== To the Ecosystem ====
+
+**Static Analyzers:**
+
+Static analyzers will need to implement new checks for safe async/await usage:
+
+1. **Deadlock detection:**
+2. **CancellationError suppression detection:**
+   * ''catch (\Throwable)'' that may hide CancellationError
+
+
+
 ==== php.ini Defaults ====
 
 	* async.zombie_coroutine_timeout - default 5 seconds
 
 ===== Open Issues =====
 None.
-
-===== Unaffected PHP Functionality =====
-
-  * Fiber API.
 
 ===== Future Scope =====
 
@@ -2120,6 +2144,20 @@ The following can be considered as competing solutions to the current implementa
    * The **Swow** (https://github.com/swow/) project is a C library that provides a good lightweight API while not affecting the language itself and not requiring changes to PHP.
 
    * Examples of code: https://github.com/EdmondDantes/php-true-async-rfc/tree/main/examples
+
+===== Implementation =====
+
+
+
+===== Changelog =====
+
+==== Version 1.4 (September 2025) ====
+   * Major RFC simplification - removed CoroutineGroup, Future and AwaitXX functions
+   * Added Memory Management and Garbage Collection section
+   * Documented self-cancellation behavior in coroutines and its impact on execution
+   * Enhanced "Cancellable by design" principle documentation
+   * Updated suspend function information and usage guidelines
+   * Added Scope waiting functionality and extra descriptions
 
 ===== Rejected Features =====
 Keep this updated with features that were discussed on the mail lists.
