@@ -640,7 +640,39 @@ for all coroutines executed within that Scope.
 
 The ''Scope'' class does not implement the ''Awaitable'' interface,
 and therefore cannot be used in an ''await'' expression.
-Awaiting a ''Scope'' is a potentially **dangerous operation** that should be performed consciously, not accidentally.
+
+Awaiting a ''Scope'' is a potentially **dangerous operation** that should be performed consciously,
+not accidentally.
+
+A ''Scope'' can own a coroutine that was created “by someone else” “somewhere else.”
+For example, a programmer explicitly defines a ''$scope'',
+and then inside a coroutine that belongs to this ''$scope'' calls a function
+from a third-party library, which in turn uses ''spawn()''.
+
+<code>
+$scope = new Async\Scope();
+
+$scope->spawn(function() {
+    // Call to third-party library function
+    thirdPartyFunction();
+});
+
+function thirdPartyFunction() {
+    // Library code spawns a coroutine
+    spawn(function() {
+        sleep(10000); // <- long operation
+    });
+}
+</code>
+
+When you await a ''Scope'', you do **not know** which coroutines you are actually awaiting.
+Even if ''$scope'' is used by only one class or module, there is still a chance
+that someone accidentally created an “incorrect coroutine.”
+
+That is why awaiting a ''Scope'' must be bounded by a cancellation token.
+
+> To await a group of coroutines,
+> a specialized primitive should be used, which will be described in a separate ''RFC''.
 
 There are several Use-Cases where waiting for a ''Scope'' might be necessary:
 
