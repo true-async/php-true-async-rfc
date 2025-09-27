@@ -207,13 +207,8 @@ Isolated execution contexts make it possible to switch between coroutines and ex
 
 Any function can be executed as a coroutine without any changes to the code.
 
-A coroutine can stop itself bypassing control to the ''scheduler''.
+A coroutine can stop itself passing control to the ''scheduler''.
 However, it cannot be stopped externally.
-
-> ⚠️ **Warning:**
-> It is permissible to stop a coroutine’s execution externally for two reasons:
-> 	* To implement multitasking.
-> 	* To enforce an active execution time limit.
 
 A suspended coroutine can be resumed at any time.
 The ''scheduler'' component is responsible for the coroutine resumption algorithm.
@@ -421,7 +416,7 @@ $coroutine = spawn(readFile(...), 'file1.txt');
 
 echo await($coroutine);
 // or
-echo await spawn(readFile(...), 'file2.txt');
+echo await(spawn(readFile(...), 'file2.txt'));
 </code>
 
 ''await'' suspends the execution of the current coroutine until
@@ -586,8 +581,6 @@ for all coroutines executed within that Scope.
 > A good practice is to ensure that a Scope object has **only ONE owner**.
 > Passing ''$scope'' as a parameter to other functions or assigning it to multiple objects
 > is a **potentially dangerous** operation that can lead to complex bugs.
-> If you need to interact with the ''Scope'' in different parts of the program,
-> use ''Async\ScopeProvider'' containers or other appropriate mechanisms.
 
 === Scope waiting ===
 
@@ -1157,13 +1150,10 @@ The following scenarios are considered potentially erroneous:
   1. A coroutine belongs to a global scope and is not awaited by anyone (a **zombie coroutine**).
   2. The root scope has been destroyed (its destructor was called), but no one awaited
    it or ensured that its resources were explicitly cleaned up (e.g., by calling ''$scope->cancel()'' or ''$scope->dispose()'').
-  3. Tasks were not cancelled using the ''cancel()'' method, but through a call to ''dispose()''.
-   This indicates that the programmer did not intend to cancel the execution of the coroutine,
-   yet it happened because the scope was destroyed.
-  4. An attempt to await a coroutine from within itself.
-  5. Awaiting ''$scope'' from within itself or from one of its child scopes.
-  6. Stuck tasks in the cancellation state.
-  7. Deadlocks caused by circular dependencies between coroutines.
+  3. An attempt to await a coroutine from within itself.
+  4. Awaiting ''$scope'' from within itself or from one of its child scopes.
+  5. Stuck tasks in the cancellation state.
+  6. Deadlocks caused by circular dependencies between coroutines.
 
 **PHP** will respond to such situations by issuing **warnings**, including debug information about the involved coroutines.
 Developers are expected to write code in a way that avoids triggering these warnings.
