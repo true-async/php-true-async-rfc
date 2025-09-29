@@ -937,8 +937,20 @@ use function Async\await;
 use Async\Scope;
 use Async\CancellationError;
 
+function webServer(): void
+{
+    // Creating a new Root Scope
+    $scope = new Scope();
+
+    // socket server code that accepts connections...
+    while ($socket = acceptConnection()) {
+        $scope->spawn(connectionHandler(...), $socket);
+    }
+}
+
 function connectionHandler($socket): void
 {
+    // Current scope is the Root Scope
     // $scope is inherited from the current Scope.
     $scope = Scope::inherit();
 
@@ -960,13 +972,15 @@ function connectionHandler($socket): void
 </code>
 Let's examine how this example works.
 
+  - The ''webServer'' function creates a new ''Root Scope'' for the entire server.
+  - Each time a new connection is accepted, a new coroutine is created within the ''Root Scope''.
   - ''connectionHandler'' creates an inherited ''Scope'' from the current context.
   - A ''$cancelToken'' closure is created to provide a simple way to cancel the entire scope with a custom message.
   - A child ''$limiterScope'' is created for timeout management.
   - A timeout coroutine automatically cancels the request after 10 seconds with the message "The request processing limit has been reached."
 
 <code>
-GLOBAL <- globalScope
+Root <- Root Scope
 │
 ├── connectionHandler (Scope) <- inherited scope
 │   │
