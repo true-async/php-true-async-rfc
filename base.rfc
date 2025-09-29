@@ -1027,6 +1027,8 @@ The ''cancel'' method cancels all child coroutines and all child ''Scopes'' of t
 use function Async\spawn;
 use Async\Scope;
 
+echo "Start\n";
+
 $scope = new Scope();
 
 $scope->spawn(function() {
@@ -1042,11 +1044,14 @@ $scope->spawn(function() {
 });
 
 $scope->cancel();
+echo "End\n";
 </code>
 
 **Expected output:**
 
 <code>
+Start
+End
 </code>
 
 === Scope disposal ===
