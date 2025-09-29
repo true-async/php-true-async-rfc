@@ -2090,15 +2090,14 @@ No new constants are introduced.
 
 **Static Analyzers:**
 
-Static analyzers will need to implement new checks for safe async/await usage:
+Static analyzers will need to implement new checks for safe async/await usage
 
-1. **Deadlock detection:**
-2. **CancellationError suppression detection:**
-   * ''catch (\Throwable)'' that may hide CancellationError
+  1. **Deadlock detection:**
+  2. **CancellationError suppression detection:** ''catch (\Throwable)'' that may hide CancellationError
 
 **Libraries Using Fiber:**
 
-Libraries that use the Fiber API will continue to work as expected,
+Libraries that use the ''Fiber API'' will continue to work as expected,
 but cannot be used simultaneously with ''True Async''.
 
 ==== php.ini Defaults ====
