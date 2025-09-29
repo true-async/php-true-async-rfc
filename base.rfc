@@ -46,7 +46,7 @@ This **RFC** describes the **API** for writing concurrent code in PHP, which inc
 
 === Coroutine ===
 A lightweight execution thread that can be suspended (''suspend'') and resumed.
-Example:
+Example
 <code php>
 use function Async\spawn;
 use function Async\suspend;
@@ -60,7 +60,7 @@ spawn(function() {
 
 === Scope ===
 A container that manages coroutine lifetimes.
-Example:
+Example
 <code php>
 use function Async\spawn;
 
@@ -79,7 +79,7 @@ $scope->disposeSafely();
 
 === Cooperative cancellation ===
 A special exception that implements cooperative cancellation:
-Example:
+Example
 <code php>
 use function Async\spawn;
 use function Async\suspend;
@@ -145,7 +145,7 @@ spawn(myFunction(...));
 echo "Next line\n";
 </code>
 
-Output:
+Output
 
 <code>
 Hello, World
@@ -319,7 +319,7 @@ $result = file_get_contents('https://php.net');
 echo "next line".__LINE__."\n";
 </code>
 
-This code:
+This code
   1. first returns the contents of the PHP website,
   2. then executes the ''echo'' statement.
 
@@ -330,7 +330,7 @@ $coroutine = spawn('file_get_contents', 'https://php.net');
 echo "next line".__LINE__."\n";
 </code>
 
-This code:
+This code
   1. starts a coroutine with the ''file_get_contents'' function.
   2. The next line is executed without waiting for the result of ''file_get_contents''.
   3. The coroutine is executed after the ''echo'' statement.
@@ -373,7 +373,7 @@ spawn('example', 'World');
 spawn('example', 'Universe');
 </code>
 
-Expected output:
+Expected output
 
 <code>
 Hello, World!
@@ -419,7 +419,7 @@ suspend();
 echo "Back to the main flow";
 </code>
 
-Expected output:
+Expected output
 
 <code>
 Hello, World!
@@ -450,7 +450,7 @@ suspend();
 $coroutine->cancel();
 </code>
 
-**Expected output:**
+**Expected output**
 
 <code>
 Hello, World!
@@ -654,7 +654,7 @@ $scope->spawn(function() { // <- new scope
 $scope->awaitCompletion(Async\timeout(60000));
 </code>
 
-**Expected output:**
+**Expected output**
 
 <code>
 Sibling task 1
@@ -767,7 +767,7 @@ $scope->spawn(function() {
 $scope->awaitCompletion(Async\timeout(60000));
 </code>
 
-**Expected output:**
+**Expected output**
 
 <code>
 Sibling task 1
@@ -803,7 +803,7 @@ try {
 }
 </code>
 
-**Expected output:**
+**Expected output**
 
 <code>
 Error occurred
@@ -828,7 +828,7 @@ try {
 }
 </code>
 
-**Expected output:**
+**Expected output**
 
 <code>
 Caught exception: cancelled at ...
@@ -866,7 +866,7 @@ $scope->spawn(function() use ($scope) {
 });
 </code>
 
-**Expected output:**
+**Expected output**
 
 <code>
 Finally
@@ -1047,7 +1047,7 @@ $scope->cancel();
 echo "End\n";
 </code>
 
-**Expected output:**
+**Expected output**
 
 <code>
 Start
@@ -1102,7 +1102,7 @@ await($scope->spawn(function() {
 $scope->disposeSafely();
 </code>
 
-**Expected output:**
+**Expected output**
 
 <code>
 Root task
@@ -1122,7 +1122,7 @@ The ''Scope::dispose'' method differs from ''Scope::disposeSafely'' in that it d
 It cancels **all coroutines**.
 When coroutines are detected as unfinished, a warning is issued.
 
-**Example:**
+**Example**
 
 <code php>
 use function Async\spawn;
@@ -1148,7 +1148,7 @@ await($scope->spawn(function() {
 $scope->dispose();
 </code>
 
-**Expected output:**
+**Expected output**
 
 <code>
 Warning: Coroutine is zombie at ... in Scope disposed at ...
@@ -1196,7 +1196,7 @@ sleep(1);
 unset($service);
 </code>
 
-**Expected output:**
+**Expected output**
 
 <code>
 Task 1
@@ -1528,7 +1528,7 @@ An uncaught exception in a coroutine follows this flow:
 
 {{ :rfc:true_async:exception_flow.svg |}}
 
-**Example:**
+**Example**
 
 <code php>
 use Async\Scope;
@@ -1579,7 +1579,7 @@ For this purpose, two methods are used:
 > The methods ''setExceptionHandler'' and ''setChildScopeExceptionHandler'' cannot be used with the ''globalScope''.
 > If an attempt is made to do so, an exception will be thrown.
 
-**Example:**
+**Example**
 
 <code php>
 $scope = new Scope();
@@ -1882,7 +1882,7 @@ try {
 }
 </code>
 
-Expected output:
+Expected output
 
 <code>
 The end
@@ -1911,7 +1911,7 @@ try {
 }
 </code>
 
-Expected output:
+Expected output
 
 <code>
 Caught CancellationError
