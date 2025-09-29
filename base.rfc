@@ -267,42 +267,6 @@ This state diagram illustrates the lifecycle of a coroutine, showing how it tran
 | ''isCancellationRequested(): bool'' | Returns ''true'' if cancellation has been requested.       | ''Pending Cancellation''         |
 | ''isFinished(): bool''              | Returns ''true'' if the coroutine has completed execution. | ''Completed'', ''Cancelled''     |
 
-=== Memory Management and Garbage Collection ===
-
-**Coroutines** and **Scopes** participate in PHP's standard garbage collection system:
-
-  * **Unreferenced coroutines** can be collected by the garbage collector
-  * **Circular references** between objects and coroutines are properly detected and resolved
-  * **Active coroutines** (running or suspended) are protected from collection while they have pending operations
-
-Coroutines retain either the execution result or the exception that occurred.
-These items are visible to the garbage collector.
-
-=== Destructors and Async Operations ===
-
-**Destructors can contain async operations** and execute asynchronously:
-
-<code php>
-use function Async\spawn;
-use function Async\suspend;
-
-class AsyncResource {
-    public function __destruct() {
-        // Destructors can spawn coroutines
-        spawn(function() {
-            echo "Async cleanup\n";
-        });
-
-        // Destructors can suspend
-        suspend();
-    }
-}
-</code>
-
-Destructor execution is **deferred** until the async context allows it, and destructors run **asynchronously** like other async code.
-
-> **Note:** Objects can be "resurrected" if destructors store references to ``$this`` in global variables or other persistent storage.
-
 ==== Spawn function ====
 
 To create coroutines, the ''spawn(callable $callable, mixed ...$args)'' function is used.
@@ -569,6 +533,40 @@ which is also considered a coroutine.
 As a result, operations like ''suspend'' and ''currentCoroutine()'' will behave the same way as in other cases.
 
 Asynchronous code will work as expected, including inside ''register_shutdown_function''.
+
+=== Memory Management and Garbage Collection ===
+
+**Coroutines** and **Scopes** participate in PHP's standard garbage collection system:
+
+  * **Unreferenced coroutines** can be collected by the garbage collector
+  * **Circular references** between objects and coroutines are properly detected and resolved
+  * **Active coroutines** (running or suspended) are protected from collection while they have pending operations
+
+Coroutines retain either the execution result or the exception that occurred.
+These items are visible to the garbage collector.
+
+=== Destructors and Async Operations ===
+
+**Destructors can contain async operations** and execute asynchronously:
+
+<code php>
+use function Async\spawn;
+use function Async\suspend;
+
+class AsyncResource {
+    public function __destruct() {
+        // Destructors can spawn coroutines
+        spawn(function() {
+            echo "Async cleanup\n";
+        });
+
+        // Destructors can suspend
+        suspend();
+    }
+}
+</code>
+
+Destructor execution is **deferred** until the async context allows it, and destructors run **asynchronously** like other async code.
 
 ==== Coroutine Scope ====
 
