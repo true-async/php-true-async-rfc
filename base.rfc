@@ -337,12 +337,14 @@ This code:
 
 === Spawn with scope ===
 
-You can use the ''spawn'' method, which is available for the ''Scope'' class:
+To create a coroutine in a specific ''Scope'',
+you need to use the ''Scope::spawn'' method.:
 
 <code php>
 $scope = new Async\Scope();
 
-$coroutine = $scope->spawn(function() use ():string {
+// Launch a coroutine in the $scope
+$coroutine = $scope->spawn(function():string {
     return gethostbyname('php.net');
 });
 
