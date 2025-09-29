@@ -731,7 +731,7 @@ That is why awaiting a ''Scope'' must be bounded by a cancellation token.
 There are several Use-Cases where waiting for a ''Scope'' might be necessary:
 
   * Structured concurrency: when a parent awaits the completion of all child coroutines.
-  * Waiting for Scope tasks to complete the cancellation process.
+  * Waiting for Scope tasks to complete the cancellation process (see section: [[#cancellation|Cancellation]]).
 
 The structured concurrency pattern with waiting for all child coroutines can be useful
 for applications whose lifetime is explicitly limited by external conditions.
@@ -1838,6 +1838,11 @@ spawn('task');
 </code>
 
 ==== Cancellation ====
+
+The ''cancellation'' operation allows interrupting the execution of a coroutine that is in a waiting state.
+A cancelled coroutine is **resumed** with a special ''CancellationError'' exception and continues its execution.
+The cancellation operation is not instantaneous; it takes time.
+While in the ''cancellation'' state, a coroutine may execute as usual without any restrictions.
 
 The cancellation operation is available for coroutines and scopes
 using the ''cancel()'' method:
