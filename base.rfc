@@ -278,7 +278,7 @@ This state diagram illustrates the lifecycle of a coroutine, showing how it tran
 Coroutines retain either the execution result or the exception that occurred.
 These items are visible to the garbage collector.
 
-==== Destructors and Async Operations ====
+=== Destructors and Async Operations ===
 
 **Destructors can contain async operations** and execute asynchronously:
 
