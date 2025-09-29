@@ -2090,10 +2090,10 @@ No new constants are introduced.
 
 **Static Analyzers:**
 
-Static analyzers will need to implement new checks for safe async/await usage
+Static analyzers will need to implement new checks for safe async/await usage:
 
-  1. **Deadlock detection:**
-  2. **CancellationError suppression detection:** ''catch (\Throwable)'' that may hide CancellationError
+  - **Deadlock detection:** Identify potential deadlocks in async code
+  - **CancellationError suppression detection:** ''catch (\Throwable)'' that may hide CancellationError
 
 **Libraries Using Fiber:**
 
