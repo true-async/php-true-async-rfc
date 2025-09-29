@@ -548,9 +548,13 @@ function readFile(string $fileName):string
     return $result;
 }
 
+$cancellation = spawn(function() {
+    Async\delay(2000);
+});
+
 try {
     // Wait for the coroutine to finish or for the cancellation to occur
-    echo await(spawn(readFile(...), 'file1.txt'), timeout(2000));
+    echo await(spawn(readFile(...), 'file1.txt'), $cancellation);
 } catch (AwaitCancelledException $e) {
     echo "Caught exception: ", $e->getMessage();
 }
