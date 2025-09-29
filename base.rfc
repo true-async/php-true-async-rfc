@@ -2118,21 +2118,6 @@ None.
 At the moment, the Reactor component uses the ''LibUV'' library.
 This component should be implemented as a separate extension.
 
-=== Integration with Pipe ===
-
-The Future->map()->catch()->finally() call chain is rightly criticized for excessive complexity and difficulty of comprehension.
-**Pipe** (not UNIX-like-pipe) can solve this problem and create a more intuitive
-and understandable interface for describing sequences of asynchronous function calls.
-
-=== Refactoring of the Input-Output Module ===
-
-Input-output modules such as **PHP Streams** can be redesigned with **asynchronous capabilities**
-in mind and better optimized for operation in this environment.
-
-It would also be appropriate to add support for ''pipe'' in such a way
-that it can be used regardless of the operating system using ''fopen()'' functions.
-This would make the API more consistent.
-
 ===== Proposed Voting Choices =====
 Yes or no vote.  2/3 required to pass.
 
