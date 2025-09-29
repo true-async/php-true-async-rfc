@@ -247,14 +247,14 @@ This state diagram illustrates the lifecycle of a coroutine, showing how it tran
 	- **Queued** – The coroutine is queued
 	- **Running** – The coroutine is actively executing.
 	- **Suspended** – Execution is paused, usually waiting for a result or I/O.
-	- **Completed** – The coroutine has finished successfully (via ''return'').
+	- **Completed** – The coroutine has finished (Successfully or with an exception).
 	- **Pending Cancellation** – A cancellation was requested; the coroutine is cleaning up.
 
 **Key Transitions:**
 	- ''spawn'' moves a coroutine from **Created** to **Running**.
 	- ''suspend'' and ''resume'' move it between **Running** and **Suspended**.
 	- ''return/exit'' ends it in **Completed**.
-	- ''cancel()'' initiates cancellation from **Running** or **Suspended**, leading to **Pending Cancellation**, and finally **Cancelled**.
+	- ''cancel()'' initiates cancellation from **Running** or **Suspended**, leading to **Pending Cancellation**, and finally **Complete** with **Cancelled** flag.
 
 === Memory Management and Garbage Collection ===
 
