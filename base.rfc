@@ -1248,11 +1248,10 @@ $scope->spawn(function() { // <- AsyncException: Coroutine scope is closed
 
 Detecting erroneous situations when using coroutines is an important part of analyzing an application's reliability.
 
-The following scenarios are considered potentially erroneous:
+**The following scenarios are considered potentially erroneous**
 
   1. A coroutine belongs to a global scope and is not awaited by anyone (a **zombie coroutine**).
-  2. The root scope has been destroyed (its destructor was called), but no one awaited
-   it or ensured that its resources were explicitly cleaned up (e.g., by calling ''$scope->cancel()'' or ''$scope->dispose()'').
+  2. The root scope has been destroyed (its destructor was called), but no one awaited it or ensured that its resources were explicitly cleaned up (e.g., by calling ''$scope->cancel()'' or ''$scope->dispose()'').
   3. An attempt to await a coroutine from within itself.
   4. Awaiting ''$scope'' from within itself or from one of its child scopes.
   5. Stuck tasks in the cancellation state.
