@@ -256,6 +256,17 @@ This state diagram illustrates the lifecycle of a coroutine, showing how it tran
 	- ''return/exit'' ends it in **Completed**.
 	- ''cancel()'' initiates cancellation from **Running** or **Suspended**, leading to **Pending Cancellation**, and finally **Complete** with **Cancelled** flag.
 
+=== ''Coroutine'' state check methods ===
+
+| Method                              | Description                                                | Related State on Diagram         |
+| ''isStarted(): bool''               | Returns ''true'' if the coroutine has been started.        | ''Running'', ''Suspended'', etc. |
+| ''isRunning(): bool''               | Returns ''true'' if the coroutine is currently running.    | ''Running''                      |
+| ''isQueued(): bool''                | Returns ''true'' if the coroutine is queued.               | ''Queued''                       |
+| ''isSuspended(): bool''             | Returns ''true'' if the coroutine is suspended.            | ''Suspended''                    |
+| ''isCancelled(): bool''             | Returns ''true'' if the coroutine has been cancelled.      | ''Cancelled''                    |
+| ''isCancellationRequested(): bool'' | Returns ''true'' if cancellation has been requested.       | ''Pending Cancellation''         |
+| ''isFinished(): bool''              | Returns ''true'' if the coroutine has completed execution. | ''Completed'', ''Cancelled''     |
+
 === Memory Management and Garbage Collection ===
 
 **Coroutines** and **Scopes** participate in PHP's standard garbage collection system:
@@ -291,17 +302,6 @@ class AsyncResource {
 Destructor execution is **deferred** until the async context allows it, and destructors run **asynchronously** like other async code.
 
 > **Note:** Objects can be "resurrected" if destructors store references to ``$this`` in global variables or other persistent storage.
-
-=== ''Coroutine'' state check methods ===
-
-| Method                              | Description                                                | Related State on Diagram         |
-| ''isStarted(): bool''               | Returns ''true'' if the coroutine has been started.        | ''Running'', ''Suspended'', etc. |
-| ''isRunning(): bool''               | Returns ''true'' if the coroutine is currently running.    | ''Running''                      |
-| ''isQueued(): bool''                | Returns ''true'' if the coroutine is queued.               | ''Queued''                       |
-| ''isSuspended(): bool''             | Returns ''true'' if the coroutine is suspended.            | ''Suspended''                    |
-| ''isCancelled(): bool''             | Returns ''true'' if the coroutine has been cancelled.      | ''Cancelled''                    |
-| ''isCancellationRequested(): bool'' | Returns ''true'' if cancellation has been requested.       | ''Pending Cancellation''         |
-| ''isFinished(): bool''              | Returns ''true'' if the coroutine has completed execution. | ''Completed'', ''Cancelled''     |
 
 ==== Spawn function ====
 
