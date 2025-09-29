@@ -924,13 +924,36 @@ WebServer
 │               └── sub-subtask B1
 </code>
 
-A new child ''Scope'' can be created using a special constructor:
-''Scope::inherit()''.
+The ''new Scope()'' constructor creates a **root independent Scope**.
+
+To create a **child Scope**, you need to use a special constructor:
+
+''Scope::inherit(?Scope $parentScope = null)''
+
 It returns a new ''Scope'' object that acts as a child.
 A coroutine created within the child ''Scope'' can also be considered
 a child relative to the coroutines in the parent ''Scope''.
 
+If the ''$parentScope'' parameter is not specified, the current ''Scope'' will be used as the parent.
+
 **An example:**
+<code php>
+use function Async\spawn;
+use Async\Scope;
+use Async\CancellationError;
+
+// New independent root scope
+$scope = new Scope();
+
+// child scope from $scope number 1
+$childScope1 = Scope::inherit($scope);
+
+$scope->spawn(function() {
+    $childScope2 = Scope::inherit(); // child scope from $scope number 2
+});
+</code>
+
+**WebServer example:**
 
 <code php>
 use function Async\await;
