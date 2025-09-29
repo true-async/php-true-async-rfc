@@ -937,139 +937,50 @@ use function Async\await;
 use Async\Scope;
 use Async\CancellationError;
 
-function connectionChecker($socket, callable $cancelToken): void
-{
-    while (true) {
-        if(feof($socket)) {
-            $cancelToken("The connection was closed by user");
-            return;
-        }
-
-        Async\delay(1000); // throw CancellationError if canceled
-    }
-}
-
-function connectionLimiter(callable $cancelToken): void
-{
-   Async\delay(10000);
-   $cancelToken("The request processing limit has been reached.");
-}
-
 function connectionHandler($socket): void
 {
-    // Note that a parent Scope can stop the execution of all coroutines
-    // belonging to a child Scope at any moment.
+    // $scope is inherited from the current Scope.
     $scope = Scope::inherit();
 
-    //
-    // Passing ''$scope'' via ''use'' into a single coroutine is equivalent to the logic:
-    // the lifetime of ''$scope'' equals the lifetime of the coroutine.
-    // In this way, we create a coroutine-closure that acts as a Point of Responsibility.
-    // This code is one example of how to implement Points of Responsibility.
-    //
-    $scope->spawn(function() use ($socket, $scope) {
+    // We do not provide direct access to the Scope object in other functions
+    $cancelToken = fn(string $message) => $scope->cancel(new CancellationError($message));
 
-        $limiterScope = Scope::inherit(); // child scope for connectionLimiter and connectionChecker
+    $scope->spawn(function() use ($socket, $cancelToken) {
 
-        // We do not provide direct access to the Scope object in other functions, because this is an antipattern!
-        $cancelToken = fn(string $message) => $scope->cancel(new CancellationError($message));
+        $limiterScope = Scope::inherit(); // child scope for connectionLimiter
 
-        // Limiter coroutine
-        $limiterScope->spawn(connectionLimiter(...), $cancelToken);
+        $limiterScope->spawn(function() {
+            Async\delay(10000);
+            $cancelToken("The request processing limit has been reached.");
+        }, $cancelToken);
 
-        // A separate coroutine checks that the socket is still active.
-        $limiterScope->spawn(connectionChecker(...), $socket, $cancelToken);
-
-        try {
-            sendResponse($socket, dispatchRequest(parseRequest($socket)));
-        } catch (\Exception $exception) {
-            fwrite($socket, "HTTP/1.1 500 Internal Server Error\r\n\r\n");
-        } finally {
-            fclose($socket);
-            // Explicitly cancel all coroutines in the child scope
-            $scope->cancel();
-        }
+        handleRequest($socket, $cancelToken);
     });
-}
-
-function socketServer(): void
-{
-    // Main Server $scope
-    $scope = new Scope();
-
-    // Child coroutine that listens for a shutdown signal
-    //
-    // Note that we are passing ''$scope'' to another function!
-    // This is acceptable here because the code is within a single visual block,
-    // and the risk of an error due to oversight is minimal.
-    $scope->spawn(function() use ($scope) {
-        try {
-            // await for a shutdown signal
-        } finally {
-            $scope->cancel(new CancellationError('Server shutdown'));
-        }
-    }
-
-    try {
-       // The main coroutine that listens for incoming connections
-       // The server runs as long as this coroutine is running.
-       await($scope->spawn(function() {
-           while ($socket = stream_socket_accept($serverSocket, 0)) {
-               connectionHandler($socket);
-           });
-       }));
-    } catch (\Throwable $exception) {
-        echo "Server error: ", $exception->getMessage(), "\n";
-    } finally {
-        echo "Server should be stopped...\n";
-
-        // Graceful exit
-        try {
-            $scope->cancel();
-            // Await for all coroutines to finish but not more than 5 seconds
-            $scope->awaitAfterCancellation(cancellation: Async\timeout(5000));
-            echo "Server stopped\n";
-        } catch (\Throwable $exception) {
-            // Force exit
-            echo "Server error: ", $exception->getMessage(), "\n";
-            throw $exception;
-        }
-    }
 }
 </code>
 Let's examine how this example works.
 
-  - ''socketServer'' creates a new ''Scope'' for coroutines that will handle all connections.
-  - Each new connection is processed using ''connectionHandler()'' in a separate ''Scope'', which is inherited from the main one.
-  - ''connectionHandler'' creates a new ''Scope'' for the ''connectionLimiter'' and ''connectionChecker'' coroutines.
-  - ''connectionHandler'' creates coroutine: ''connectionLimiter()'' to limit the processing time of the request.
-  - ''connectionHandler'' creates coroutine, ''connectionChecker()'', to monitor the connection's activity. As soon as the client disconnects, ''connectionChecker'' will cancel all coroutines related to the request.
-  - If the main ''Scope'' is closed, all coroutines handling requests will also be canceled.
+  - ''connectionHandler'' creates an inherited ''Scope'' from the current context.
+  - A ''$cancelToken'' closure is created to provide a simple way to cancel the entire scope with a custom message.
+  - A child ''$limiterScope'' is created for timeout management.
+  - A timeout coroutine automatically cancels the request after 10 seconds with the message "The request processing limit has been reached."
 
 <code>
 GLOBAL <- globalScope
 │
-├── socketListen (Scope) <- rootScope
+├── connectionHandler (Scope) <- inherited scope
 │   │
-│   ├── connectionHandler (Scope) <- request scope1
-│   │   └── connectionLimiter (Coroutine) <- $limiterScope
-│   │   └── connectionChecker (Coroutine) <- $limiterScope
-│   │
-│   ├── connectionHandler (Scope) <- request scope2
-│   │   └── connectionLimiter (Coroutine) <- $limiterScope
-│   │   └── connectionChecker (Coroutine) <- $limiterScope
+│   ├── main request handling (Coroutine) <- $scope
+│   │   └── timeout limiter (Coroutine) <- $limiterScope
 │   │
 </code>
 
-The ''connectionHandler'' doesn't worry if the lifetimes of the ''connectionLimiter'' or ''connectionChecker''
-coroutines exceed the lifetime of the main coroutine handling the request,
-because it is guaranteed to call ''$scope->cancel()'' when the main coroutine finishes.
+The ''connectionHandler'' uses structured concurrency principles where the timeout limiter coroutine
+is automatically managed within its dedicated ''$limiterScope''. When the request processing completes
+or times out, all associated coroutines are properly cleaned up through the scope hierarchy.
 
-''$limiterScope'' is used to explicitly define a child-group of coroutines
-that should be cancelled when the request is completed. This approach minimizes errors.
-
-On the other hand, if the server receives a shutdown signal,
-all child ''Scopes'' will be cancelled because the main ''Scope'' will be cancelled as well.
+''$limiterScope'' is used to isolate the timeout management logic from the main request handling
+that should be cancelled when the request is completed.
 
 === Scope cancellation ===
 
