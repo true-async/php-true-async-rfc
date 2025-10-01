@@ -284,8 +284,8 @@ echo "next line".__LINE__."\n";
 </code>
 
 This code
-  1. first returns the contents of the PHP website,
-  2. then executes the ''echo'' statement.
+  - first returns the contents of the PHP website,
+  - then executes the ''echo'' statement.
 
 <code php>
 use function Async\spawn;
@@ -295,9 +295,9 @@ echo "next line".__LINE__."\n";
 </code>
 
 This code
-  1. starts a coroutine with the ''file_get_contents'' function.
-  2. The next line is executed without waiting for the result of ''file_get_contents''.
-  3. The coroutine is executed after the ''echo'' statement.
+  - starts a coroutine with the ''file_get_contents'' function.
+  - The next line is executed without waiting for the result of ''file_get_contents''.
+  - The coroutine is executed after the ''echo'' statement.
 
 === Spawn with scope ===
 
@@ -1250,12 +1250,12 @@ Detecting erroneous situations when using coroutines is an important part of ana
 
 **The following scenarios are considered potentially erroneous**
 
-  1. A coroutine belongs to a global scope and is not awaited by anyone (a **zombie coroutine**).
-  2. The root scope has been destroyed (its destructor was called), but no one awaited it or ensured that its resources were explicitly cleaned up (e.g., by calling ''$scope->cancel()'' or ''$scope->dispose()'').
-  3. An attempt to await a coroutine from within itself.
-  4. Awaiting ''$scope'' from within itself or from one of its child scopes.
-  5. Stuck tasks in the cancellation state.
-  6. Deadlocks caused by circular dependencies between coroutines.
+  - A coroutine belongs to a global scope and is not awaited by anyone (a **zombie coroutine**).
+  - The root scope has been destroyed (its destructor was called), but no one awaited it or ensured that its resources were explicitly cleaned up (e.g., by calling ''$scope->cancel()'' or ''$scope->dispose()'').
+  - An attempt to await a coroutine from within itself.
+  - Awaiting ''$scope'' from within itself or from one of its child scopes.
+  - Stuck tasks in the cancellation state.
+  - Deadlocks caused by circular dependencies between coroutines.
 
 **PHP** will respond to such situations by issuing **warnings**, including debug information about the involved coroutines.
 Developers are expected to write code in a way that avoids triggering these warnings.
