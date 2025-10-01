@@ -1523,6 +1523,11 @@ An uncaught exception in a coroutine follows this flow:
   - Otherwise, the exception is passed to the parent scope if it is defined.
   - If there is no parent scope, the exception falls into ''globalScope'', where the same rules apply as for a regular scope.
 
+> **Note:** In addition to regular exception handling, when a deadlock condition is detected
+> (circular dependencies between coroutines), a ''DeadlockError'' is thrown as a fatal error
+> at the end of the application lifecycle. This error is not intended for normal exception handling
+> but serves as a diagnostic tool to identify architectural problems.
+
 {{ :rfc:true_async:exception_flow.svg |}}
 
 **Example**
@@ -2006,6 +2011,32 @@ This condition is called a **Deadlock**, and it represents a serious logical err
 When a **Deadlock** is detected, the application enters **Graceful Shutdown** mode
 and generates warnings containing information about which **Coroutines** are in a waiting state
 and the exact lines of code where they were suspended.
+
+At the end of the application lifecycle, if a deadlock condition was detected, 
+a **DeadlockError** exception is thrown as a fatal error. This exception extends **Error** 
+and indicates a critical architectural problem in the application design.
+The **DeadlockError** is not intended to be caught during normal execution,
+but rather serves as a diagnostic tool to identify circular dependencies between coroutines.
+
+Example of deadlock situation:
+<code php>
+use function Async\spawn;
+use function Async\await;
+use function Async\suspend;
+
+$coroutine1 = spawn(function() use (&$coroutine2) {
+    suspend();
+    await($coroutine2); // Waits for coroutine2
+});
+
+$coroutine2 = spawn(function() use ($coroutine1) {
+    suspend(); 
+    await($coroutine1); // Waits for coroutine1 - deadlock!
+});
+
+// Results in: Fatal error: Uncaught Async\DeadlockError: 
+// Deadlock detected: no active coroutines, 2 coroutines in waiting
+</code>
 
 ==== Tools ====
 
