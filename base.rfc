@@ -2185,7 +2185,10 @@ The following can be considered as competing solutions to the current implementa
 
 ===== Implementation =====
 
+The current implementation of the project is located here:
+https://github.com/true-async
 
+The code will be split into several PRs upon agreement.
 
 ===== Changelog =====
 
