@@ -2071,7 +2071,14 @@ The ''Async\getCoroutines()'' method returns an array of all coroutines in the a
 
 ===== Backward Incompatible Changes =====
 
-Simultaneous use of the **True Async API** and the **Fiber API** is not possible.
+Simultaneous use of the **True Async API** and the **Fiber API** is not possible,
+as Fibers and coroutines manage the same resources (execution context, stacks) in different ways:
+
+^ API        ^ Execution model                  ^ API level                                                ^
+| **Fibers** | Symmetric execution contexts     | Low-level API where the programmer explicitly controls switching |
+| **TrueAsync** | Switches contexts in an arbitrary order | High-level API where the programmer does not manage the switching |
+
+Thus, these two APIs are incompatible not only at the technical level but also at the logical level.
 
 If you try to create a ''Fiber'' inside a coroutine, you will get a ''FiberError'':
 
