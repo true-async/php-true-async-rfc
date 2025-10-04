@@ -2049,7 +2049,6 @@ The ''Coroutine'' class implements methods for inspecting the state of a corouti
 | **''getSuspendLocation():string''**      | Returns a string representation of the location where the coroutine was last suspended, typically in the format ''"file:line"''. If the coroutine has not been suspended, it may return an empty string. |
 | **''isSuspended():bool''**               | Returns ''true'' if the coroutine has been suspended                                                                                                                                                     |
 | **''isCancelled():bool''**               | Returns ''true'' if the coroutine has been cancelled, otherwise ''false''.                                                                                                                               |
-| **''getTrace():array''**                 | Returns the stack trace of the coroutine.                                                                                                                                                                |
 
 The ''Coroutine::getAwaitingInfo()'' method returns an array with debugging information
 about what the coroutine is waiting for, if it is in a waiting state.
