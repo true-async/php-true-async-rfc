@@ -2111,6 +2111,29 @@ request processing. Therefore, using concurrency is reasonable only for long-lif
 It is expected that **True Async** will enable the integration of built-in **web servers** into PHP,
 which will be embedded into the reactor’s event loop.
 
+=== NGINX Unit integration example ===
+
+[[https://github.com/EdmondDantes/nginx-unit/tree/true-async|NGINX Unit TrueAsync Integration]]
+demonstrates a web server integration using **True Async**.
+
+''NGINX Unit'' with **TrueAsync** enables handling multiple ''HTTP'' requests
+within a single process through ''PHP'' coroutines.
+Each incoming ''HTTP'' request spawns a dedicated coroutine,
+enabling concurrent request processing without creating new processes or threads.
+
+**Non SAPI Integration**
+
+Instead of traditional ''PHP'' globals (''$_SERVER'', ''$_POST''),
+provides the ''NginxUnit\'' namespace with ''Request'' and ''Response'' classes.
+Request handlers are registered via ''HttpServer::onRequest()''.
+
+  * **Entrypoint Loading**: The entrypoint ''PHP'' file is loaded **once** at process startup (not per request), registering the callback in the global variable ''nxt_php_request_callback''.
+  * **Coroutine Lifecycle**: Coroutines suspend and resume through coordination with TrueAsync's event loop, enabling true non-blocking operation.
+  * **Request Flow**: ''HTTP Request'' → ''nxt_php_request_handler()'' → ''ZEND_ASYNC_SPAWN()'' → ''nxt_php_request_coroutine_entry()'' → User callback → ''response->write()'' → ''nxt_unit_response_write_nb()'' → Event loop → Response completion.
+
+Example of entrypoint: [[https://github.com/EdmondDantes/nginx-unit/blob/true-async/src/true-async-php/entrypoint.php|entrypoint.php]]
+Git: https://github.com/EdmondDantes/nginx-unit/tree/true-async
+
 ==== To Existing Extensions ====
 
 No changes are expected in existing extensions.
