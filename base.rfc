@@ -2061,13 +2061,6 @@ The method ''Async\Scope::getCoroutines()'' returns a list of coroutines that ar
 
 The ''Async\getCoroutines()'' method returns an array of all coroutines in the application.
 
-==== Prototypes ====
-
-  * [Async functions](https://github.com/EdmondDantes/php-true-async-rfc/tree/main/examples/Async/Async.php)
-  * [Coroutine](https://github.com/EdmondDantes/php-true-async-rfc/tree/main/examples/Async/Coroutine.php)
-  * [Coroutine Context](https://github.com/EdmondDantes/php-true-async-rfc/tree/main/examples/Async/Context.php)
-  * [Coroutine Scope](https://github.com/EdmondDantes/php-true-async-rfc/tree/main/examples/Async/Scope.php)
-
 ===== Backward Incompatible Changes =====
 
 Simultaneous use of the **True Async API** and the **Fiber API** is not possible,
