@@ -2121,8 +2121,6 @@ within a single process through ''PHP'' coroutines.
 Each incoming ''HTTP'' request spawns a dedicated coroutine,
 enabling concurrent request processing without creating new processes or threads.
 
-**Non SAPI Integration**
-
 Instead of traditional ''PHP'' globals (''$_SERVER'', ''$_POST''),
 provides the ''NginxUnit\'' namespace with ''Request'' and ''Response'' classes.
 Request handlers are registered via ''HttpServer::onRequest()''.
