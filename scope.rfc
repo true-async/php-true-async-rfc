@@ -1,0 +1,1375 @@
+====== PHP True Async: Scope and Structured Concurrency ======
+
+  * Version: 1.0
+  * Date: 2025-11-03
+  * Author: Edmond [HT], edmondifthen@proton.me
+  * Status: Draft
+  * First Published at: http://wiki.php.net/rfc/true_async_scope
+  * Git: https://github.com/true-async
+  * Related RFC: [[rfc:true_async|PHP True Async (Base RFC)]]
+
+===== Introduction =====
+
+This RFC extends the [[rfc:true_async|PHP True Async (Base RFC)]] with **Scope** and **Structured Concurrency** functionality.
+
+**Note:** This RFC builds upon the base async functionality. Please read the [[rfc:true_async|Base RFC]] first.
+
+Structured concurrency is a programming paradigm that ties the lifetime of concurrent operations to the lexical scope in which they are created. This provides several benefits:
+
+  * **Automatic lifetime management**: Coroutines are automatically cancelled when their scope ends
+  * **Predictable resource cleanup**: Resources are released in a deterministic order
+  * **Error propagation**: Exceptions in child coroutines are propagated to parent scope
+  * **Prevention of "fire-and-forget"**: Eliminates zombie coroutines that outlive their intended lifetime
+
+The ''Scope'' class provides a container for managing groups of coroutines with shared lifetime and cancellation semantics.
+
+===== Goals =====
+
+The **Scope and Structured Concurrency** implementation pursues the following goals:
+
+  * **Prevent resource leaks**: Ensure all coroutines complete or are properly cancelled before scope exits
+  * **Predictable lifetime management**: Make coroutine lifetimes explicit and manageable
+  * **Error handling**: Provide clear error propagation from child coroutines to parent scope
+  * **Zombie prevention**: Eliminate coroutines that continue executing after their intended lifetime
+  * **Flexible patterns**: Support both fire-and-forget and structured concurrency patterns
+  * **Critical sections**: Provide mechanisms to protect code sections from cancellation
+
+===== Proposal =====
+
+==== Overview ====
+
+=== Short glossary ===
+
+| Term                       | Description                                                                    | Section                                     |
+| **Scope**                  | A container for managing the lifecycle of coroutines                           | Scope                                       |
+| **Zombie coroutine**       | A coroutine that continues execution after its Scope has been destroyed        | Scope disposal                              |
+| **Structured concurrency** | A paradigm where coroutine lifetimes are bound to lexical scope                | Structured concurrency                      |
+
+This **RFC** describes structured concurrency functionality for PHP, which includes:
+
+
+=== Scope ===
+A container that manages coroutine lifetimes.
+Example
+<code php>
+use function Async\spawn;
+
+$scope = new Async\Scope();
+$scope->spawn(function() {
+    // Coroutine bound to $scope
+    spawn(function() {
+        // Coroutine bound to $scope
+    });
+});
+
+// Dispose of the scope after 5 seconds
+sleep(5);
+$scope->disposeSafely();
+</code>
+
+=== Structured concurrency ===
+
+<code php>
+use Async\Scope;
+
+function getUserProfile(int $userId): array {
+    $scope = new Scope();
+    $profile = [];
+
+    $scope->spawn(function() use ($userId, &$profile) {
+        $profile['data'] = fetchUserData($userId);
+    });
+
+    $scope->spawn(function() use ($userId, &$profile) {
+        $profile['orders'] = fetchUserOrders($userId);
+    });
+
+    $scope->spawn(function() use ($userId, &$profile) {
+        $profile['settings'] = fetchUserSettings($userId);
+    });
+
+    $scope->awaitCompletion(Async\timeout(30000));
+    return $profile;
+}
+</code>
+
+=== Spawn with scope ===
+
+To create a coroutine in a specific ''Scope'',
+you need to use the ''Scope::spawn'' method.:
+
+<code php>
+$scope = new Async\Scope();
+
+// Launch a coroutine in the $scope
+$coroutine = $scope->spawn(function():string {
+    return gethostbyname('php.net');
+});
+
+function defineTargetIpV4(string $host): string {
+    return gethostbyname($host);
+}
+
+$coroutine = $scope->spawn(defineTargetIpV4(...), $host);
+</code>
+
+==== Coroutine Scope ====
+
+> **Coroutine Scope** — the space associated with coroutines created using the ''spawn'' expression.
+
+=== Motivation ===
+
+Sometimes it is necessary to gain control not only over a currently running coroutine,
+but also over all coroutines that will be launched within a new one — without having direct access to them.
+This could be the case for web server code that handles requests in separate coroutines
+and does not know how many additional coroutines will be launched,
+or a ''JobExecutor'' that wants to manage the lifecycle of running jobs.
+
+Without such control, the application code loses the ability to resist runtime errors,
+which increases the risk of a complete service failure.
+
+This is why the **Coroutine Scope** pattern is of critical importance in the context of ensuring reliability.
+
+The main use cases for ''Scope'' are:
+
+  - Controlling the lifetime of coroutines created within a single scope (**Point of responsibility**)
+  - Handling errors from all coroutines within the scope
+  - Binding the lifetime of the scope's coroutines to the lifetime of a **PHP object**
+  - Creating a hierarchy of scopes to manage coroutines in a structured way
+
+Binding ''Scope'' to objects is a good practice that has proven effective in **Kotlin**.
+By allowing coroutines to be tied to an object (this could be a ''Screen'' or a ''ViewModel''),
+it is possible to avoid the error where coroutines outlive the object that manages them.
+
+For frameworks, it can be useful to be able to control all coroutines created within a ''Scope'',
+to apply context-dependent constraints to them.
+
+
+
+
+=== Scope propagation ===
+
+By default, all coroutines are associated with the **Global Coroutine Scope**:
+
+<code php>
+use function Async\spawn;
+
+spawn('file_get_contents', 'file1.txt'); // <- global scope
+
+function readFile(string $file): void {
+    return file_get_contents($file); // <- global scope
+}
+
+function mainTask(): void { // <- global scope
+    spawn('readFile', 'file1.txt'); // <- global scope
+}
+
+spawn('mainTask'); // <- global scope
+</code>
+
+If an application never creates **custom Scopes**, its behavior is similar to coroutines in ''Go'':
+  * Coroutines are not explicitly linked to each other.
+  * The lifetime of coroutines is not limited.
+
+The method ''Scope::spawn'' creates a **new coroutine** bound to the specified scope.
+Scope is propagated between coroutines.
+If a coroutine is launched within a specific Scope, that Scope is considered the current one.
+The function like ''spawn(<callable>)'' will create a coroutine within the current Scope.
+
+Coroutines created during the execution of this **new coroutine** will become **sibling tasks**:
+
+<code php>
+use function Async\spawn;
+use Async\Scope;
+
+$scope = new Scope();
+
+$scope->spawn(function() { // <- new scope
+
+    echo "Sibling task 1\n";
+
+    spawn(function() { // <- $scope is current scope
+        echo "Sibling task 2\n";
+
+        spawn(function() { // <- $scope is current scope
+            echo "Sibling task 3\n";
+        });
+    });
+});
+
+$scope->awaitCompletion(Async\timeout(60000));
+</code>
+
+**Expected output**
+
+<code>
+Sibling task 1
+Sibling task 2
+Sibling task 3
+</code>
+
+**Structure:**
+
+<code>
+main()                          ← defines a $scope
+└── $scope = new Scope()
+    ├── task1()                 ← runs in the $scope
+    ├── task2()                 ← runs in the $scope
+    ├── task3()                 ← runs in the $scope
+</code>
+
+Thus, the method ''Scope::spawn'' creates a new branch of sibling coroutines,
+where the new coroutine exists at the same level as all subsequent ones.
+
+The code that owns a ''Scope'' object becomes the **Point of responsibility**
+for all coroutines executed within that Scope.
+
+> A good practice is to ensure that a Scope object has **only ONE owner**.
+> Passing ''$scope'' as a parameter to other functions or assigning it to multiple objects
+> is a **potentially dangerous** operation that can lead to complex bugs.
+> When a ''$scope'' is owned by multiple modules/classes,
+> there is a risk that they may either accidentally extend the Scope’s lifetime
+> or accidentally call ''scope::dispose()'' and disrupt its lifecycle.
+> Because the code is asynchronous, finding the real cause in such cases is much harder than
+> if the Scope had only a single owner.
+
+
+
+
+=== Scope waiting ===
+
+The ''Scope'' class does not implement the ''Awaitable'' interface,
+and therefore cannot be used in an ''await'' expression.
+
+Awaiting a ''Scope'' is a potentially **dangerous operation** that should be performed consciously,
+not accidentally.
+
+A ''Scope'' can own a coroutine that was created “by someone else” “somewhere else.”
+For example, a programmer explicitly defines a ''$scope'',
+and then inside a coroutine that belongs to this ''$scope'' calls a function
+from a third-party library, which in turn uses ''spawn()''.
+
+<code php>
+use function Async\spawn;
+use Async\Scope;
+
+$scope = new Scope();
+
+$scope->spawn(function() {
+    // Call to third-party library function
+    thirdPartyFunction();
+});
+
+function thirdPartyFunction() {
+    // Library code spawns a coroutine
+    spawn(function() {
+        sleep(10000); // <- long operation
+    });
+}
+</code>
+
+When you await a ''Scope'', you do **not know** which coroutines you are actually awaiting.
+Even if ''$scope'' is used by only one class or module, there is still a chance
+that someone accidentally created an “incorrect coroutine.”
+
+That is why awaiting a ''Scope'' must be bounded by a cancellation token.
+
+> To await a group of coroutines,
+> a specialized primitive should be used, which will be described in a separate ''RFC''.
+
+There are several Use-Cases where waiting for a ''Scope'' might be necessary:
+
+  * Structured concurrency: when a parent awaits the completion of all child coroutines.
+  * Waiting for Scope tasks to complete the cancellation process (see section: [[#cancellation|Cancellation]]).
+
+The structured concurrency pattern with waiting for all child coroutines can be useful
+for applications whose lifetime is explicitly limited by external conditions.
+For example, the user might stop a console application.
+
+To support a task awaiting in a controlled manner, ''Scope'' provides two specific methods:
+
+  * ''public function awaitCompletion(Awaitable $cancellation): void {}''
+  * ''public function awaitAfterCancellation(?callable $errorHandler = null, ?Awaitable $cancellation = null): void {}''
+
+The ''awaitCompletion'' method blocks the execution flow until all tasks within the scope are completed.
+The ''awaitAfterCancellation'' method does the same but is intended to be called only after the scope has been cancelled.
+
+<code php>
+use function Async\spawn;
+use Async\Scope;
+
+$scope = new Scope();
+
+$scope->spawn(function() {
+
+    echo "Sibling task 1\n";
+
+    spawn(function() {
+        echo "Sibling task 2\n";
+
+        spawn(function() {
+            echo "Sibling task 3\n";
+        });
+    });
+});
+
+$scope->awaitCompletion(Async\timeout(60000));
+</code>
+
+**Expected output**
+
+<code>
+Sibling task 1
+Sibling task 2
+Sibling task 3
+</code>
+
+The ''Scope'' awaiting methods do not capture any task results,
+so they cannot be used to await return values.
+
+The ''awaitCompletion'' method can only be used with an explicitly defined cancellation token.
+This requirement helps prevent indefinite waiting.
+
+Awaiting the ''$scope'' object also allows handling exceptions from coroutines within the ''$scope'':
+
+<code php>
+use Async\Scope;
+
+$scope = new Scope();
+
+$scope->spawn(function() {
+    spawn(function() {
+        spawn(function() {
+            throw new Exception("Error occurred");
+        });
+    });
+});
+
+try {
+    $scope->awaitCompletion(Async\timeout(60000));
+} catch (Exception $exception) {
+    echo $exception->getMessage()."\n";
+}
+</code>
+
+**Expected output**
+
+<code>
+Error occurred
+</code>
+
+Calling the ''awaitCompletion()'' method after the ''Scope'' has been cancelled
+will immediately throw a cancellation exception.
+
+<code php>
+use Async\Scope;
+
+$scope = new Scope();
+
+try {
+    $scope->spawn(task1(...));
+    $scope->spawn(task2(...));
+    $scope->cancel();
+    // Wait all tasks
+    $scope->awaitCompletion(Async\timeout(60000));
+} catch (Exception $exception) {
+    echo "Caught exception: ",$exception->getMessage()."\n";
+}
+</code>
+
+**Expected output**
+
+<code>
+Caught exception: cancelled at ...
+</code>
+
+In this example, ''$scope->awaitCompletion(Async\timeout(60000));'' will immediately throw an exception.
+
+If you need to wait for the ''Scope'' to complete after it has been cancelled,
+use the special method ''awaitAfterCancellation'', which is designed for this case.
+
+<code php>
+use function Async\spawn;
+use Async\Scope;
+
+$scope = new Scope();
+
+spawn(function() {
+    try {
+        $scope->awaitCompletion(Async\timeout(60000));
+    } catch (\Async\CancellationError $exception) {
+        $scope->awaitAfterCancellation();
+        echo "Caught exception: ",$exception->getMessage()."\n";
+    }
+});
+
+$scope->spawn(function() use ($scope) {
+    $scope->cancel();
+
+    try {
+        Async\delay(1000);
+    } finally {
+        sleep(1);
+        echo "Finally\n";
+    }
+});
+</code>
+
+**Expected output**
+
+<code>
+Finally
+Caught exception: cancelled at ...
+</code>
+
+In this example, the line ''Finally'' will be printed first because ''$scope->awaitAfterCancellation()''
+waits for all coroutines inside the Scope to complete.
+
+The ''awaitAfterCancellation'' method is used in scenarios where final resource cleanup is required
+after all child tasks are guaranteed to have finished execution.
+
+There is also a risk of indefinite waiting, so it is **recommended** to explicitly specify a timeout.
+
+=== Scope Hierarchy ===
+
+A hierarchy can be a convenient way to describe an application as a set of dependent tasks:
+
+  * Parent tasks are connected to child tasks and are responsible for their execution time.
+  * Tasks on the same hierarchy level are independent of each other.
+  * Parent tasks should control their child's tasks.
+  * Child tasks MUST NOT control or wait for their parent tasks.
+  * It is correct if tasks at the same hierarchy level are only connected to tasks of the immediate child level.
+
+<code>
+WebServer
+├── Request Worker
+│   ├── request1 task
+│   │   ├── request1 subtask A
+│   │   └── request1 subtask B
+│   └── request2 task
+│       ├── request2 subtask A
+│       └── request2 subtask B
+</code>
+
+The work of a web server can be represented as a hierarchy of task groups that are interconnected.
+The ''Request Worker'' is a task responsible for handling incoming requests. There can be multiple requests.
+Each request may spawn subtasks. On the same level, all requests form a group of request-tasks.
+
+''Scope'' is fit for implementing this concept:
+
+<code>
+WebServer
+├── Request Worker
+│   ├── request1 Scope
+│   │   ├── request1 subtask A
+│   │   │   └── subtask A Scope
+│   │   │       ├── sub-subtask A1
+│   │   │       └── sub-subtask A2
+│   │   └── request1 subtask B
+│   └── request2 Scope
+│       ├── request2 subtask A
+│       └── request2 subtask B
+│           └── subtask B Scope
+│               └── sub-subtask B1
+</code>
+
+The ''new Scope()'' constructor creates a **root independent Scope**.
+
+To create a **child Scope**, you need to use a special constructor:
+
+''Scope::inherit(?Scope $parentScope = null)''
+
+It returns a new ''Scope'' object that acts as a child.
+A coroutine created within the child ''Scope'' can also be considered
+a child relative to the coroutines in the parent ''Scope''.
+
+If the ''$parentScope'' parameter is not specified, the current ''Scope'' will be used as the parent.
+
+**An example:**
+<code php>
+use function Async\spawn;
+use Async\Scope;
+use Async\CancellationError;
+
+// New independent root scope
+$scope = new Scope();
+
+// child scope from $scope number 1
+$childScope1 = Scope::inherit($scope);
+
+$scope->spawn(function() {
+    $childScope2 = Scope::inherit(); // child scope from $scope number 2
+});
+</code>
+
+**WebServer example:**
+
+<code php>
+use function Async\await;
+use Async\Scope;
+use Async\CancellationError;
+
+function webServer(): void
+{
+    // Creating a new Root Scope
+    $scope = new Scope();
+
+    // socket server code that accepts connections...
+    while ($socket = acceptConnection()) {
+        $scope->spawn(connectionHandler(...), $socket);
+    }
+}
+
+function connectionHandler($socket): void
+{
+    // Current scope is the Root Scope
+    // $scope is inherited from the current Scope.
+    $scope = Scope::inherit();
+
+    // We do not provide direct access to the Scope object in other functions
+    $cancelToken = fn(string $message) => $scope->cancel(new CancellationError($message));
+
+    $scope->spawn(function() use ($socket, $cancelToken) {
+
+        $limiterScope = Scope::inherit(); // child scope for connectionLimiter
+
+        $limiterScope->spawn(function() {
+            Async\delay(10000);
+            $cancelToken("The request processing limit has been reached.");
+        }, $cancelToken);
+
+        handleRequest($socket, $cancelToken);
+    });
+}
+</code>
+Let's examine how this example works.
+
+  - The ''webServer'' function creates a new ''Root Scope'' for the entire server.
+  - Each time a new connection is accepted, a new coroutine is created within the ''Root Scope''.
+  - ''connectionHandler'' creates an inherited ''Scope'' from the current context.
+  - A ''$cancelToken'' closure is created to provide a simple way to cancel the entire scope with a custom message.
+  - A child ''$limiterScope'' is created for timeout management.
+  - A timeout coroutine automatically cancels the request after 10 seconds with the message "The request processing limit has been reached."
+
+<code>
+Root <- Root Scope
+│
+├── connectionHandler (Scope) <- inherited scope
+│   │
+│   ├── main request handling (Coroutine) <- $scope
+│   │   └── timeout limiter (Coroutine) <- $limiterScope
+│   │
+</code>
+
+The ''connectionHandler'' uses structured concurrency principles where the timeout limiter coroutine
+is automatically managed within its dedicated ''$limiterScope''. When the request processing completes
+or times out, all associated coroutines are properly cleaned up through the scope hierarchy.
+
+''$limiterScope'' is used to isolate the timeout management logic from the main request handling
+that should be cancelled when the request is completed.
+
+=== Scope cancellation ===
+
+The ''cancel'' method cancels all child coroutines and all child ''Scopes'' of the current ''Scope''.:
+
+<code php>
+use function Async\spawn;
+use Async\Scope;
+
+echo "Start\n";
+
+$scope = new Scope();
+
+$scope->spawn(function() {
+    spawn(function() {
+        Async\delay(1000);
+        echo "Task 1\n";
+    });
+
+    spawn(function() {
+        Async\delay(2000);
+        echo "Task 2\n";
+    });
+});
+
+$scope->cancel();
+echo "End\n";
+</code>
+
+**Expected output**
+
+<code>
+Start
+End
+</code>
+
+=== Scope disposal ===
+
+**Coroutine Scope** has several resource cleanup strategies
+that can be triggered either explicitly, on demand,
+or implicitly when the ''Scope'' object loses its last reference.
+
+There are three available strategies for ''Scope'' termination:
+
+| **Method**              |                                              |
+| ''disposeSafely''       | Marks as zombie coroutines, does not cancel  |
+| ''dispose''             | Cancels with a warning                       |
+| ''disposeAfterTimeout'' | Issues a warning, then cancels after a delay |
+
+The main goal of all three methods is to terminate the execution of coroutines
+that belong to the ''Scope'' or its child Scopes.
+However, each method approaches this task slightly differently.
+
+The ''disposeSafely'' method is used by default in the destructor of the ''Async\Scope'' class.
+Its key feature is transitioning coroutines into a **zombie coroutine** state.
+A **zombie coroutine** continues execution but is tracked by the system differently than regular coroutines.
+(See section: [[#zombie_coroutine_policy|Zombie coroutine policy]]).
+
+A warning is issued when a **zombie coroutine** is detected.
+
+<code php>
+use function Async\spawn;
+use function Async\await;
+use Async\Scope;
+
+$scope = new Scope();
+
+await($scope->spawn(function() {
+    spawn(function() {
+        Async\delay(1000);
+        echo "Task 1\n";
+    });
+
+    spawn(function() {
+        Async\delay(2000);
+        echo "Task 2\n";
+    });
+
+    echo "Root task\n";
+}));
+
+$scope->disposeSafely();
+</code>
+
+**Expected output**
+
+<code>
+Root task
+Warning: Coroutine is zombie at ... in Scope disposed at ...
+Warning: Coroutine is zombie at ... in Scope disposed at ...
+Task 1
+Task 2
+</code>
+
+The ''$scope'' variable is released immediately after the coroutine ''Root task'' completes execution,
+so the child coroutine ''Task 1'' does not have time to execute
+before the ''disposeSafely'' method is called.
+
+''disposeSafely'' detects this and signals it with a warning but allows the coroutine to complete.
+
+The ''Scope::dispose'' method differs from ''Scope::disposeSafely'' in that it does not leave **zombie coroutines**.
+It cancels **all coroutines**.
+When coroutines are detected as unfinished, a warning is issued.
+
+**Example**
+
+<code php>
+use function Async\spawn;
+use function Async\await;
+use Async\Scope;
+
+$scope = new Scope();
+
+await($scope->spawn(function() {
+    spawn(function() {
+        Async\delay(1000);
+        echo "Task 1\n";
+    });
+
+    spawn(function() {
+        Async\delay(2000);
+        echo "Task 2\n";
+    });
+
+    echo "Root task\n";
+}));
+
+$scope->dispose();
+</code>
+
+**Expected output**
+
+<code>
+Warning: Coroutine is zombie at ... in Scope disposed at ...
+Warning: Coroutine is zombie at ... in Scope disposed at ...
+Warning: Coroutine is zombie at ... in Scope disposed at ...
+</code>
+
+The ''disposeAfterTimeout'' method is a delayed version of the ''disposeSafely'' method.
+The ''$timeout'' parameter must be greater than zero but less than 10 minutes.
+
+<code php>
+use Async\Scope;
+
+class Service
+{
+    private Scope $scope;
+
+    public function __construct() {
+        $this->scope = new Scope();
+    }
+
+    public function __destruct() {
+        $this->scope->disposeAfterTimeout(5000);
+    }
+
+    public function run(): void {
+        $this->scope->spawn(function() {
+
+            spawn(function() {
+                Async\delay(1000);
+                echo "Task 2\n";
+                Async\delay(5000);
+                echo "Task 2 next line never executed\n";
+            });
+
+            echo "Task 1\n";
+        });
+    }
+}
+
+$service = new Service();
+$service->run();
+
+sleep(1);
+unset($service);
+</code>
+
+**Expected output**
+
+<code>
+Task 1
+Warning: Coroutine is zombie at ... in Scope disposed at ...
+Task 2
+</code>
+
+The ''dispose*()'' methods can be called multiple times, which is not considered an error.
+
+If the ''Scope::cancel()'' method is called with a parameter after the ''Scope'' has already been cancelled,
+**PHP** will emit a warning indicating that the call will be ignored.
+
+=== Scope cancellation/disposal order ===
+
+If a ''Scope'' has child ''Scopes'', the coroutines in the child ''Scopes'' will be canceled or disposed first,
+followed by those in the parent — from the bottom up in the hierarchy.
+This approach increases the likelihood that resources will be released correctly.
+However, it does not guarantee this,
+since the exact order of coroutines in the execution queue cannot be determined with 100% certainty.
+
+During the release of child ''Scopes'',
+the same cleanup strategy is used that was applied to the parent ''Scope''.
+
+If the ''disposeSafely'' method is called, the child Scopes will also be released using the ''disposeSafely'' strategy.
+If the ''dispose'' method is used, the child Scopes will use the same method for cleanup.
+
+The ''disposeAfterTimeout'' method will delay the execution of ''disposeSafely'' for the specified time.
+
+=== Spawn with disposed scope ===
+
+When the ''cancel()'' or ''dispose()'' method is called, the ''Scope'' is marked as closed.
+Attempting to launch a coroutine with this Scope will result in a fatal exception.
+
+<code php>
+use Async\Scope;
+
+$scope = new Scope();
+
+$scope->spawn(function() {
+    echo "Task 1\n";
+});
+
+$scope->cancel();
+
+$scope->spawn(function() { // <- AsyncException: Coroutine scope is closed
+    echo "Task 2\n";
+});
+</code>
+
+==== Error detection ====
+
+Detecting erroneous situations when using coroutines is an important part of analyzing an application's reliability.
+
+**The following scenarios are considered potentially erroneous**
+
+  - A coroutine belongs to a global scope and is not awaited by anyone (a **zombie coroutine**).
+  - The root scope has been destroyed (its destructor was called), but no one awaited it or ensured that its resources were explicitly cleaned up (e.g., by calling ''$scope->cancel()'' or ''$scope->dispose()'').
+  - An attempt to await a coroutine from within itself.
+  - Awaiting ''$scope'' from within itself or from one of its child scopes.
+  - Stuck tasks in the cancellation state.
+  - Deadlocks caused by circular dependencies between coroutines.
+
+**PHP** will respond to such situations by issuing **warnings**, including debug information about the involved coroutines.
+Developers are expected to write code in a way that avoids triggering these warnings.
+
+An attempt to use the expression ''await($coroutine)'' from within the same coroutine throws an exception.
+
+<code php>
+use function Async\spawn;
+use function Async\await;
+
+$coroutine = null;
+$coroutine = spawn(function() use (&$coroutine) {
+    await($coroutine); // <- AsyncException: A coroutine cannot await itself. Coroutine spawned at ...
+});
+</code>
+
+Using the ''Scope::awaitCompletion()'' from a coroutine that belongs to the same ''$scope'' or
+to one of its child scopes will throw a fatal exception.
+This condition makes it impossible to perform the ''$globalScope->awaitCompletion'' call.
+
+<code php>
+use Async\Scope;
+
+$scope = new Scope();
+
+$scope->spawn(function() use ($scope) {
+    $scope->awaitCompletion(Async\timeout(1000)); // <- AsyncException: Awaiting a scope from within itself or
+                                                  // its child scope would cause a deadlock. Scope created at ...
+});
+</code>
+
+=== Error mitigation strategies ===
+
+To avoid accidentally hanging coroutines whose lifetimes were not correctly limited, follow these rules:
+
+  * Use **separate Scopes** for different coroutines. This is the best practice, as it allows explicitly defining lifetime dependencies between Scopes.
+  * Use ''Scope::dispose()''. The ''dispose()'' method cancels coroutine execution and logs an error.
+  * Don't mix semantically different coroutines within the same ''Scope''.
+  * Avoid building hierarchies between ''Scopes'' with complex interdependencies.
+  * Do not use cyclic dependencies between ''Scopes''.
+  * The principle of single point of responsibility and ''Scope'' ownership. Do not pass the ''Scope'' object to different coroutine functions (unless the action happens in a closure). Do not store ''Scope'' objects in different places. Violating this rule can lead to manipulations with ''Scope'', which may cause a deadlock or disrupt the application's logic.
+  * Child coroutines should not wait for their parents. Child Scopes should not wait for their parents.
+
+<code php>
+namespace ProcessPool;
+
+use Async\Scope;
+
+final class ProcessPool
+{
+    private Scope $watcherScope;
+    private Scope $jobsScope;
+    private Scope $pool;
+
+    /**
+     * List of pipes for each process.
+     * @var array
+     */
+    private array $pipes = [];
+    /**
+     * Map of process descriptors: pid => bool
+     * If the value is true, the process is free.
+     * @var array
+     */
+    private array $descriptors = [];
+
+    public function __construct(readonly public string $entryPoint, readonly public int $max, readonly public int $min)
+    {
+        // Define the coroutine scopes for the pool, watcher, and jobs
+        $this->watcherScope = new Scope();
+        $this->jobsScope = new Scope();
+        $this->pool = new Scope();
+    }
+
+    public function __destruct()
+    {
+        $this->watcherScope->dispose();
+        $this->pool->dispose();
+        $this->jobsScope->dispose();
+    }
+
+    public function start(): void
+    {
+        $this->watcherScope->spawn($this->processWatcher(...));
+
+        for ($i = 0; $i < $this->min; $i++) {
+            $this->pool->spawn($this->startProcess(...));
+        }
+    }
+
+    public function stop(): void
+    {
+        $this->watcherScope->cancel();
+        $this->pool->cancel();
+        $this->jobsScope->cancel();
+    }
+
+    private function processWatcher(): void
+    {
+        while (true) {
+            try {
+                $this->pool->awaitCompletion(Async\timeout(60000));
+            } catch (StopProcessException $exception)  {
+                echo "Process was stopped with message: {$exception->getMessage()}\n";
+
+                if($exception->getCode() !== 0 || count($this->descriptors) < $this->min) {
+                    $this->pool->spawn($this->startProcess(...));
+                }
+            }
+        }
+    }
+}
+</code>
+
+The example above demonstrates how splitting coroutines into
+Scopes helps manage their interaction and reduces the likelihood of errors.
+
+Here, ''watcherScope'' monitors tasks in ''pool''.
+When a process finishes, the watcher detects this event and, if necessary, starts a new process or not.
+The monitoring logic is completely separated from the process startup logic.
+
+The lifetime of ''watcherScope'' matches that of ''pool'', but not longer than the lifetime of the watcher itself.
+
+The overall lifetime of all coroutines in the ''ProcessPool'' is determined by the lifetime of the ''ProcessPool''
+object or by the moment the ''stop()'' method is explicitly called.
+
+==== Zombie coroutine policy ====
+
+Coroutines whose lifetime extends beyond the boundaries of their parent ''Scope''
+are handled according to a separate **policy**.
+
+This policy aims to strike a balance between uncontrolled resource leaks and the need to abruptly
+terminate coroutines, which could lead to data integrity violations.
+
+If there are no active coroutines left in the execution queue and no events to wait for,
+the application is considered complete.
+
+**Zombie coroutines** differ from regular ones in that they are not counted as active.
+Once the application is considered finished,
+zombie coroutines are given a time limit within which they must complete execution.
+If this limit is exceeded, all zombie coroutines are canceled.
+
+The delay time for handling zombie coroutines can be configured using
+a constant in the ''php.ini'' file: ''async.zombie_coroutine_timeout'', which is set to two seconds by default.
+
+If a coroutine is created within a user-defined ''Scope'', the programmer
+can set a custom timeout for that specific ''Scope'' using the ''Scope::disposeAfterTimeout(int $ms)'' method.
+
+=== Structured concurrency ===
+
+**Structured concurrency** allows organizing coroutines into a group or hierarchy
+to manage their lifetime or exception handling.
+
+The parent task is required to take responsibility for its child tasks and
+must not complete before the children have finished their execution.
+
+To implement structured concurrency, it is recommended to use the ''Scope'' class with proper hierarchy management.
+
+The following code implements this idea:
+
+<code php>
+use Async\Scope;
+
+function copyFile(string $sourceFile, string $targetFile): void
+{
+    $source = fopen($sourceFile, 'r');
+    $target = fopen($targetFile, 'w');
+
+    $buffer = null;
+
+    try {
+        // Child scope
+        $tasks = new \Async\CoroutineGroup(Scope::inherit());
+
+        // Read data from the source file
+        $tasks->spawn(function() use (&$buffer, $source) {
+            while (!feof($source)) {
+                if ($buffer === null) {
+                    $chunk = fread($source, 1024);
+                    $buffer = $chunk !== false && $chunk !== '' ? $chunk : null;
+                }
+
+                suspend();
+            }
+
+            $buffer = '';
+        });
+
+        // Write data to the target file
+        $tasks->spawn(function() use (&$buffer, $target) {
+            while (true) {
+                if (is_string($buffer)) {
+                    if ($buffer === '') {
+                        break; // End of a file
+                    }
+
+                    fwrite($target, $buffer);
+                    $buffer = null;
+                }
+
+                suspend();
+            }
+
+            echo "Copy complete.\n";
+        });
+
+        await($tasks);
+    } finally {
+        fclose($source);
+        fclose($target);
+    }
+}
+
+$copyTasks = new \Async\Scope();
+
+$copyTasks->spawn(copyFile(...), 'source.txt', 'target.txt');
+$copyTasks->spawn(copyFile(...), 'source2.txt', 'target2.txt');
+
+$copyTasks->awaitCompletion(Async\timeout(60000));
+</code>
+
+The example creates two task groups: a parent and a child.
+The parent task group handles the copy operations directly, while the child tasks perform file reading and writing.
+File descriptors will not be closed until all child copy tasks have completed.
+The main code will not finish until all copy operations are completed.
+
+==== Timer functions ====
+
+The standard async library includes two functions similar to ''usleep()'':
+* ''Async\delay(int $ms): void''
+* ''Async\timeout(int $ms): Awaitable''
+
+The ''delay'' function suspends the execution of a coroutine for the specified number of milliseconds.
+Unlike ''usleep'', the ''delay'' function will throw a cancellation exception if the coroutine is cancelled.
+
+The ''timeout'' function is similar to ''delay'', but it returns an ''Awaitable'' object:
+
+<code php>
+use function Async\spawn;
+use function Async\await;
+use function Async\timeout;
+use function Async\delay;
+
+try {
+    delay(1000); // suspends the coroutine for 1 second
+    // Try to fetch data from the URL within 1 second
+    echo await(spawn('file_get_content', 'https://php.net/'), timeout(1000));
+} catch (\Async\AwaitCancelledException) {
+    echo "Operation was cancelled by timeout\n";
+} catch (\Async\CancellationError) {
+    echo "Operation was cancelled by user\n";
+}
+</code>
+
+=== Responsibility points ===
+
+A **responsibility point** is code that explicitly waits for the completion of a coroutine or a 'Scope':
+
+<code php>
+$scope = new Scope();
+
+$scope->spawn(function() {
+  throw new Exception("Task 1");
+});
+
+try {
+    $scope->awaitCompletion(Async\timeout(60000));
+} catch (\Throwable $e) {
+     echo "Caught exception: {$e->getMessage()}\n";
+}
+</code>
+
+
+==== Error Handling ====
+
+An uncaught exception in a coroutine follows this flow:
+
+  - If the coroutine is awaited using the ''await'' keyword, the exception is propagated to the awaiting points. If multiple points are awaiting, each will receive the same exception (**Each await point will receive the exact same exception object, not cloned**).
+  - The exception is passed to the ''Scope''.
+  - If the ''Scope'' has an exception handler defined, it will be invoked.
+  - If the ''Scope'' does not have an exception handler, the ''cancel()'' method is called, canceling all coroutines in this scope, including all child scopes.
+  - If the ''Scope'' has responsibility points, i.e., the construction ''Scope::awaitCompletion'', all responsibility points receive the exception.
+  - Otherwise, the exception is passed to the parent scope if it is defined.
+  - If there is no parent scope, the exception falls into ''globalScope'', where the same rules apply as for a regular scope.
+
+> **Note:** In addition to regular exception handling, when a deadlock condition is detected
+> (circular dependencies between coroutines), a ''DeadlockError'' is thrown as a fatal error
+> at the end of the application lifecycle. This error is not intended for normal exception handling
+> but serves as a diagnostic tool to identify architectural problems.
+
+{{ :rfc:true_async:exception_flow.svg |}}
+
+**Example**
+
+<code php>
+use Async\Scope;
+
+$scope = new Scope();
+
+$scope->spawn(function() {
+    throw new Exception("Task 1");
+});
+
+$exception1 = null;
+$exception2 = null;
+
+$scope2 = new Scope();
+
+$scope2->spawn(function() use ($scope, &$exception1) {
+    try {
+        $scope->awaitCompletion(Async\timeout(60000));
+    } catch (Exception $e) {
+        $exception1 = $e;
+        echo "Caught exception1: {$e->getMessage()}\n";
+    }
+});
+
+$scope2->spawn(function() use ($scope, &$exception2) {
+    try {
+        $scope->awaitCompletion(Async\timeout(60000));
+    } catch (Exception $e) {
+        $exception2 = $e;
+        echo "Caught exception2: {$e->getMessage()}\n";
+    }
+});
+
+$scope2->awaitCompletion(Async\timeout(60000));
+
+echo $exception1 === $exception2 ? "The same exception\n" : "Different exceptions\n";
+</code>
+
+If an exception reaches ''globalScope'' and is not handled in any way,
+it triggers **Graceful Shutdown Mode**, which will terminate the entire application.
+
+The ''Scope'' class allows defining an exception handler that can prevent exception propagation.
+
+For this purpose, two methods are used:
+  - **''setExceptionHandler''** – triggers for any exceptions thrown within this **Scope**.
+  - **''setChildScopeExceptionHandler''** – triggers for exceptions from **child Scopes**.
+
+> The methods ''setExceptionHandler'' and ''setChildScopeExceptionHandler'' cannot be used with the ''globalScope''.
+> If an attempt is made to do so, an exception will be thrown.
+
+**Example**
+
+<code php>
+$scope = new Scope();
+$scope->setExceptionHandler(function (Async\Scope $scope, Async\Coroutine $coroutine, Throwable $e) {
+    echo "Caught exception: {$e->getMessage()}\n in coroutine: {$coroutine->getSpawnLocation()}\n";
+});
+
+$scope->spawn(function() {
+    throw new Exception("Task 1");
+});
+
+$scope->awaitCompletion(Async\timeout(60000));
+</code>
+
+Using these handlers,
+you can implement the **Supervisor** pattern, i.e.,
+a **Scope** that will not be canceled when an exception occurs in coroutines.
+
+> If the ''setExceptionHandler'' or ''setChildScopeExceptionHandler'' handlers throw an exception,
+> it will be propagated to the **parent Scope** or the **global Scope**.
+
+The **''setChildScopeExceptionHandler''** method allows handling exceptions only from **child Scopes**,
+which can be useful for implementing an algorithm where the **main Scope** runs core tasks,
+while **child Scopes** handle additional ones.
+
+For example:
+
+<code php>
+
+use Async\Scope;
+use Async\Coroutine;
+
+final class Service
+{
+    private Scope $scope;
+
+    public function __construct()
+    {
+        $this->scope = new Scope();
+
+        $this->scope->setChildScopeExceptionHandler(
+        static function (Scope $scope, Coroutine $coroutine, \Throwable $exception): void {
+            echo "Occurred an exception: {$exception->getMessage()} in Coroutine {$coroutine->getSpawnLocation()}\n";
+        });
+    }
+
+    public function start(): void
+    {
+        $this->scope->spawn($this->run(...));
+    }
+
+    public function stop(): void
+    {
+        $this->scope->cancel();
+    }
+
+    private function run(): void
+    {
+        while (($socket = $this->service->receive()) !== null) {
+
+            $scope = Scope::inherit($this->scope);
+
+            // supervisor pattern
+            ($scope->spawn($this->handleRequest(...), $socket)->onFinally(
+                static function () use ($scope) {
+                    $scope->disposeSafely();
+                }
+            );
+        }
+    }
+}
+</code>
+
+''$this->scope'' listens for new connections on the server socket.
+Canceling ''$this->scope'' means shutting down the entire service.
+
+Each new connection is handled in a separate **Scope**, which is inherited from ''$this->scope''.
+If an exception occurs in a coroutine created within a **child Scope**,
+it will be passed to the ''setChildScopeExceptionHandler'' handler and will not affect
+the operation of the service as a whole.
+
+{{ :rfc:true_async:supervisor.svg |}}
+
+=== Scope::onFinally ===
+
+For ''Scope'', the callback receives the completed scope as a parameter:
+
+<code php>
+use Async\Scope;
+
+$scope = new Scope();
+
+$scope->spawn(function() {
+    throw new Exception("Task 1");
+});
+
+$scope->onFinally(function (Scope $completedScope) {
+    echo "Scope " . spl_object_id($completedScope) . " completed\n";
+});
+
+$scope->awaitCompletion(Async\timeout(60000));
+</code>
+
+=== Critical section ===
+
+Sometimes it's necessary to execute a **critical section** of code
+that must not be cancelled via ''CancellationError''.
+
+For example, this could be a sequence of write operations or a transaction.
+
+For this purpose, the ''Async\protect'' function is used,
+which allows executing a closure in a non-cancellable (silent) mode.
+
+<code php>
+use function Async\spawn;
+
+function task(): void
+{
+    Async\protect(fn() => fwrite($file, "Critical data\n"));
+}
+
+spawn(task(...));
+</code>
+
+If a ''CancellationError'' was sent to a coroutine during ''protect()'',
+the exception will be thrown immediately after the execution of ''protect()'' completes.
+
+The use of loops or unsafe operations inside a critical section can be checked by static analyzers.
+
+
+===== Backward Incompatible Changes =====
+
+This RFC introduces new functionality and does not break existing code.
+
+The ''Scope'' class and structured concurrency are opt-in features.
+
+===== Proposed PHP Version(s) =====
+
+PHP 8.6
+
+It is proposed to approve this RFC together with or after the [[rfc:true_async|Base RFC]].
+
+===== RFC Impact =====
+
+==== To SAPIs ====
+
+No direct impact. Scope management is implemented at the engine level and works with all SAPIs.
+
+==== To Existing Extensions ====
+
+Extensions can optionally use Scope for managing concurrent operations.
+
+==== To Opcache ====
+
+No impact.
+
+==== New Constants ====
+
+The following ''php.ini'' constants are introduced:
+
+  * ''async.zombie_coroutine_timeout'' - timeout for zombie coroutine detection (default: 2 seconds)
+
+==== To the Ecosystem ====
+
+Provides standard structured concurrency primitives that async libraries can build upon.
+
+==== php.ini Defaults ====
+
+  * ''async.zombie_coroutine_timeout = 2'' (seconds)
+
+===== Open Issues =====
+
+None at this time.
+
+===== Future Scope =====
+
+Potential future enhancements:
+
+  * Additional scope lifetime strategies
+  * Scope-local storage (like thread-local but for scope)
+  * Advanced cancellation policies
+
+===== Proposed Voting Choices =====
+
+This RFC requires a 2/3 majority to pass.
+
+Voting options:
+  * Yes - Accept Scope and Structured Concurrency functionality
+  * No - Reject this RFC
+
+===== Patches and Tests =====
+
+Implementation is part of the true-async project:
+  * https://github.com/true-async/php-src
+
+===== References =====
+
+  * [[rfc:true_async|PHP True Async (Base RFC)]] - Must be read first
+  * **Structured Concurrency**: https://en.wikipedia.org/wiki/Structured_concurrency
+  * **Trio** (Python): https://trio.readthedocs.io/ - Pioneering structured concurrency library
+  * **Kotlin Coroutines**: Structured concurrency in production
+  * **Swift Concurrency**: Task groups and structured concurrency
+
+===== Implementation =====
+
+The current implementation of the project is located here:
+https://github.com/true-async
+
+The code will be split into several PRs upon agreement.
+
+===== Changelog =====
+
+==== Version 1.0 (November 2025) ====
+   * Initial version: Split from base RFC
+   * Comprehensive Scope and structured concurrency functionality
+   * Zombie coroutine detection and prevention
+   * Critical sections with protect() function
+   * Scope hierarchy and propagation
+
+===== Rejected Features =====
+
+Keep this updated with features that were discussed on the mail lists.
