@@ -234,7 +234,7 @@ This state diagram illustrates the lifecycle of a coroutine, showing how it tran
 | ''isSuspended(): bool''             | Returns ''true'' if the coroutine is suspended.            | ''Suspended''                    |
 | ''isCancelled(): bool''             | Returns ''true'' if the coroutine has been cancelled.      | ''Cancelled''                    |
 | ''isCancellationRequested(): bool'' | Returns ''true'' if cancellation has been requested.       | ''Pending Cancellation''         |
-| ''isFinished(): bool''              | Returns ''true'' if the coroutine has completed execution. | ''Completed'', ''Cancelled''     |
+| ''isCompleted(): bool''             | Returns ''true'' if the coroutine has completed execution. | ''Completed'', ''Cancelled''     |
 
 ==== Spawn function ====
 
@@ -388,6 +388,9 @@ they complete once with a result and provide **idempotent reads**.
 
 <code php>
 interface Async\FutureLike extends Async\Awaitable {
+    public function cancel(?CancellationError $cancellationError = null): void;
+    public function isCompleted(): bool;
+    public function isCancelled(): bool;
 }
 </code>
 
@@ -397,6 +400,8 @@ Unlike the base ''Awaitable'' interface which allows multiple state changes,
   * **Single-assignment**: The result is set exactly once (write-once)
   * **Idempotent reads**: Multiple ''await()'' calls always return the same result
   * **Type safety**: The ''await()'' function accepts only ''FutureLike'' objects, preventing misuse of multi-value awaitables
+  * **Cancellation support**: Provides ''cancel()'' method to request cancellation
+  * **State checking**: Provides ''isCompleted()'' and ''isCancelled()'' methods to check completion state
 
 **Examples of FutureLike:**
   * ''Coroutine'' - completes once with a return value or exception
@@ -1016,12 +1021,14 @@ The code will be split into several PRs upon agreement.
 ===== Changelog =====
 
 ==== Version 1.5 (October 2025) ====
+   * Added ''FutureLike'' interface methods: ''cancel()'', ''isCompleted()'', ''isCancelled()''
+   * Renamed ''Coroutine::isFinished()'' to ''Coroutine::isCompleted()''
    * Clarified exit/die behavior: always triggers Graceful Shutdown mode regardless of where called
    * Added rationale for "Cancellable by design" policy: explains why default cancellability reduces code complexity for read-heavy PHP workloads
    * RFC structure improvements: reorganized Cancellation section with proper subsections hierarchy
    * Moved "Coroutine lifetime" as subsection under Coroutine section
    * Extended glossary with Awaitable, Suspension, Graceful Shutdown, and Deadlock terms
-   * Introduced `FutureLike` interface with single-assignment semantics and changed `await()` signature to accept `FutureLike` instead of Awaitable for type safety
+   * Introduced ''FutureLike'' interface with single-assignment semantics and changed ''await()'' signature to accept ''FutureLike'' instead of Awaitable for type safety
    * Split RFC: Moved Scope and structured concurrency functionality to separate [[rfc:true_async_scope|Scope RFC]]. Base RFC now focuses on core async primitives (coroutines, await, cancellation)
 
 ==== Version 1.4 (September 2025) ====
