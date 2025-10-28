@@ -2219,6 +2219,9 @@ The code will be split into several PRs upon agreement.
 
 ===== Changelog =====
 
+==== Version 1.5 (October 2025) ====
+   * Clarified exit/die behavior: always triggers Graceful Shutdown mode regardless of where called
+
 ==== Version 1.4 (September 2025) ====
    * Major RFC simplification - removed CoroutineGroup, Future and AwaitXX functions
    * Added Memory Management and Garbage Collection section
