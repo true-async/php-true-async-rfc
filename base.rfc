@@ -192,6 +192,12 @@ In other words, by default, I/O operations or others awaiting operations,
 To properly complete transactions and release resources,
 coroutine code **MUST** handle the cancellation exception ''CancellationError''.
 
+=== Rationale ===
+
+This **"cancellable by default"** policy is particularly well-suited for PHP because **read operations** (database queries, API calls, file reads) are typically as frequent as—or even more frequent than—write operations. Since read operations generally don't modify state, they're inherently safe to cancel without risking data corruption.
+
+By making all operations cancellable by default, this approach eliminates the need for developers to explicitly mark or protect individual read operations, significantly reducing boilerplate code. Only write operations and critical sections that require transactional guarantees need special handling through proper ''CancellationError'' exception management.
+
 ==== Coroutine lifetime ====
 
 > A coroutine launched without an **explicitly defined** Scope has an **unknown** lifetime.
@@ -2221,6 +2227,7 @@ The code will be split into several PRs upon agreement.
 
 ==== Version 1.5 (October 2025) ====
    * Clarified exit/die behavior: always triggers Graceful Shutdown mode regardless of where called
+   * Added rationale for "Cancellable by design" policy: explains why default cancellability reduces code complexity for read-heavy PHP workloads
 
 ==== Version 1.4 (September 2025) ====
    * Major RFC simplification - removed CoroutineGroup, Future and AwaitXX functions
