@@ -39,6 +39,8 @@ The **True Async** project pursues the following goals and values:
 | **Scope**                  | A container for managing the lifecycle of coroutines                           | Scope                                       |
 | **Zombie coroutine**       | A coroutine that continues execution after its Scope has been destroyed        | Scope disposal                              |
 | **CancellationError**      | A mechanism for cooperative canceling coroutine execution                      | Cancellation                                |
+| **Awaitable**              | An interface for objects that can be awaited (may produce different values)    | Awaitable interface                         |
+| **FutureLike**             | An interface for single-assignment awaitables with idempotent reads            | FutureLike interface                        |
 | **Suspension**             | The state when a coroutine pauses execution and yields control                 | Suspension                                  |
 | **Graceful Shutdown**      | A safe application termination mode that cancels all coroutines                | Graceful Shutdown                           |
 | **Deadlock**               | A condition where no coroutines can progress due to circular dependencies      | Deadlocks                                   |
@@ -218,6 +220,9 @@ provided that they are directly related to concurrency functionality.
 
 > A ''Coroutine'' is an ''execution container'', transparent to the code,
 > that can be suspended on demand and resumed at any time.
+
+The ''Coroutine'' class implements the ''FutureLike'' interface,
+meaning it completes once and preserves its final result (value or exception).
 
 Isolated execution contexts make it possible to switch between coroutines and execute tasks concurrently.
 
@@ -441,14 +446,44 @@ In the general case, objects implementing the ''Awaitable'' interface can act as
 they can change their state an unlimited number of times.
 This means that multiple calls to ''await <Awaitable>'' may produce different results.
 
+==== FutureLike interface ====
+
+The ''FutureLike'' interface extends ''Awaitable'' and represents objects with **single-assignment semantics** — 
+they complete once with a result and provide **idempotent reads**.
+
+<code php>
+interface Async\FutureLike extends Async\Awaitable {
+}
+</code>
+
+Unlike the base ''Awaitable'' interface which allows multiple state changes,
+''FutureLike'' implements single-assignment semantics from academic dataflow programming:
+
+  * **Single-assignment**: The result is set exactly once (write-once)
+  * **Idempotent reads**: Multiple ''await()'' calls always return the same result
+  * **Type safety**: The ''await()'' function accepts only ''FutureLike'' objects, preventing misuse of multi-value awaitables
+
+**Examples of FutureLike:**
+  * ''Coroutine'' - completes once with a return value or exception
+  * ''Future'' - represents a single deferred value
+  * ''Task'' - a single unit of asynchronous work
+
+**Examples of Awaitable (but NOT FutureLike):**
+  * ''Channel'' - can be read multiple times, each read may return different value
+  * ''Signal'' - can be triggered multiple times
+  * ''Timer'' - fires repeatedly at intervals
+
+This distinction enables compile-time type safety, making it clear whether an object
+follows single-assignment semantics (''FutureLike'') or multi-value semantics (''Awaitable'').
+
 ==== Await ====
 
 <code php>
-Async\await(Async\Awaitable $awaitable, ?Async\Awaitable $cancellation = null): mixed
+Async\await(Async\FutureLike $awaitable, ?Async\Awaitable $cancellation = null): mixed
 </code>
 
 The ''await'' function is used to wait for the completion of another coroutine
-or any object that implements the ''Awaitable'' interface.:
+or any object that implements the ''FutureLike'' interface.
 
 <code php>
 use function Async\spawn;
@@ -2234,6 +2269,7 @@ The code will be split into several PRs upon agreement.
    * RFC structure improvements: reorganized Cancellation section with proper subsections hierarchy
    * Moved "Coroutine lifetime" as subsection under Coroutine section
    * Extended glossary with Awaitable, Suspension, Graceful Shutdown, and Deadlock terms
+   * Introduced `FutureLike` interface with single-assignment semantics and changed `await()` signature to accept `FutureLike` instead of Awaitable for type safety
 
 ==== Version 1.4 (September 2025) ====
    * Major RFC simplification - removed CoroutineGroup, Future and AwaitXX functions
