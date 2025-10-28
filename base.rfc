@@ -1971,8 +1971,15 @@ it is proposed to delegate the responsibility for such logic to the ''scheduler'
 
 === exit and die keywords ===
 
-The ''exit''/''die'' keywords called within a coroutine result in the immediate termination of the application.
-Unlike the ''cancel()'' operation, they do not allow for proper resource cleanup.
+The ''exit''/''die'' keywords always trigger the **Graceful Shutdown** mode,
+regardless of where they are called in the code.
+This works the same way as when an unhandled exception occurs.
+
+**Graceful Shutdown** allows the application to safely terminate by canceling all coroutines
+and performing necessary cleanup operations.
+
+Unlike the ''cancel()'' operation, ''exit''/''die'' terminates the entire application,
+not just the current coroutine.
 
 ==== Graceful Shutdown ====
 
