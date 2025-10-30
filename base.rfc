@@ -615,7 +615,7 @@ use function Async\await;
 
 try {
     $coroutine = spawn(function() {
-        sleep(1);
+        await(spawn(sleep(...), 1));
         throw new \Exception("Task 1");
     });
 
@@ -643,7 +643,7 @@ The end
 <code php>
 try {
     $coroutine = spawn(function() {
-        sleep(1);
+        await(spawn(sleep(...), 1));
         throw new \Exception("Task 1");
     });
 
