@@ -144,9 +144,6 @@ it is possible to avoid the error where coroutines outlive the object that manag
 For frameworks, it can be useful to be able to control all coroutines created within a ''Scope'',
 to apply context-dependent constraints to them.
 
-
-
-
 === Scope propagation ===
 
 By default, all coroutines are associated with the **Global Coroutine Scope**:
@@ -232,9 +229,6 @@ for all coroutines executed within that Scope.
 > or accidentally call ''scope::dispose()'' and disrupt its lifecycle.
 > Because the code is asynchronous, finding the real cause in such cases is much harder than
 > if the Scope had only a single owner.
-
-
-
 
 === Scope waiting ===
 
@@ -794,6 +788,30 @@ $scope->spawn(function() { // <- AsyncException: Coroutine scope is closed
     echo "Task 2\n";
 });
 </code>
+
+=== Exception Handling ===
+
+The ''Scope'' class provides a method for handling exceptions:
+
+<code php>
+use Async\Scope;
+
+$scope = new Scope();
+
+$scope->spawn(function() {
+    throw new Exception("Task 1");
+});
+
+$scope->setExceptionHandler(function (Exception $e) {
+    echo "Caught exception: {$e->getMessage()}\n";
+});
+
+$scope->awaitCompletion(Async\timeout(60000));
+</code>
+
+An exception handler has the right to suppress the exception.
+However, if the exception handler throws another exception,
+the exception propagation algorithm will continue.
 
 ==== Error detection ====
 

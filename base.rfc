@@ -552,30 +552,6 @@ class AsyncResource {
 
 Destructor execution is **deferred** until the async context allows it, and destructors run **asynchronously** like other async code.
 
-=== Exception Handling ===
-
-The ''Scope'' class provides a method for handling exceptions:
-
-<code php>
-use Async\Scope;
-
-$scope = new Scope();
-
-$scope->spawn(function() {
-    throw new Exception("Task 1");
-});
-
-$scope->setExceptionHandler(function (Exception $e) {
-    echo "Caught exception: {$e->getMessage()}\n";
-});
-
-$scope->awaitCompletion(Async\timeout(60000));
-</code>
-
-An exception handler has the right to suppress the exception.
-However, if the exception handler throws another exception,
-the exception propagation algorithm will continue.
-
 ==== onFinally ====
 
 The ''onFinally'' method allows defining a callback function that will be invoked when a coroutine or scope completes.
@@ -583,8 +559,6 @@ This method can be considered a direct analog of ''defer'' in Go.
 
 > ⚠️ **Important:** All ''onFinally'' handlers are executed concurrently in separate coroutines.
 > This ensures that slow handlers do not block the completion of other handlers or the main execution flow.
-
-=== Coroutine::onFinally ===
 
 For ''Coroutine'', the callback receives the completed coroutine as a parameter:
 
