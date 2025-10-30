@@ -62,27 +62,6 @@ spawn(function() {
 });
 </code>
 
-=== Cooperative cancellation ===
-A special exception that implements cooperative cancellation:
-Example
-<code php>
-use function Async\spawn;
-use function Async\suspend;
-
-$coroutine = spawn(function() {
-    try {
-        Async\delay(1000);
-    } catch (Async\CancellationError $e) {
-        echo "Coroutine cancelled";
-        throw $e; // Re-throw to propagate cancellation
-    }
-});
-
-suspend();
-
-$coroutine->cancel();
-</code>
-
 === Waiting for coroutine results ===
 
 <code php>
@@ -108,7 +87,6 @@ echo await(spawn(fetchData(...), "file.txt"));
 use function Async\spawn;
 use function Async\await;
 
-echo await(spawn(file_get_contents(...), "https://php.net/"), Async\timeout(2000));
 echo await(spawn(file_get_contents(...), "https://php.net/"), spawn('sleep', 2));
 </code>
 
@@ -452,7 +430,6 @@ As soon as the $cancellation is triggered, execution is interrupted with an exce
 <code php>
 use function Async\spawn;
 use function Async\await;
-use function Async\timeout;
 use Async\AwaitCancelledException;
 
 function readFile(string $fileName):string
@@ -467,7 +444,7 @@ function readFile(string $fileName):string
 }
 
 $cancellation = spawn(function() {
-    Async\delay(2000);
+    sleep(2);
 });
 
 try {
