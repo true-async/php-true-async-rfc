@@ -13,7 +13,6 @@ For several years, **PHP** has been attempting to carve out a niche in the devel
 
 However, **PHP** still does not provide a comprehensive implementation for writing concurrent code. PHP extensions have no way to support //non-blocking execution//, even if they are capable of doing so. **Swoole** is forced to copy thousands of lines of code just for a few modifications, while **AMPHP** developers have to build drivers for ''MySQL'', ''PostgreSQL'', ''Redis'', and other systems from scratch in user-land.
 
-**Note:** This RFC focuses on core async functionality (coroutines, await, cancellation). For Scope and structured concurrency, see the [[rfc:true_async_scope|Scope RFC]].
 The goal of this **RFC** is to establish a standard for writing concurrent code in PHP, as well as a C-API interface that would allow PHP to be extended at a low level using C, Rust, C++, and other languages. This would enable extensions to support **non-blocking I/O** without the need to override PHP functions or duplicate code.
 
 ===== Goals =====
@@ -360,7 +359,7 @@ Goodbye, World!
 
 ==== Awaitable interface ====
 
-The ''Awaitable'' interface is a contract that allows objects to be used in the ''await'' expression.
+The ''Awaitable'' interface describes objects that represent event sources that can be awaited.
 
 The ''Awaitable'' interface does not impose limitations on the number of state changes.
 
@@ -839,11 +838,13 @@ PHP 8.6+
 
 ==== To SAPIs ====
 
-The **True Async** module activates the reactor within the context of ''php_request_startup\php_request_shutdown()''
-request processing. Therefore, using concurrency is reasonable only for long-life scenarios implemented via CLI.
+The use of asynchrony is **always available**, regardless of how `PHP` is integrated.
 
-It is expected that **True Async** will enable the integration of built-in **web servers** into PHP,
-which will be embedded into the reactor’s event loop.
+The **True Async** module activates the reactor within the context of ''php_request_startup\php_request_shutdown()''
+request processing.
+
+From the perspective of external integration, `PHP`’s behavior **remains unchanged**.
+This means that for all execution modes: from `FPM` to `CLI` asynchrony **does not require** any modifications to the SAPI code.
 
 ==== To Existing Extensions ====
 
@@ -873,12 +874,15 @@ but cannot be used simultaneously with ''True Async''.
 
 ==== php.ini Defaults ====
 
-	* async.zombie_coroutine_timeout - default 5 seconds
+	No new php.ini directives are introduced.
 
 ===== Open Issues =====
 None.
 
 ===== Future Scope =====
+
+This RFC focuses on core async functionality (coroutines, await, cancellation).
+For `Scope` and structured concurrency, please see the [[rfc:true_async_scope|Scope RFC]].
 
 === Reactor ===
 
