@@ -382,26 +382,10 @@ interface Async\FutureLike extends Async\Awaitable {
 </code>
 
 Unlike the base ''Awaitable'' interface which allows multiple state changes,
-''FutureLike'' implements single-assignment semantics from academic dataflow programming:
+''FutureLike'' implements single-assignment semantics:
 
   * **Single-assignment**: The result is set exactly once (write-once)
   * **Idempotent reads**: Multiple ''await()'' calls always return the same result
-  * **Type safety**: The ''await()'' function accepts only ''FutureLike'' objects, preventing misuse of multi-value awaitables
-  * **Cancellation support**: Provides ''cancel()'' method to request cancellation
-  * **State checking**: Provides ''isCompleted()'' and ''isCancelled()'' methods to check completion state
-
-**Examples of FutureLike:**
-  * ''Coroutine'' - completes once with a return value or exception
-  * ''Future'' - represents a single deferred value
-  * ''Task'' - a single unit of asynchronous work
-
-**Examples of Awaitable (but NOT FutureLike):**
-  * ''Channel'' - can be read multiple times, each read may return different value
-  * ''Signal'' - can be triggered multiple times
-  * ''Timer'' - fires repeatedly at intervals
-
-This distinction enables compile-time type safety, making it clear whether an object
-follows single-assignment semantics (''FutureLike'') or multi-value semantics (''Awaitable'').
 
 ==== Await ====
 
