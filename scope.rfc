@@ -1447,11 +1447,11 @@ Implementation is part of the true-async project:
 ===== References =====
 
   * [[rfc:true_async|PHP True Async (Base RFC)]] - Must be read first
-  * **Structured Concurrency A Review: https://doi.org/10.1145/3547276.3548519
-  * **Structured Concurrency**: https://en.wikipedia.org/wiki/Structured_concurrency
-  * **Kotlin Coroutines**: Structured concurrency in production
-  * **Swift Concurrency**: Task groups and structured concurrency
-  * **Trio** (Python): https://trio.readthedocs.io/ - Pioneering structured concurrency library
+  * [[https://doi.org/10.1145/3547276.3548519|Structured Concurrency - A Review]]
+  * [[https://en.wikipedia.org/wiki/Structured_concurrency|Structured Concurrency]] (Wikipedia)
+  * [[https://kotlinlang.org/docs/coroutines-basics.html|Kotlin Coroutines]]: Structured concurrency in production
+  * [[https://docs.swift.org/swift-book/LanguageGuide/Concurrency.html|Swift Concurrency]]: Task groups and structured concurrency
+  * [[https://trio.readthedocs.io/|Trio]] (Python): Pioneering structured concurrency library
 
 ===== Implementation =====
 
