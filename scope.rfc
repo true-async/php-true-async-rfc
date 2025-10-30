@@ -117,6 +117,19 @@ $coroutine = $scope->spawn(defineTargetIpV4(...), $host);
 
 > **Coroutine Scope** — the space associated with coroutines created using the ''spawn'' expression.
 
+=== Coroutine lifetime ===
+
+> A coroutine launched without an **explicitly defined** Scope has an **unknown** lifetime.
+
+A coroutine created with spawn inherits the current Scope and its lifetime.
+If code calls a third-party library function (or another module) that uses ''spawn()'' internally,
+the library ends up creating a coroutine whose lifetime is unknown to it.
+The programmer **should carefully** consider such situations
+and determine whether an undefined coroutine lifetime is what they expect in that context.
+
+If the coroutine lifetime matters, it is recommended to explicitly define a ''Scope''
+to clearly manage coroutine lifetimes.
+
 === Motivation ===
 
 Sometimes it is necessary to gain control not only over a currently running coroutine,
@@ -597,6 +610,38 @@ Start
 End
 </code>
 
+Another simple cancellation example:
+
+<code php>
+use Async\Scope;
+
+$scope = new Scope();
+
+$scope->spawn(function() {
+    sleep(1);
+    echo "Task 1\n";
+});
+
+$scope->cancel(new Async\CancellationError('Task was cancelled'));
+</code>
+
+Canceling a ''Scope'' triggers the cancellation of all coroutines
+within that ''Scope'' and all child ''Scopes'' in hierarchical order.
+
+=== Self-cancellation of Scope ===
+
+A coroutine can cancel its own ''Scope'', which **does** affect execution by cancelling all coroutines in the scope, including itself:
+
+<code php>
+use Async\Scope;
+
+$scope = new Scope();
+$scope->spawn(function() use ($scope) {
+    $scope->cancel(new \Async\CancellationError("Scope cancelled"));
+    echo "This executes\n";
+});
+</code>
+
 === Scope disposal ===
 
 **Coroutine Scope** has several resource cleanup strategies
@@ -812,6 +857,41 @@ $scope->awaitCompletion(Async\timeout(60000));
 An exception handler has the right to suppress the exception.
 However, if the exception handler throws another exception,
 the exception propagation algorithm will continue.
+
+==== Scope Inspection Tools ====
+
+The ''Scope'' class provides methods for inspecting the state and hierarchy of scopes:
+
+| Method                                | Description                                                                        |
+| **''getChildScopes():array''**        | Returns an array of all child scopes of the current scope                          |
+| **''getCoroutines():array''**         | Returns a list of coroutines that are registered within the specified ''Scope''   |
+
+These methods are useful for debugging and monitoring the state of scopes and their associated coroutines.
+
+<code php>
+use Async\Scope;
+
+$scope = new Scope();
+
+$scope->spawn(function() {
+    echo "Task 1\n";
+});
+
+$scope->spawn(function() {
+    echo "Task 2\n";
+});
+
+// Get all coroutines in this scope
+$coroutines = $scope->getCoroutines();
+echo "Number of coroutines in scope: " . count($coroutines) . "\n";
+
+// Create child scope
+$childScope = Scope::inherit($scope);
+
+// Get all child scopes
+$childScopes = $scope->getChildScopes();
+echo "Number of child scopes: " . count($childScopes) . "\n";
+</code>
 
 ==== Error detection ====
 
@@ -1367,10 +1447,11 @@ Implementation is part of the true-async project:
 ===== References =====
 
   * [[rfc:true_async|PHP True Async (Base RFC)]] - Must be read first
+  * **Structured Concurrency A Review: https://doi.org/10.1145/3547276.3548519
   * **Structured Concurrency**: https://en.wikipedia.org/wiki/Structured_concurrency
-  * **Trio** (Python): https://trio.readthedocs.io/ - Pioneering structured concurrency library
   * **Kotlin Coroutines**: Structured concurrency in production
   * **Swift Concurrency**: Task groups and structured concurrency
+  * **Trio** (Python): https://trio.readthedocs.io/ - Pioneering structured concurrency library
 
 ===== Implementation =====
 

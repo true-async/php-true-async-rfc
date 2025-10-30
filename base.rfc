@@ -192,19 +192,6 @@ The ''scheduler'' component is responsible for the coroutine resumption algorith
 A coroutine can be resumed with an **exception**, in which case an exception
 will be thrown from the suspension point.
 
-=== Coroutine lifetime ===
-
-> A coroutine launched without an **explicitly defined** Scope has an **unknown** lifetime.
-
-A coroutine created with spawn inherits the current Scope and its lifetime.
-If code calls a third-party library function (or another module) that uses ''spawn()'' internally,
-the library ends up creating a coroutine whose lifetime is unknown to it.
-The programmer **should carefully** consider such situations
-and determine whether an undefined coroutine lifetime is what they expect in that context.
-
-If the coroutine lifetime matters, it is recommended to explicitly define a ''Scope''
-to clearly manage coroutine lifetimes.
-
 === Coroutine Lifecycle ===
 
 {{ :rfc:true_async:coroutine-lifecycle.svg |}}
@@ -520,7 +507,7 @@ Asynchronous code will work as expected, including inside ''register_shutdown_fu
 
 === Memory Management and Garbage Collection ===
 
-**Coroutines** and **Scopes** participate in PHP's standard garbage collection system:
+**Coroutines** participate in PHP's standard garbage collection system:
 
   * **Unreferenced coroutines** can be collected by the garbage collector
   * **Circular references** between objects and coroutines are properly detected and resolved
@@ -554,7 +541,7 @@ Destructor execution is **deferred** until the async context allows it, and dest
 
 ==== onFinally ====
 
-The ''onFinally'' method allows defining a callback function that will be invoked when a coroutine or scope completes.
+The ''onFinally'' method allows defining a callback function that will be invoked when a coroutine completes.
 This method can be considered a direct analog of ''defer'' in Go.
 
 > ⚠️ **Important:** All ''onFinally'' handlers are executed concurrently in separate coroutines.
@@ -601,8 +588,7 @@ A cancelled coroutine is **resumed** with a special ''CancellationError'' except
 The cancellation operation is not instantaneous; it takes time.
 While in the ''cancellation'' state, a coroutine may execute as usual without any restrictions.
 
-The cancellation operation is available for coroutines and scopes
-using the ''cancel()'' method:
+The cancellation operation is available for coroutines using the ''cancel()'' method:
 
 <code php>
 function task(): void {}
@@ -623,22 +609,6 @@ The ''CancellationError'', if unhandled within a coroutine, is automatically sup
 
 > ⚠️ **Warning:** You should not attempt to suppress ''CancellationError'' exception,
 > as it may cause application malfunctions.
-
-<code php>
-use Async\Scope;
-
-$scope = new Scope();
-
-$scope->spawn(function() {
-    sleep(1);
-    echo "Task 1\n";
-});
-
-$scope->cancel(new Async\CancellationError('Task was cancelled'));
-</code>
-
-Canceling a ''Scope'' triggers the cancellation of all coroutines
-within that ''Scope'' and all child ''Scopes'' in hierarchical order.
 
 >
 > **Note:** ''CancellationError'' can be extended by the user
@@ -669,18 +639,6 @@ $coroutine = spawn(function() use (&$coroutine) {
 });
 
 // await() will throw CancellationError despite normal completion
-</code>
-
-A coroutine can also cancel its own ''Scope'', which **does** affect execution by cancelling all coroutines in the scope, including itself:
-
-<code php>
-use Async\Scope;
-
-$scope = new Scope();
-$scope->spawn(function() use ($scope) {
-    $scope->cancel(new \Async\CancellationError("Scope cancelled"));
-    echo "This executes\n";
-});
 </code>
 
 === CancellationError handling ===
@@ -783,7 +741,7 @@ the second phase is triggered.
 - Any remaining coroutines that were not yet canceled will be **forcibly canceled**.
 
 The further shutdown logic may depend on the specific implementation of the **Scheduler** component,
-which can be an external system and is beyond the scope of this **RFC**.
+which can be an external system and is not covered by this **RFC**.
 
 The **Graceful Shutdown** mode can also be triggered using the function:
 
@@ -857,10 +815,6 @@ The ''Coroutine::getAwaitingInfo()'' method returns an array with debugging info
 about what the coroutine is waiting for, if it is in a waiting state.
 
 The format of this array depends on the implementation of the **Scheduler** and the **Reactor**.
-
-The ''Async\Scope::getChildScopes()'' method returns an array of all child scopes of the current scope.
-
-The method ''Async\Scope::getCoroutines()'' returns a list of coroutines that are registered within the specified ''Scope''.
 
 The ''Async\getCoroutines()'' method returns an array of all coroutines in the application.
 
@@ -965,7 +919,7 @@ Links to external references, discussions or RFCs
     * **First Discussion** - https://externals.io/message/126402
     * **Second Discussion** - https://externals.io/message/126537
     * **Third Discussion** - https://externals.io/message/127120
-    * **Fourth Discussion** -
+    * **Fourth Discussion** - https://externals.io/message/128777
 
 		* **TrueAsync API RFC** - https://github.com/true-async/php-true-async-rfc/blob/main/true-async-api-rfc.md
 
