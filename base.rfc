@@ -276,6 +276,10 @@ use function Async\suspend;
 suspend();
 </code>
 
+**Exceptions:**
+  * ''suspend()'' can throw ''CancellationError'' if the **current** coroutine is cancelled while suspended
+  * The cancellation is initiated externally via ''Coroutine::cancel()''
+
 The ''suspend'' can be used in any function including from the **main execution flow**:
 
 <code php>
@@ -397,6 +401,10 @@ echo await(spawn(readFile(...), 'file2.txt'));
 
 ''await'' suspends the execution of the current coroutine until
 the awaited one returns a final result or completes with an exception.
+
+**Exceptions:**
+  * Throws ''CancellationError'' if the **current** coroutine (the one calling ''await'') is cancelled while waiting
+  * Re-throws any exception that occurred in the awaited coroutine, **except** ''CancellationError'' which is always suppressed by the coroutine
 
 > **Coroutines behave like Futures:**
 > once a coroutine completes (successfully, with an exception, or through cancellation),
@@ -923,6 +931,8 @@ The code will be split into several PRs upon agreement.
    * Extended glossary with Awaitable, Suspension, Graceful Shutdown, and Deadlock terms
    * Introduced ''FutureLike'' interface with single-assignment semantics and changed ''await()'' signature to accept ''FutureLike'' instead of Awaitable for type safety
    * Split RFC: Moved Scope and structured concurrency functionality to separate [[rfc:true_async_scope|Scope RFC]]. Base RFC now focuses on core async primitives (coroutines, await, cancellation)
+   * Documented that ''await()'' throws ''CancellationError'' when current coroutine is cancelled
+   * Documented that ''suspend()'' throws ''CancellationError'' when coroutine is cancelled while suspended
 
 ==== Version 1.4 (September 2025) ====
    * Major RFC simplification - removed CoroutineGroup, Future and AwaitXX functions
