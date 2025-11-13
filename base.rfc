@@ -1,7 +1,7 @@
 ====== PHP True Async ======
 
   * Version: 1.5
-  * Date: 2025-11-03
+  * Date: 2025-11-14
   * Author: Edmond [HT], edmondifthen@proton.me
   * Status: Under discussion
   * First Published at: http://wiki.php.net/rfc/true_async
@@ -1068,12 +1068,13 @@ For `Scope` and structured concurrency, please see the [[rfc:true_async_scope|Sc
 At the moment, the Reactor component uses the ''LibUV'' library.
 This component should be implemented as a separate extension.
 
-===== Proposed Voting Choices =====
-Yes or no vote.  2/3 required to pass.
+===== Voting Choices =====
+Yes or no vote.  2/3 required to pass. Voting ends 2025-11-29 at 15:00:00 UTC
 
-<doodle title="Accept True Async RFC?" auth="crell" voteType="single" closed="true">
+<doodle title="Accept True Async RFC?" voteType="single">
    * Yes
    * No
+   * Abstain
 </doodle>
 
 ===== Patches and Tests =====
