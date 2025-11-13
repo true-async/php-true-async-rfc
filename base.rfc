@@ -31,6 +31,21 @@ The **True Async** project pursues the following goals and values:
 
 ===== Proposal =====
 
+==== Overview ====
+
+=== Short glossary ===
+
+| Term                       | Description                                                                    | Section                                     |
+| **Coroutine**              | An executable unit of code that can be suspended and resumed                   | Launching any function in non-blocking mode |
+| **CancellationError**      | A mechanism for cooperative canceling coroutine execution                      | Cancellation                                |
+| **Awaitable**              | An interface for objects that can be awaited (may produce different values)    | Awaitable interface                         |
+| **FutureLike**             | An interface for single-assignment awaitables with idempotent reads            | FutureLike interface                        |
+| **Suspension**             | The state when a coroutine pauses execution and yields control                 | Suspension                                  |
+| **Graceful Shutdown**      | A safe application termination mode that cancels all coroutines                | Graceful Shutdown                           |
+| **Deadlock**               | A condition where no coroutines can progress due to circular dependencies      | Deadlocks                                   |
+| **Scheduler**              | A component that manages coroutine execution and switching                     | Coroutine lifecycle                         |
+| **Reactor**                | An event loop that handles I/O events and timers                               | Coroutine lifecycle                         |
+
 This RFC introduces native support for concurrent programming in ''PHP'' through coroutines and async/await primitives.
 
 **What is proposed (new functionality):**
@@ -51,51 +66,51 @@ This RFC introduces native support for concurrent programming in ''PHP'' through
 **What becomes incompatible:**
   * **Fiber API cannot be used together with True Async** - attempting to create a Fiber while True Async is active throws ''FiberError''
 
-==== API Overview (Full Stubs) ====
+=== API Overview ===
 
 <code php>
 <?php
 
 namespace Async {
     // === Core Functions ===
-    
+
     /**
      * Creates and starts a new coroutine
      * @return Coroutine The created coroutine instance
      */
     function spawn(callable $callable, mixed ...$args): Coroutine {}
-    
+
     /**
      * Waits for a FutureLike to complete and returns its result
      * @throws CancellationError if current coroutine is cancelled
      * @throws AwaitCancelledException if $cancellation is triggered
      */
     function await(FutureLike $awaitable, ?Awaitable $cancellation = null): mixed {}
-    
+
     /**
      * Suspends current coroutine and yields control to scheduler
      * @throws CancellationError if coroutine is cancelled while suspended
      */
     function suspend(): void {}
-    
+
     /**
      * Returns the currently executing coroutine
      */
     function currentCoroutine(): Coroutine {}
-    
+
     /**
      * Initiates graceful shutdown of the application
      */
     function gracefulShutdown(?CancellationError $cancellationError = null): void {}
-    
+
     /**
      * Returns array of all coroutines in the application
      * @return Coroutine[]
      */
     function getCoroutines(): array {}
-    
+
     // === Core Classes ===
-    
+
     /**
      * Represents a coroutine - an executable unit that can be suspended and resumed
      */
@@ -104,12 +119,12 @@ namespace Async {
          * Request cancellation of this coroutine
          */
         public function cancel(?CancellationError $cancellationError = null): void {}
-        
+
         /**
          * Register a callback to be executed when coroutine completes
          */
         public function onFinally(callable $callback): void {}
-        
+
         // State check methods
         public function isStarted(): bool {}
         public function isRunning(): bool {}
@@ -118,7 +133,7 @@ namespace Async {
         public function isCancelled(): bool {}
         public function isCancellationRequested(): bool {}
         public function isCompleted(): bool {}
-        
+
         // Debug methods
         public function getSpawnFileAndLine(): array {}
         public function getSpawnLocation(): string {}
@@ -126,15 +141,15 @@ namespace Async {
         public function getSuspendLocation(): string {}
         public function getAwaitingInfo(): array {}
     }
-    
+
     // === Interfaces ===
-    
+
     /**
      * Interface for objects that can be awaited
      * May produce different values on multiple await calls
      */
     interface Awaitable {}
-    
+
     /**
      * Interface for single-assignment awaitables with idempotent reads
      * Extends Awaitable with completion semantics
@@ -144,20 +159,20 @@ namespace Async {
          * Request cancellation
          */
         public function cancel(?CancellationError $cancellationError = null): void;
-        
+
         /**
          * Check if completed (successfully, with exception, or cancelled)
          */
         public function isCompleted(): bool;
-        
+
         /**
          * Check if cancelled
          */
         public function isCancelled(): bool;
     }
-    
+
     // === Exceptions ===
-    
+
     /**
      * Exception thrown when a coroutine is cancelled
      * Does not extend Exception to avoid accidental suppression
@@ -165,14 +180,14 @@ namespace Async {
     class CancellationError extends \Error {
         public function __construct(string $message = "", int $code = 0, ?\Throwable $previous = null) {}
     }
-    
+
     /**
      * Exception thrown when await() is cancelled by $cancellation parameter
      */
     class AwaitCancelledException extends \Exception {
         public function __construct(string $message = "", int $code = 0, ?\Throwable $previous = null) {}
     }
-    
+
     /**
      * Fatal error thrown when deadlock is detected
      */
@@ -184,22 +199,7 @@ namespace Async {
 ?>
 </code>
 
-==== Overview ====
-
-=== Short glossary ===
-
-| Term                       | Description                                                                    | Section                                     |
-| **Coroutine**              | An executable unit of code that can be suspended and resumed                   | Launching any function in non-blocking mode |
-| **CancellationError**      | A mechanism for cooperative canceling coroutine execution                      | Cancellation                                |
-| **Awaitable**              | An interface for objects that can be awaited (may produce different values)    | Awaitable interface                         |
-| **FutureLike**             | An interface for single-assignment awaitables with idempotent reads            | FutureLike interface                        |
-| **Suspension**             | The state when a coroutine pauses execution and yields control                 | Suspension                                  |
-| **Graceful Shutdown**      | A safe application termination mode that cancels all coroutines                | Graceful Shutdown                           |
-| **Deadlock**               | A condition where no coroutines can progress due to circular dependencies      | Deadlocks                                   |
-| **Scheduler**              | A component that manages coroutine execution and switching                     | Coroutine lifecycle                         |
-| **Reactor**                | An event loop that handles I/O events and timers                               | Coroutine lifecycle                         |
-
-This **RFC** describes the **API** for writing concurrent code in PHP, which includes:
+Examples:
 
 === Coroutine ===
 A lightweight execution thread that can be suspended (''suspend'') and resumed.
