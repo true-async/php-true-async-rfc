@@ -583,6 +583,36 @@ The ''CancellationError'', if unhandled within a coroutine, is automatically sup
 > to add metadata that can be used for debugging purposes.
 >
 
+=== Exception override rules ===
+
+**CancellationError** exceptions do not override each other.
+Multiple ''cancel()'' calls preserve the first cancellation reason:
+
+<code php>
+$coroutine = spawn(function() {
+    // some work
+});
+
+$coroutine->cancel(new \Async\CancellationError("First reason"));
+$coroutine->cancel(new \Async\CancellationError("Second reason")); // ignored
+
+await($coroutine); // throws CancellationError("First reason")
+</code>
+
+However, if an unhandled exception occurs during cancellation that is **not** inherited from ''CancellationError'',
+it overrides the previous ''CancellationError'':
+
+<code php>
+$coroutine = spawn(function() {
+    // coroutine gets cancelled, but then throws different exception
+    throw new \RuntimeException("boom");
+});
+
+$coroutine->cancel(new \Async\CancellationError("Cancelled"));
+
+await($coroutine); // throws RuntimeException, not CancellationError
+</code>
+
 === Cancellation policy ===
 
 This **RFC** intentionally does not define rules for tracking the execution time of cancelled coroutines.
@@ -607,6 +637,17 @@ $coroutine = spawn(function() use (&$coroutine) {
 });
 
 // await() will throw CancellationError despite normal completion
+</code>
+
+Self-cancellation only sets the exception as the coroutine result, but does not throw it immediately.
+For example, ''suspend()'' can be called without triggering an exception:
+
+<code php>
+$coroutine = spawn(function() use (&$coroutine) {
+    $coroutine->cancel(new \Async\CancellationError("Self-cancelled"));
+    suspend(); // No exception thrown here
+    echo "After suspend\n";
+});
 </code>
 
 === CancellationError handling ===
@@ -933,6 +974,8 @@ The code will be split into several PRs upon agreement.
    * Split RFC: Moved Scope and structured concurrency functionality to separate [[rfc:true_async_scope|Scope RFC]]. Base RFC now focuses on core async primitives (coroutines, await, cancellation)
    * Documented that ''await()'' throws ''CancellationError'' when current coroutine is cancelled
    * Documented that ''suspend()'' throws ''CancellationError'' when coroutine is cancelled while suspended
+   * Added exception override rules: ''CancellationError'' exceptions don't override each other (first wins), but other exceptions override ''CancellationError''
+   * Clarified self-cancellation behavior with ''suspend()'': self-cancellation only sets result without throwing exception immediately
 
 ==== Version 1.4 (September 2025) ====
    * Major RFC simplification - removed CoroutineGroup, Future and AwaitXX functions
