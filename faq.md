@@ -1,5 +1,41 @@
 # PHP True Async RFC - Frequently Asked Questions
 
+## Executive Summary: What This RFC Proposes
+
+This RFC proposes adding **built-in concurrency support** to PHP through two core components:
+
+### 1. Coroutines via `spawn()`
+
+Launch any PHP function as a lightweight coroutine that can be suspended and resumed:
+```php
+use function Async\spawn;
+use function Async\await;
+
+$coroutine = spawn(file_get_contents(...), 'https://php.net');
+$result = await($coroutine);
+```
+
+### 2. Non-blocking I/O Functions
+**50+ existing PHP functions** automatically become non-blocking when used inside coroutines:
+- **Database**: PDO MySQL, MySQLi operations
+- **Network**: CURL, sockets, streams, DNS lookups
+- **Files**: `file_get_contents()`, `fread()`, `fwrite()`
+- **Process**: `exec()`, `shell_exec()`, `proc_open()`
+- **Timers**: `sleep()`, `usleep()`
+
+**Key principle:** From the developer's perspective, these functions work identically to their synchronous versions. 
+The difference is that they suspend only the current coroutine instead of blocking the entire PHP process.
+
+See full list: https://github.com/true-async/php-async#adapted-php-functions
+
+### What This RFC Does NOT Propose
+- **No changes to existing synchronous behavior** - code without coroutines works exactly as before
+- **No new syntax keywords** - uses function calls (`spawn()`, `await()`, `suspend()`)
+- **No changes to Fiber API** - Fibers and True Async are mutually exclusive by design
+- **No structured concurrency primitives** - covered in separate [Scope RFC](https://wiki.php.net/rfc/true_async_scope)
+
+## General Questions
+
 ### Q: What is the main goal of this RFC?
 
 **A:** The RFC aims to provide a standardized way to write concurrent code in PHP without requiring developers 
@@ -8,13 +44,37 @@ inside a coroutine without modifications, unlike explicit async/await models.
 
 ### Q: How is this different from Fibers?
 
-**A:** Fibers and True Async serve different purposes:
-- **Fibers** are low-level symmetric execution contexts where programmers explicitly control switching
-- **True Async** is a high-level API where coroutine switching is managed automatically by the scheduler
+**A:** Fibers and True Async serve fundamentally different purposes and cannot coexist:
 
-They are incompatible because they manage the same resources (execution context, stacks) 
-in fundamentally different ways. 
-Using Fibers violates the "Strict Layering" principle by exposing low-level primitives in a high-level language.
+**Fibers:**
+- Low-level symmetric execution contexts
+- Programmer explicitly controls switching (`$fiber->resume()`, `Fiber::suspend()`)
+- Direct access to execution stack management
+- Suitable for building custom scheduling solutions
+
+**True Async:**
+- High-level asymmetric coroutines
+- Automatic switching managed by the scheduler
+- Transparent to the developer
+- Designed for business logic, not infrastructure
+
+**Why they can't work together:**
+
+1. **Resource conflicts**: Both manage the same low-level resources (execution context, CPU stack) in incompatible ways
+2. **Architectural incompatibility**: Mixing symmetric (Fibers) and asymmetric (coroutines) models creates unpredictable behavior
+3. **Abstraction level**: Fibers expose low-level primitives in a high-level language, violating the "Strict Layering" principle
+
+**Why not map Fiber::suspend() to Async\suspend()?**
+
+This would create a leaky abstraction:
+- Fibers require explicit scheduling decisions (who to resume? when?)
+- True Async scheduler makes these decisions automatically
+- Mixing both models would break scheduler guarantees and lead to race conditions
+- The execution models are fundamentally incompatible (symmetric vs asymmetric)
+
+If you need Fibers' explicit control, use Fibers. 
+If you want automatic concurrency for I/O-bound applications, use True Async. 
+Attempting to unify them would result in a solution that's neither simple nor safe.
 
 ### Q: Isn't this just Fibers 2.0?
 
@@ -48,39 +108,6 @@ You can gradually adopt async features where beneficial.
 they work exactly as they always have. 
 However, functions that previously blocked the entire PHP process now only suspend the current coroutine, 
 allowing other coroutines to continue executing.
-
-**50+ PHP functions** have been adapted to work asynchronously:
-
-**DNS Functions:**
-- `gethostbyname()`, `gethostbyaddr()`, `gethostbynamel()`
-
-**Database Functions:**
-- **PDO MySQL**: `PDO::__construct()`, `PDO::prepare()`, `PDO::exec()`, `PDOStatement::execute()`, `PDOStatement::fetch()`
-- **MySQLi**: `mysqli_connect()`, `mysqli_query()`, `mysqli_prepare()`, `mysqli_stmt_execute()`, `mysqli_fetch_*()`
-
-**CURL Functions:**
-- `curl_exec()`, `curl_multi_exec()`, `curl_multi_select()`, `curl_multi_getcontent()`, etc.
-
-**Socket Functions:**
-- `socket_connect()`, `socket_accept()`, `socket_read()`, `socket_write()`, `socket_send()`, `socket_recv()`, etc.
-
-**Stream Functions:**
-- `file_get_contents()`, `fread()`, `fwrite()`, `fopen()`, `fclose()`, `stream_socket_client()`, `stream_socket_server()`, etc.
-
-**Process Execution:**
-- `proc_open()`, `exec()`, `shell_exec()`, `system()`, `passthru()`
-
-**Sleep/Timer Functions:**
-- `sleep()`, `usleep()`, `time_nanosleep()`, `time_sleep_until()`
-
-**Output Buffer Functions:**
-- `ob_start()`, `ob_flush()`, `ob_clean()`, `ob_get_contents()`, `ob_end_clean()` (with coroutine isolation)
-
-**Key principle:** All these functions automatically become non-blocking when used in async context, 
-allowing other coroutines to continue execution while waiting for I/O operations to complete. 
-From the developer's perspective, the code looks identical to synchronous code.
-
-See full list: https://github.com/true-async/php-async#adapted-php-functions
 
 ---
 
