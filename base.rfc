@@ -185,16 +185,21 @@ namespace Async {
     }
 
     /**
+     * General exception class for Async namespace
+     */
+    class Exception extends \Exception {}
+
+    /**
      * Exception thrown when await() is cancelled by $cancellation parameter
      */
-    class AwaitCancelledException extends \Exception {
+    class AwaitCancelledException extends Exception {
         public function __construct(string $message = "", int $code = 0, ?\Throwable $previous = null) {}
     }
 
     /**
      * Fatal error thrown when deadlock is detected
      */
-    class DeadlockError extends \Error {
+    class DeadlockException extends Exception {
         public function __construct(string $message = "", int $code = 0, ?\Throwable $previous = null) {}
     }
 }
@@ -939,9 +944,9 @@ and generates warnings containing information about which **Coroutines** are in 
 and the exact lines of code where they were suspended.
 
 At the end of the application lifecycle, if a deadlock condition was detected, 
-a **DeadlockError** exception is thrown as a fatal error. This exception extends **Error** 
+a **DeadlockException** exception is thrown as a fatal error. This exception extends **Error** 
 and indicates a critical architectural problem in the application design.
-The **DeadlockError** is not intended to be caught during normal execution,
+The **DeadlockException** is not intended to be caught during normal execution,
 but rather serves as a diagnostic tool to identify circular dependencies between coroutines.
 
 Example of deadlock situation:
@@ -960,7 +965,7 @@ $coroutine2 = spawn(function() use ($coroutine1) {
     await($coroutine1); // Waits for coroutine1 - deadlock!
 });
 
-// Results in: Fatal error: Uncaught Async\DeadlockError: 
+// Results in: Fatal error: Uncaught Async\DeadlockException: 
 // Deadlock detected: no active coroutines, 2 coroutines in waiting
 </code>
 
@@ -1074,7 +1079,7 @@ This component should be implemented as a separate extension.
 ===== Voting Choices =====
 Yes or no vote.  2/3 required to pass. Voting ends 2025-12-06 at 00:00:00 UTC
 
-<doodle title="Accept True Async RFC?" voteType="single">
+<doodle title="Accept True Async RFC?" voteType="single" closed="false" closeon="2025-12-06T00:00:00Z">
    * Yes
    * No
    * Abstain
@@ -1121,7 +1126,9 @@ The code will be split into several PRs upon agreement.
 ===== Changelog =====
 
 ==== Version 1.6 (November 2025) ====
-  * I/O functions have earned the right to be covered in a separate RFC.
+  * I/O functions have earned the right to be covered in a separate **RFC**.
+  * Add basic exception Async\Exception according to the https://github.com/php/policies/blob/main/coding-standards-and-naming.rst#throwables
+  * Rename `DeadlockError` to `DeadlockException`
 
 ==== Version 1.5 (October 2025) ====
    * Added ''FutureLike'' interface methods: ''cancel()'', ''isCompleted()'', ''isCancelled()''
