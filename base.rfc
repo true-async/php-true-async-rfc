@@ -1,7 +1,7 @@
 ====== PHP True Async ======
 
-  * Version: 1.5
-  * Date: 2025-11-14
+  * Version: 1.6
+  * Date: 2025-11-20
   * Author: Edmond [HT], edmondifthen@proton.me
   * Status: Under discussion
   * First Published at: http://wiki.php.net/rfc/true_async
@@ -21,7 +21,7 @@ The **True Async** project pursues the following goals and values:
 
   * From a PHP developer's perspective, the **main value** of this implementation is that they DO NOT NEED to change existing code (or if changes are required, they should be minimal) to enable concurrency. Unlike explicit async models, this approach lets developers reuse existing synchronous code inside coroutines without modification.
 
-  * Code that was originally written and intended to run outside of a Coroutine must work **EXACTLY THE SAME** inside a Coroutine without modifications.
+  * Code that was originally written and intended to run outside of a Coroutine must work **EXACTLY THE SAME** inside a Coroutine without modifications. (provided that the programmer accounts for shared access to mutable memory)
 
   * A PHP developer should not have to think about how Coroutine switch and should not need to manage their switching—except in special cases where they consciously choose to intervene in this logic.
 
@@ -62,6 +62,9 @@ This RFC introduces native support for concurrent programming in ''PHP'' through
   * Existing PHP functions like ''file_get_contents()'', ''fopen()'', ''mysqli_query()'' **keep their signatures and contracts unchanged**
   * No modifications needed to existing synchronous code to work inside coroutines
   * No breaking changes to existing PHP extensions or SAPIs
+
+This **RFC** defines the general rules for all input/output functions,
+but the exact behavior of specific I/O functions will be described in separate RFCs if needed.
 
 **What becomes incompatible:**
   * **Fiber API cannot be used together with True Async** - attempting to create a Fiber while True Async is active throws ''FiberError''
@@ -1115,6 +1118,9 @@ https://github.com/true-async
 The code will be split into several PRs upon agreement.
 
 ===== Changelog =====
+
+==== Version 1.6 (November 2025) ====
+  * I/O functions have earned the right to be covered in a separate RFC.
 
 ==== Version 1.5 (October 2025) ====
    * Added ''FutureLike'' interface methods: ''cancel()'', ''isCompleted()'', ''isCancelled()''
