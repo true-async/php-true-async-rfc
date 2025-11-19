@@ -1072,7 +1072,7 @@ At the moment, the Reactor component uses the ''LibUV'' library.
 This component should be implemented as a separate extension.
 
 ===== Voting Choices =====
-Yes or no vote.  2/3 required to pass. Voting ends 2025-11-29 at 15:00:00 UTC
+Yes or no vote.  2/3 required to pass. Voting ends 2025-12-06 at 00:00:00 UTC
 
 <doodle title="Accept True Async RFC?" voteType="single">
    * Yes
