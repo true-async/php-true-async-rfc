@@ -112,6 +112,11 @@ namespace Async {
      */
     function getCoroutines(): array {}
 
+    /**
+     * Returns the coroutine by id
+     */
+    function getCoroutine( int $id ): ?Coroutine {}
+
     // === Core Classes ===
 
     /**
@@ -119,19 +124,9 @@ namespace Async {
      */
     final class Coroutine implements FutureLike {
         /**
-         * Return the coroutine id
+         * Returns the coroutine id
          */
         public function getId(): int {}
-
-        /**
-         * Static method get
-         */
-        public static function get ( int $id ) : ?static
-
-        /**
-         * Static method getCurrent
-         */
-        public static function getCurrent ( ) : self|static
 
         /**
          * Request cancellation of this coroutine
