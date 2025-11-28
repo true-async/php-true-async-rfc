@@ -112,12 +112,22 @@ namespace Async {
      */
     function getCoroutines(): array {}
 
+    /**
+     * Returns the coroutine by id
+     */
+    function getCoroutine( int $id ): ?Coroutine {}
+
     // === Core Classes ===
 
     /**
      * Represents a coroutine - an executable unit that can be suspended and resumed
      */
     final class Coroutine implements FutureLike {
+        /**
+         * Returns the coroutine id
+         */
+        public function getId(): int {}
+
         /**
          * Request cancellation of this coroutine
          */
