@@ -37,7 +37,7 @@ The **True Async** project pursues the following goals and values:
 
 | Term                       | Description                                                                    | Section                                     |
 | **Coroutine**              | An executable unit of code that can be suspended and resumed                   | Launching any function in non-blocking mode |
-| **OperationCancelled**     | A mechanism for cooperative canceling coroutine execution                      | Cancellation                                |
+| **Cancellation**           | A mechanism for cooperative canceling coroutine execution                      | Cancellation                                |
 | **Awaitable**              | An interface for objects that can be awaited (may produce different values)    | Awaitable interface                         |
 | **Completable**            | An interface for single-assignment awaitables with idempotent reads            | Completable interface                       |
 | **Suspension**             | The state when a coroutine pauses execution and yields control                 | Suspension                                  |
