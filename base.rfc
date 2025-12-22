@@ -134,6 +134,11 @@ namespace Async {
      */
     final class Coroutine implements Completable {
         /**
+         * Returns the Coroutine ID
+         */
+        public function getId(): int {}
+
+        /**
          * Request cancellation of this coroutine
          */
         public function cancel(?OperationCancelled $cancellation = null): void {}
@@ -142,6 +147,21 @@ namespace Async {
          * Register a callback to be executed when coroutine completes
          */
         public function finally(callable $callback): void {}
+
+        /**
+         * Returns the Coroutine result when finished
+         * If the Coroutine is not finished, it will return null
+         */
+        public function getResult(): mixed {}
+
+        /**
+         * Returns the Coroutine exception when finished
+         * If the Coroutine is not finished, it will return null
+         * If the Coroutine is cancelled, it will return an OperationCancelled
+         *
+         * @throws \RuntimeException if the Coroutine is running
+         */
+        public function getException(): mixed {}
 
         // State check methods
         public function isStarted(): bool {}
@@ -153,6 +173,16 @@ namespace Async {
         public function isCompleted(): bool {}
 
         // Debug methods
+        /**
+         * Returns the Coroutine debug trace
+         * If the coroutine is in the suspended state, returns a backtrace array
+         * Otherwise, returns null
+         *
+         * @param int $options Options for the backtrace (DEBUG_BACKTRACE_PROVIDE_OBJECT, DEBUG_BACKTRACE_IGNORE_ARGS)
+         * @param int $limit Maximum number of stack frames to return (0 for no limit)
+         */
+        public function getTrace(int $options = DEBUG_BACKTRACE_PROVIDE_OBJECT, int $limit = 0): ?array {}
+
         public function getSpawnFileAndLine(): array {}
         public function getSpawnLocation(): string {}
         public function getSuspendFileAndLine(): array {}
@@ -1430,6 +1460,7 @@ The code will be split into several PRs upon agreement.
 
 ==== Version 1.7 (December 2025) ====
   * **Fiber integration:** added `Fiber::getCoroutine()` method, ownership model, deadlock resolution; BC BREAK: destructors run in scheduler context, not in Fibers
+  * Added Coroutine methods: `getId()`, `getResult()`, `getException()`, `getTrace()`
   * Refined Goals section: improved clarity and technical accuracy of core value propositions
   * Function naming compliance with PHP coding standards: renamed `currentCoroutine()` to `current_coroutine()`, `gracefulShutdown()` to `shutdown()`, `getCoroutines()` to `get_coroutines()`
   * Method renaming: `Coroutine::onFinally()` renamed to `Coroutine::finally()` for brevity
