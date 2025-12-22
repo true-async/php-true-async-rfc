@@ -55,7 +55,7 @@ This RFC introduces native support for concurrent programming in ''PHP'' through
   * ''suspend()'' function to yield control between coroutines
   * ''Coroutine'' class representing an executable unit
   * ''Awaitable'' and ''Completable'' interfaces for awaitable objects
-  * ''OperationCancelled'' exception for cooperative cancellation
+  * ''Cancellation'' exception for cooperative cancellation
   * Graceful shutdown mechanism and deadlock detection
 
 **What is left untouched (no changes to existing function contracts):**
@@ -67,8 +67,7 @@ This **RFC** defines the general rules for all input/output functions,
 but the exact behavior of specific I/O functions will be described in separate RFCs if needed.
 
 **What becomes incompatible:**
-  * **Destructor execution context:** destructors no longer execute in Fibers, always run in scheduler context - code relying on destructor coroutine/Fiber context will break
-  * New root namespace class `\OperationCancelled` may conflict with existing userland code
+  * New root namespace class `\Cancellation` may conflict with existing userland code
 
 === API Overview ===
 
@@ -83,7 +82,7 @@ but the exact behavior of specific I/O functions will be described in separate R
  * Extends Throwable directly to avoid accidental suppression by catch(\Exception)
  * and to clearly separate from regular errors
  */
-class OperationCancelled extends \Throwable {
+class Cancellation extends \Throwable {
     public function __construct(string $message = "", int $code = 0, ?\Throwable $previous = null) {}
 }
 
@@ -100,14 +99,14 @@ namespace Async {
 
     /**
      * Waits for a Completable to complete and returns its result
-     * @throws OperationCancelled if current coroutine is cancelled
+     * @throws Cancellation if current coroutine is cancelled
      * @throws AwaitCancelledException if $cancellation is triggered
      */
-    function await(Completable $awaitable, ?Awaitable $cancellation = null): mixed {}
+    function await(Completable $awaitable, ?Completable $cancellation = null): mixed {}
 
     /**
      * Suspends current coroutine and yields control to scheduler
-     * @throws OperationCancelled if coroutine is cancelled while suspended
+     * @throws Cancellation if coroutine is cancelled while suspended
      */
     function suspend(): void {}
 
@@ -119,7 +118,7 @@ namespace Async {
     /**
      * Initiates graceful shutdown of the application
      */
-    function shutdown(?OperationCancelled $cancellation = null): void {}
+    function shutdown(?Cancellation $cancellation = null): void {}
 
     /**
      * Returns array of all coroutines in the application
@@ -141,7 +140,7 @@ namespace Async {
         /**
          * Request cancellation of this coroutine
          */
-        public function cancel(?OperationCancelled $cancellation = null): void {}
+        public function cancel(?Cancellation $cancellation = null): void {}
 
         /**
          * Register a callback to be executed when coroutine completes
@@ -157,7 +156,7 @@ namespace Async {
         /**
          * Returns the Coroutine exception when finished
          * If the Coroutine is not finished, it will return null
-         * If the Coroutine is cancelled, it will return an OperationCancelled
+         * If the Coroutine is cancelled, it will return an Cancellation
          *
          * @throws \RuntimeException if the Coroutine is running
          */
@@ -175,9 +174,6 @@ namespace Async {
         // Debug methods
         /**
          * Returns the Coroutine debug trace
-         * If the coroutine is in the suspended state, returns a backtrace array
-         * Otherwise, returns null
-         *
          * @param int $options Options for the backtrace (DEBUG_BACKTRACE_PROVIDE_OBJECT, DEBUG_BACKTRACE_IGNORE_ARGS)
          * @param int $limit Maximum number of stack frames to return (0 for no limit)
          */
@@ -206,7 +202,7 @@ namespace Async {
         /**
          * Request cancellation
          */
-        public function cancel(?OperationCancelled $cancellation = null): void;
+        public function cancel(?Cancellation $cancellation = null): void;
 
         /**
          * Check if completed (successfully, with exception, or cancelled)
@@ -227,6 +223,11 @@ namespace Async {
     class Exception extends \Exception {}
 
     /**
+     * General Cancellation class for Async namespace
+     */
+    class Cancellation extends \Cancellation {}
+
+    /**
      * Exception thrown when await() is cancelled by $cancellation parameter
      */
     class AwaitCancelledException extends Exception {
@@ -236,7 +237,7 @@ namespace Async {
     /**
      * Fatal error thrown when deadlock is detected
      */
-    class DeadlockException extends Exception {
+    class DeadlockCancellation extends Cancellation {
         public function __construct(string $message = "", int $code = 0, ?\Throwable $previous = null) {}
     }
 }
@@ -338,17 +339,23 @@ In other words, by default, I/O operations or others awaiting operations,
 **can be cancelled** by code **outside** the coroutine at **any moment**.
 
 To properly complete transactions and release resources,
-coroutine code **MUST** handle the cancellation exception ''OperationCancelled''.
+coroutine code **MUST** handle the cancellation exception ''Cancellation''.
 
 === Rationale ===
 
-This **"cancellable by default"** policy is particularly well-suited for PHP because **read operations** (database queries, API calls, file reads) are typically as frequent as—or even more frequent than—write operations. Since read operations generally don't modify state, they're inherently safe to cancel without risking data corruption.
+This **"cancellable by default"** policy is particularly well-suited for PHP because **read operations**
+(database queries, API calls, file reads) are typically as frequent as—or even more frequent than—write operations.
+Since read operations generally don't modify state, they're inherently safe to cancel without risking data corruption.
 
-By making all operations cancellable by default, this approach eliminates the need for developers to explicitly mark or protect individual read operations, significantly reducing boilerplate code. Only write operations and critical sections that require transactional guarantees need special handling through proper ''OperationCancelled'' exception management.
+By making all operations cancellable by default,
+this approach eliminates the need for developers to explicitly mark or protect individual read operations,
+significantly reducing boilerplate code. Only write operations and critical sections that require transactional
+guarantees need special handling through proper ''Cancellation'' exception management.
 
 ==== Namespace ====
 
-All functions, classes, and constants defined in this **RFC** are located in the ''Async'' namespace.
+All functions, classes, and constants defined in
+this **RFC** are located in the ''Async'' namespace (except for `Cancellation`).
 Extensions are allowed to extend this namespace with functions and classes,
 provided that they are directly related to concurrency functionality.
 
@@ -488,7 +495,7 @@ suspend();
 </code>
 
 **Exceptions:**
-  * ''suspend()'' can throw ''OperationCancelled'' if the **current** coroutine is cancelled while suspended
+  * ''suspend()'' can throw ''Cancellation'' if the **current** coroutine is cancelled while suspended
   * The cancellation is initiated externally via ''Coroutine::cancel()''
 
 The ''suspend'' can be used in any function including from the **main execution flow**:
@@ -558,7 +565,7 @@ The ''Awaitable'' interface does not impose limitations on the number of state c
 
 In the general case, objects implementing the ''Awaitable'' interface can act as triggers — that is,
 they can change their state an unlimited number of times.
-This means that multiple calls to ''await <Awaitable>'' may produce different results.
+This means that multiple calls to ''select <Awaitable>'' may produce different results.
 
 ==== Completable interface ====
 
@@ -567,7 +574,7 @@ they complete once with a result and provide **idempotent reads**.
 
 <code php>
 interface Async\Completable extends Async\Awaitable {
-    public function cancel(?OperationCancelled $cancellation = null): void;
+    public function cancel(?Cancellation $cancellation = null): void;
     public function isCompleted(): bool;
     public function isCancelled(): bool;
 }
@@ -582,7 +589,7 @@ Unlike the base ''Awaitable'' interface which allows multiple state changes,
 ==== Await ====
 
 <code php>
-Async\await(Async\Completable $awaitable, ?Async\Awaitable $cancellation = null): mixed
+Async\await(Async\Completable $awaitable, ?Async\Completable $cancellation = null): mixed
 </code>
 
 The ''await'' function is used to wait for the completion of another coroutine
@@ -614,8 +621,8 @@ echo await(spawn(readFile(...), 'file2.txt'));
 the awaited one returns a final result or completes with an exception.
 
 **Exceptions:**
-  * Throws ''OperationCancelled'' if the **current** coroutine (the one calling ''await'') is cancelled while waiting
-  * Re-throws any exception that occurred in the awaited coroutine, **except** ''OperationCancelled'' which is always suppressed by the coroutine
+  * Throws ''Cancellation'' if the **current** coroutine (the one calling ''await'') is cancelled while waiting
+  * Re-throws any exception that occurred in the awaited coroutine, **except** ''Cancellation'' which is always suppressed by the coroutine
 
 > **Coroutines behave like Futures:**
 > once a coroutine completes (successfully, with an exception, or through cancellation),
@@ -676,7 +683,7 @@ try {
 
 ==== Fiber Support ====
 
-**Fibers** are a type of **coroutine** that work as stackful generators with symmetric behavior.
+**Fibers** are a type of **coroutine** that work as ''stackful generators'' with symmetric behavior.
 
 **Key principles:**
   * **Fiber** is a coroutine that can be suspended and resumed at any time (see ''Async\suspend()''). Fibers fully inherit coroutine behavior.
@@ -706,7 +713,12 @@ $coroutine = spawn(function() {
 await($coroutine);
 </code>
 
-=== Suspend and Resume ===
+=== Fiber YIELD state ===
+
+Fibers have a special ''YIELD'' state,
+which means that the fiber was suspended using a method ''Fiber::suspend''.
+
+The ''YIELD'' state indicates that the fiber is waiting to be resumed using a method ''Fiber::resume()''.
 
 <code php>
 $coroutine = spawn(function() {
@@ -729,7 +741,7 @@ await($coroutine);
 
 Fibers maintain symmetric behavior **relative to the coroutine where they were created**.
 This means that if Fibers are created in two different coroutines,
-they are not required to be symmetric with each other — only within their own coroutine's context.
+they are not required to be symmetric with each other; only within their own coroutine's context.
 
 <code php>
 // Two coroutines, each with its own Fiber
@@ -763,6 +775,14 @@ await($c2);
 // Each Fiber is symmetric only within its own coroutine
 // They execute independently and don't interfere with each other
 </code>
+
+Like coroutines, fibers can be suspended using ''Async\suspend()''.
+In this case, control is transferred to the ''Scheduler'', not to the coroutine that started the Fiber.
+
+An attempt to resume the fiber using ''Fiber::resume()'', that was suspended using ''Async\suspend()''
+will result in an exception ''FiberError'' with the message ''Cannot resume a not yielded fiber''.
+
+''Fiber::resume()'' may throw an exception ''Cancellation'' exception if the Fiber-coroutine is cancelled.
 
 === Fiber Ownership ===
 
@@ -844,7 +864,7 @@ $coroutine = spawn(function() {
     echo "Is suspended: " . ($fiberCoroutine->isSuspended() ? "yes" : "no") . "\n";
 
     // Can cancel fiber via its coroutine
-    $fiberCoroutine->cancel(new \OperationCancelled("cancelled"));
+    $fiberCoroutine->cancel(new \Cancellation("cancelled"));
 });
 </code>
 
@@ -861,24 +881,26 @@ True Async implements **special deadlock detection** for Fibers that differs fro
 
 **Resolution strategy:**
 
-If **all remaining coroutines** are Fiber-coroutines in YIELD state, the scheduler performs **graceful cancellation** instead of throwing ''DeadlockException''. This happens because:
+If **all remaining coroutines** are Fiber-coroutines in ''YIELD'' state,
+the scheduler performs **graceful cancellation** instead of throwing ''DeadlockCancellation''.
+This happens because:
   * Suspended Fibers belong to their variables/objects, not to the scheduler
   * They are waiting for explicit resume, which is a valid suspended state
-  * This is not a true deadlock — it's intentional symmetric suspension
+  * This is not a true deadlock. It's intentional symmetric suspension
 
 **Behavior difference:**
-  * **Regular coroutines in deadlock**: Receive ''DeadlockException''
+  * **Regular coroutines in deadlock**: Receive ''DeadlockCancellation''
   * **Only Fiber-coroutines suspended**: Graceful cancellation without exception
 
 <code php>
 use function Async\spawn;
 use function Async\await;
 
-$c = spawn(function() {
+$coro = spawn(function() {
     $fiber = new Fiber(function() {
         Fiber::suspend();  // Waiting for resume
         // If no resume happens and this is the only coroutine left,
-        // graceful cancellation occurs instead of DeadlockException
+        // graceful cancellation occurs instead of DeadlockCancellation
     });
 
     $fiber->start();
@@ -887,8 +909,8 @@ $c = spawn(function() {
     // This triggers graceful cancellation, not deadlock error
 });
 
-await($c);
-// No DeadlockException thrown
+await($coro);
+// No DeadlockCancellation thrown
 </code>
 
 This design recognizes that suspended Fibers represent intentional state, not erroneous deadlock conditions.
@@ -982,7 +1004,7 @@ spawn('task');
 ==== Cancellation ====
 
 The ''cancellation'' operation allows interrupting the execution of a coroutine that is in a waiting state.
-A cancelled coroutine is **resumed** with a special ''OperationCancelled'' exception and continues its execution.
+A cancelled coroutine is **resumed** with a special ''Cancellation'' exception and continues its execution.
 The cancellation operation is not instantaneous; it takes time.
 While in the ''cancellation'' state, a coroutine may execute as usual without any restrictions.
 
@@ -994,7 +1016,7 @@ function task(): void {}
 $coroutine = spawn(task(...));
 
 // cancel the coroutine
-$coroutine->cancel(new \OperationCancelled('Task was cancelled'));
+$coroutine->cancel(new \Cancellation('Task was cancelled'));
 </code>
 
 The cancellation operation is implemented as follows:
@@ -1003,19 +1025,19 @@ The cancellation operation is implemented as follows:
   - If a coroutine is suspended, its execution will resume with an exception.
   - If a coroutine has already completed, nothing happens.
 
-The ''OperationCancelled'', if unhandled within a coroutine, is automatically suppressed after the coroutine completes. However, the coroutine preserves its cancellation state, and any ''await()'' operation on this coroutine will throw the ''OperationCancelled''.
+The ''Cancellation'', if unhandled within a coroutine, is automatically suppressed after the coroutine completes. However, the coroutine preserves its cancellation state, and any ''await()'' operation on this coroutine will throw the ''Cancellation''.
 
-> ⚠️ **Warning:** You should not attempt to suppress ''OperationCancelled'' exception,
+> ⚠️ **Warning:** You should not attempt to suppress ''Cancellation'' exception,
 > as it may cause application malfunctions.
 
 >
-> **Note:** ''OperationCancelled'' can be extended by the user
+> **Note:** ''Cancellation'' can be extended by the user
 > to add metadata that can be used for debugging purposes.
 >
 
 === Exception override rules ===
 
-**OperationCancelled** exceptions do not override each other.
+**Cancellation** exceptions do not override each other.
 Multiple ''cancel()'' calls preserve the first cancellation reason:
 
 <code php>
@@ -1023,14 +1045,14 @@ $coroutine = spawn(function() {
     // some work
 });
 
-$coroutine->cancel(new \OperationCancelled("First reason"));
-$coroutine->cancel(new \OperationCancelled("Second reason")); // ignored
+$coroutine->cancel(new \Cancellation("First reason"));
+$coroutine->cancel(new \Cancellation("Second reason")); // ignored
 
-await($coroutine); // throws OperationCancelled("First reason")
+await($coroutine); // throws Cancellation("First reason")
 </code>
 
-However, if an unhandled exception occurs during cancellation that is **not** inherited from ''OperationCancelled'',
-it overrides the previous ''OperationCancelled'':
+However, if an unhandled exception occurs during cancellation that is **not** inherited from ''Cancellation'',
+it overrides the previous ''Cancellation'':
 
 <code php>
 $coroutine = spawn(function() {
@@ -1038,9 +1060,9 @@ $coroutine = spawn(function() {
     throw new \RuntimeException("boom");
 });
 
-$coroutine->cancel(new \OperationCancelled("Cancelled"));
+$coroutine->cancel(new \Cancellation("Cancelled"));
 
-await($coroutine); // throws RuntimeException, not OperationCancelled
+await($coroutine); // throws RuntimeException, not Cancellation
 </code>
 
 === Cancellation policy ===
@@ -1055,18 +1077,18 @@ it is proposed to delegate the responsibility for such logic to the ''scheduler'
 
 === Self-cancellation ===
 
-A coroutine can attempt to cancel itself by calling its own ''cancel()'' method. However, **nothing happens immediately** - the coroutine continues executing normally until it naturally completes, but is marked as cancelled and stores the ''OperationCancelled'' as its final result:
+A coroutine can attempt to cancel itself by calling its own ''cancel()'' method. However, **nothing happens immediately** - the coroutine continues executing normally until it naturally completes, but is marked as cancelled and stores the ''Cancellation'' as its final result:
 
 <code php>
 use function Async\spawn;
 
 $coroutine = spawn(function() use (&$coroutine) {
-    $coroutine->cancel(new \OperationCancelled("Self-cancelled"));
+    $coroutine->cancel(new \Cancellation("Self-cancelled"));
     echo "This still executes\n"; // Will execute
     return "completed";
 });
 
-// await() will throw OperationCancelled despite normal completion
+// await() will throw Cancellation despite normal completion
 </code>
 
 Self-cancellation only sets the exception as the coroutine result, but does not throw it immediately.
@@ -1074,7 +1096,7 @@ For example, ''suspend()'' can be called without triggering an exception:
 
 <code php>
 $coroutine = spawn(function() use (&$coroutine) {
-    $coroutine->cancel(new \OperationCancelled("Self-cancelled"));
+    $coroutine->cancel(new \Cancellation("Self-cancelled"));
     suspend(); // No exception thrown here
     echo "After suspend\n";
 });
@@ -1082,9 +1104,9 @@ $coroutine = spawn(function() use (&$coroutine) {
 
 === Cancellation handling ===
 
-In the context of coroutines, it is not recommended to use ''catch \Throwable'' or ''catch OperationCancelled''.
+In the context of coroutines, it is not recommended to use ''catch \Throwable'' or ''catch Cancellation''.
 
-Since ''OperationCancelled'' does not extend the ''\Exception'' class,
+Since ''Cancellation'' does not extend the ''\Exception'' class,
 using ''catch \Exception'' is a safe way to handle exceptions,
 and the ''finally'' block is the recommended way to execute finalizing code.
 
@@ -1132,9 +1154,9 @@ try {
 
     try {
         await($coroutine);
-    } catch (\OperationCancelled $exception) {
+    } catch (\Cancellation $exception) {
         // not recommended way to handle exceptions
-        echo "Caught OperationCancelled\n";
+        echo "Caught Cancellation\n";
         throw $exception;
     }
 } finally {
@@ -1145,20 +1167,20 @@ try {
 Expected output
 
 <code>
-Caught OperationCancelled
+Caught Cancellation
 The end
 </code>
 
 === Cancellation propagation ===
 
-The ''OperationCancelled'' affects **PHP** standard library functions differently.
+The ''Cancellation'' affects **PHP** standard library functions differently.
 If it is thrown inside one of these functions that previously did not throw exceptions,
 the PHP function will terminate with an error.
 
 In other words, the ''cancel()'' mechanism does not alter the existing function contract.
 PHP standard library functions behave as if the operation had failed.
 
-Additionally, the ''OperationCancelled'' will not appear in ''get_last_error()'',
+Additionally, the ''Cancellation'' will not appear in ''get_last_error()'',
 but it may trigger an ''E_WARNING'' to maintain compatibility with expected behavior
 for functions like ''fwrite'' (if such behavior is specified in the documentation).
 
@@ -1185,7 +1207,7 @@ which can be an external system and is not covered by this **RFC**.
 The **Graceful Shutdown** mode can also be triggered using the function:
 
 <code php>
-Async\shutdown(?OperationCancelled $cancellation = null): void {}
+Async\shutdown(?Cancellation $cancellation = null): void {}
 </code>
 
 from anywhere in the application.
@@ -1213,9 +1235,9 @@ and generates warnings containing information about which **Coroutines** are in 
 and the exact lines of code where they were suspended.
 
 At the end of the application lifecycle, if a deadlock condition was detected, 
-a **DeadlockException** exception is thrown as a fatal error. This exception extends **Error** 
+a **DeadlockCancellation** exception is thrown as a fatal error. This exception extends **Error** 
 and indicates a critical architectural problem in the application design.
-The **DeadlockException** is not intended to be caught during normal execution,
+The **DeadlockCancellation** is not intended to be caught during normal execution,
 but rather serves as a diagnostic tool to identify circular dependencies between coroutines.
 
 Example of deadlock situation:
@@ -1234,7 +1256,7 @@ $coroutine2 = spawn(function() use ($coroutine1) {
     await($coroutine1); // Waits for coroutine1 - deadlock!
 });
 
-// Results in: Fatal error: Uncaught Async\DeadlockException: 
+// Results in: Fatal error: Uncaught Async\DeadlockCancellation: 
 // Deadlock detected: no active coroutines, 2 coroutines in waiting
 </code>
 
@@ -1259,23 +1281,16 @@ The ''Async\get_coroutines()'' method returns an array of all coroutines in the 
 
 ===== Backward Incompatible Changes =====
 
-==== New Root Namespace Class ====
+This RFC introduces **''Cancellation''** class in the root namespace:
 
-This RFC introduces **''OperationCancelled''** class in the root namespace:
-
-<code php>
-class OperationCancelled extends \Throwable {}
-</code>
-
-**Why root namespace:**
-  * ''OperationCancelled'' extends ''\Throwable'' directly, making it a fundamental PHP mechanism
+  * ''Cancellation'' extends ''\Throwable'' directly, making it a fundamental PHP mechanism
   * It can be used by any PHP extension, not just Async
   * Similar to ''Error'', ''Exception'', and other core throwables
 
 **Potential conflicts:**
-  * If userland code already defines ''OperationCancelled'' in root namespace, it will conflict
+  * If userland code already defines ''Cancellation'' in root namespace, it will conflict
   * This is similar to how PHP 7.0 introduced ''Error'' class - rare but possible conflict
-  * Mitigation: Check for existing ''OperationCancelled'' class before upgrading to PHP 8.6+
+  * Mitigation: Check for existing ''Cancellation'' class before upgrading to PHP 8.6+
 
 ==== Fiber API Extension ====
 
@@ -1297,51 +1312,6 @@ class Fiber {
   * Existing Fiber-based libraries continue to work without modifications
   * Libraries can optionally detect async context via ''getCoroutine() !== null''
   * No changes needed to existing Fiber usage patterns
-
-==== Destructor Execution Context ====
-
-**Critical change:** Object destructors can **no longer assume** which coroutine context they execute in:
-
-<code php>
-class Resource {
-    public function __destruct() {
-        // WRONG: Cannot assume we're in the same coroutine where object was created
-        // WRONG: Cannot assume we're in any specific Fiber context
-
-        // Destructors now execute in scheduler context, NOT in Fibers!
-    }
-}
-</code>
-
-**Key implications:**
-  * Destructors are **never executed inside Fibers** — they run in the scheduler's context
-  * Code that relied on destructor executing in specific coroutine/Fiber will break
-  * Destructors should not depend on coroutine-local state or Fiber context
-  * Use explicit cleanup methods (''close()'', ''dispose()'') for context-dependent cleanup
-
-**Migration:**
-<code php>
-// Before (BREAKS):
-class AsyncResource {
-    public function __destruct() {
-        // Assumed to run in same coroutine
-        $this->cleanup();
-    }
-}
-
-// After (CORRECT):
-class AsyncResource {
-    public function close() {
-        // Explicit cleanup in known context
-        $this->cleanup();
-    }
-
-    public function __destruct() {
-        // Only context-independent cleanup here
-        // No coroutine/Fiber assumptions
-    }
-}
-</code>
 
 ===== Proposed PHP Version(s) =====
 
@@ -1378,7 +1348,7 @@ No new constants are introduced.
 Static analyzers will need to implement new checks for safe async/await usage:
 
   - **Deadlock detection:** Identify potential deadlocks in async code
-  - **Cancellation suppression detection:** ''catch (\Throwable)'' that may hide OperationCancelled
+  - **Cancellation suppression detection:** ''catch (\Throwable)'' that may hide Cancellation
 
 **Libraries Using Fiber:**
 
@@ -1473,11 +1443,12 @@ The code will be split into several PRs upon agreement.
   * Refined Goals section: improved clarity and technical accuracy of core value propositions
   * Function naming compliance with PHP coding standards: renamed `currentCoroutine()` to `current_coroutine()`, `gracefulShutdown()` to `shutdown()`, `getCoroutines()` to `get_coroutines()`
   * Method renaming: `Coroutine::onFinally()` renamed to `Coroutine::finally()` for brevity
-  * Interface renaming: `FutureLike` renamed to `Completable` (66% community vote) for clearer semantics - represents objects that can be completed
-  * Exception renaming: `CancellationError` → `Cancellation` → `OperationCancelled` (final) for better semantics and avoiding conflicts with cancellation tokens
-  * Moved `OperationCancelled` to **root namespace** (`\OperationCancelled`) as it's a fundamental PHP mechanism, not Async-specific
-  * Changed `OperationCancelled` inheritance from `\Error` to `\Throwable` directly, following Python's `CancelledError` pattern (BaseException since 3.8)
+  * Interface renaming: `FutureLike` renamed to `Completable` (66% community vote) for clearer semantics; represents objects that can be completed
+  * Exception renaming: `CancellationError` → `Cancellation` for better semantics
+  * Moved `Cancellation` to **root namespace** (`\Cancellation`) as it's a fundamental PHP mechanism, not Async-specific
+  * Changed `Cancellation` inheritance from `\Error` to `\Throwable` directly, following Python's `CancelledError` pattern (BaseException since 3.8)
   * Added backward compatibility notes about new root namespace class
+  * Rename `DeadlockException` to `DeadlockCancellation`
 
 ==== Version 1.6 (November 2025) ====
   * I/O functions have earned the right to be covered in a separate **RFC**.
@@ -1494,9 +1465,9 @@ The code will be split into several PRs upon agreement.
    * Extended glossary with Awaitable, Suspension, Graceful Shutdown, and Deadlock terms
    * Introduced ''Completable'' interface with single-assignment semantics and changed ''await()'' signature to accept ''Completable'' instead of Awaitable for type safety
    * Split RFC: Moved Scope and structured concurrency functionality to separate [[rfc:true_async_scope|Scope RFC]]. Base RFC now focuses on core async primitives (coroutines, await, cancellation)
-   * Documented that ''await()'' throws ''OperationCancelled'' when current coroutine is cancelled
-   * Documented that ''suspend()'' throws ''OperationCancelled'' when coroutine is cancelled while suspended
-   * Added exception override rules: ''OperationCancelled'' exceptions don't override each other (first wins), but other exceptions override ''OperationCancelled''
+   * Documented that ''await()'' throws ''Cancellation'' when current coroutine is cancelled
+   * Documented that ''suspend()'' throws ''Cancellation'' when coroutine is cancelled while suspended
+   * Added exception override rules: ''Cancellation'' exceptions don't override each other (first wins), but other exceptions override ''Cancellation''
    * Clarified self-cancellation behavior with ''suspend()'': self-cancellation only sets result without throwing exception immediately
 
 ==== Version 1.4 (September 2025) ====
