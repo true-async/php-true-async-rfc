@@ -37,7 +37,7 @@ The **True Async** project pursues the following goals and values:
 
 | Term                       | Description                                                                    | Section                                     |
 | **Coroutine**              | An executable unit of code that can be suspended and resumed                   | Launching any function in non-blocking mode |
-| **CancellationError**      | A mechanism for cooperative canceling coroutine execution                      | Cancellation                                |
+| **Cancellation**           | A mechanism for cooperative canceling coroutine execution                      | Cancellation                                |
 | **Awaitable**              | An interface for objects that can be awaited (may produce different values)    | Awaitable interface                         |
 | **FutureLike**             | An interface for single-assignment awaitables with idempotent reads            | FutureLike interface                        |
 | **Suspension**             | The state when a coroutine pauses execution and yields control                 | Suspension                                  |
@@ -55,7 +55,7 @@ This RFC introduces native support for concurrent programming in ''PHP'' through
   * ''suspend()'' function to yield control between coroutines
   * ''Coroutine'' class representing an executable unit
   * ''Awaitable'' and ''FutureLike'' interfaces for awaitable objects
-  * ''CancellationError'' exception for cooperative cancellation
+  * ''Cancellation'' exception for cooperative cancellation
   * Graceful shutdown mechanism and deadlock detection
 
 **What is left untouched (no changes to existing function contracts):**
@@ -85,14 +85,14 @@ namespace Async {
 
     /**
      * Waits for a FutureLike to complete and returns its result
-     * @throws CancellationError if current coroutine is cancelled
+     * @throws Cancellation if current coroutine is cancelled
      * @throws AwaitCancelledException if $cancellation is triggered
      */
     function await(FutureLike $awaitable, ?Awaitable $cancellation = null): mixed {}
 
     /**
      * Suspends current coroutine and yields control to scheduler
-     * @throws CancellationError if coroutine is cancelled while suspended
+     * @throws Cancellation if coroutine is cancelled while suspended
      */
     function suspend(): void {}
 
@@ -104,7 +104,7 @@ namespace Async {
     /**
      * Initiates graceful shutdown of the application
      */
-    function shutdown(?CancellationError $cancellationError = null): void {}
+    function shutdown(?Cancellation $cancellation = null): void {}
 
     /**
      * Returns array of all coroutines in the application
@@ -121,7 +121,7 @@ namespace Async {
         /**
          * Request cancellation of this coroutine
          */
-        public function cancel(?CancellationError $cancellationError = null): void {}
+        public function cancel(?Cancellation $cancellation = null): void {}
 
         /**
          * Register a callback to be executed when coroutine completes
@@ -161,7 +161,7 @@ namespace Async {
         /**
          * Request cancellation
          */
-        public function cancel(?CancellationError $cancellationError = null): void;
+        public function cancel(?Cancellation $cancellation = null): void;
 
         /**
          * Check if completed (successfully, with exception, or cancelled)
@@ -178,9 +178,10 @@ namespace Async {
 
     /**
      * Exception thrown when a coroutine is cancelled
-     * Does not extend Exception to avoid accidental suppression
+     * Extends Throwable directly to avoid accidental suppression by catch(\Exception)
+     * and to clearly separate from regular errors
      */
-    class CancellationError extends \Error {
+    class Cancellation extends \Throwable {
         public function __construct(string $message = "", int $code = 0, ?\Throwable $previous = null) {}
     }
 
@@ -288,13 +289,13 @@ In other words, by default, I/O operations or others awaiting operations,
 **can be cancelled** by code **outside** the coroutine at **any moment**.
 
 To properly complete transactions and release resources,
-coroutine code **MUST** handle the cancellation exception ''CancellationError''.
+coroutine code **MUST** handle the cancellation exception ''Cancellation''.
 
 === Rationale ===
 
 This **"cancellable by default"** policy is particularly well-suited for PHP because **read operations** (database queries, API calls, file reads) are typically as frequent as—or even more frequent than—write operations. Since read operations generally don't modify state, they're inherently safe to cancel without risking data corruption.
 
-By making all operations cancellable by default, this approach eliminates the need for developers to explicitly mark or protect individual read operations, significantly reducing boilerplate code. Only write operations and critical sections that require transactional guarantees need special handling through proper ''CancellationError'' exception management.
+By making all operations cancellable by default, this approach eliminates the need for developers to explicitly mark or protect individual read operations, significantly reducing boilerplate code. Only write operations and critical sections that require transactional guarantees need special handling through proper ''Cancellation'' exception management.
 
 ==== Namespace ====
 
@@ -438,7 +439,7 @@ suspend();
 </code>
 
 **Exceptions:**
-  * ''suspend()'' can throw ''CancellationError'' if the **current** coroutine is cancelled while suspended
+  * ''suspend()'' can throw ''Cancellation'' if the **current** coroutine is cancelled while suspended
   * The cancellation is initiated externally via ''Coroutine::cancel()''
 
 The ''suspend'' can be used in any function including from the **main execution flow**:
@@ -517,7 +518,7 @@ they complete once with a result and provide **idempotent reads**.
 
 <code php>
 interface Async\FutureLike extends Async\Awaitable {
-    public function cancel(?CancellationError $cancellationError = null): void;
+    public function cancel(?Cancellation $cancellation = null): void;
     public function isCompleted(): bool;
     public function isCancelled(): bool;
 }
@@ -564,8 +565,8 @@ echo await(spawn(readFile(...), 'file2.txt'));
 the awaited one returns a final result or completes with an exception.
 
 **Exceptions:**
-  * Throws ''CancellationError'' if the **current** coroutine (the one calling ''await'') is cancelled while waiting
-  * Re-throws any exception that occurred in the awaited coroutine, **except** ''CancellationError'' which is always suppressed by the coroutine
+  * Throws ''Cancellation'' if the **current** coroutine (the one calling ''await'') is cancelled while waiting
+  * Re-throws any exception that occurred in the awaited coroutine, **except** ''Cancellation'' which is always suppressed by the coroutine
 
 > **Coroutines behave like Futures:**
 > once a coroutine completes (successfully, with an exception, or through cancellation),
@@ -713,7 +714,7 @@ spawn('task');
 ==== Cancellation ====
 
 The ''cancellation'' operation allows interrupting the execution of a coroutine that is in a waiting state.
-A cancelled coroutine is **resumed** with a special ''CancellationError'' exception and continues its execution.
+A cancelled coroutine is **resumed** with a special ''Cancellation'' exception and continues its execution.
 The cancellation operation is not instantaneous; it takes time.
 While in the ''cancellation'' state, a coroutine may execute as usual without any restrictions.
 
@@ -725,7 +726,7 @@ function task(): void {}
 $coroutine = spawn(task(...));
 
 // cancel the coroutine
-$coroutine->cancel(new Async\CancellationError('Task was cancelled'));
+$coroutine->cancel(new Async\Cancellation('Task was cancelled'));
 </code>
 
 The cancellation operation is implemented as follows:
@@ -734,19 +735,19 @@ The cancellation operation is implemented as follows:
   - If a coroutine is suspended, its execution will resume with an exception.
   - If a coroutine has already completed, nothing happens.
 
-The ''CancellationError'', if unhandled within a coroutine, is automatically suppressed after the coroutine completes. However, the coroutine preserves its cancellation state, and any ''await()'' operation on this coroutine will throw the ''CancellationError''.
+The ''Cancellation'', if unhandled within a coroutine, is automatically suppressed after the coroutine completes. However, the coroutine preserves its cancellation state, and any ''await()'' operation on this coroutine will throw the ''Cancellation''.
 
-> ⚠️ **Warning:** You should not attempt to suppress ''CancellationError'' exception,
+> ⚠️ **Warning:** You should not attempt to suppress ''Cancellation'' exception,
 > as it may cause application malfunctions.
 
 >
-> **Note:** ''CancellationError'' can be extended by the user
+> **Note:** ''Cancellation'' can be extended by the user
 > to add metadata that can be used for debugging purposes.
 >
 
 === Exception override rules ===
 
-**CancellationError** exceptions do not override each other.
+**Cancellation** exceptions do not override each other.
 Multiple ''cancel()'' calls preserve the first cancellation reason:
 
 <code php>
@@ -754,14 +755,14 @@ $coroutine = spawn(function() {
     // some work
 });
 
-$coroutine->cancel(new \Async\CancellationError("First reason"));
-$coroutine->cancel(new \Async\CancellationError("Second reason")); // ignored
+$coroutine->cancel(new \Async\Cancellation("First reason"));
+$coroutine->cancel(new \Async\Cancellation("Second reason")); // ignored
 
-await($coroutine); // throws CancellationError("First reason")
+await($coroutine); // throws Cancellation("First reason")
 </code>
 
-However, if an unhandled exception occurs during cancellation that is **not** inherited from ''CancellationError'',
-it overrides the previous ''CancellationError'':
+However, if an unhandled exception occurs during cancellation that is **not** inherited from ''Cancellation'',
+it overrides the previous ''Cancellation'':
 
 <code php>
 $coroutine = spawn(function() {
@@ -769,9 +770,9 @@ $coroutine = spawn(function() {
     throw new \RuntimeException("boom");
 });
 
-$coroutine->cancel(new \Async\CancellationError("Cancelled"));
+$coroutine->cancel(new \Async\Cancellation("Cancelled"));
 
-await($coroutine); // throws RuntimeException, not CancellationError
+await($coroutine); // throws RuntimeException, not Cancellation
 </code>
 
 === Cancellation policy ===
@@ -786,18 +787,18 @@ it is proposed to delegate the responsibility for such logic to the ''scheduler'
 
 === Self-cancellation ===
 
-A coroutine can attempt to cancel itself by calling its own ''cancel()'' method. However, **nothing happens immediately** - the coroutine continues executing normally until it naturally completes, but is marked as cancelled and stores the ''CancellationError'' as its final result:
+A coroutine can attempt to cancel itself by calling its own ''cancel()'' method. However, **nothing happens immediately** - the coroutine continues executing normally until it naturally completes, but is marked as cancelled and stores the ''Cancellation'' as its final result:
 
 <code php>
 use function Async\spawn;
 
 $coroutine = spawn(function() use (&$coroutine) {
-    $coroutine->cancel(new \Async\CancellationError("Self-cancelled"));
+    $coroutine->cancel(new \Async\Cancellation("Self-cancelled"));
     echo "This still executes\n"; // Will execute
     return "completed";
 });
 
-// await() will throw CancellationError despite normal completion
+// await() will throw Cancellation despite normal completion
 </code>
 
 Self-cancellation only sets the exception as the coroutine result, but does not throw it immediately.
@@ -805,17 +806,17 @@ For example, ''suspend()'' can be called without triggering an exception:
 
 <code php>
 $coroutine = spawn(function() use (&$coroutine) {
-    $coroutine->cancel(new \Async\CancellationError("Self-cancelled"));
+    $coroutine->cancel(new \Async\Cancellation("Self-cancelled"));
     suspend(); // No exception thrown here
     echo "After suspend\n";
 });
 </code>
 
-=== CancellationError handling ===
+=== Cancellation handling ===
 
-In the context of coroutines, it is not recommended to use ''catch \Throwable'' or ''catch CancellationError''.
+In the context of coroutines, it is not recommended to use ''catch \Throwable'' or ''catch Cancellation''.
 
-Since ''CancellationError'' does not extend the ''\Exception'' class,
+Since ''Cancellation'' does not extend the ''\Exception'' class,
 using ''catch \Exception'' is a safe way to handle exceptions,
 and the ''finally'' block is the recommended way to execute finalizing code.
 
@@ -863,9 +864,9 @@ try {
 
     try {
         await($coroutine);
-    } catch (Async\CancellationError $exception) {
+    } catch (Async\Cancellation $exception) {
         // not recommended way to handle exceptions
-        echo "Caught CancellationError\n";
+        echo "Caught Cancellation\n";
         throw $exception;
     }
 } finally {
@@ -876,20 +877,20 @@ try {
 Expected output
 
 <code>
-Caught CancellationError
+Caught Cancellation
 The end
 </code>
 
-=== CancellationError propagation ===
+=== Cancellation propagation ===
 
-The ''CancellationError'' affects **PHP** standard library functions differently.
+The ''Cancellation'' affects **PHP** standard library functions differently.
 If it is thrown inside one of these functions that previously did not throw exceptions,
 the PHP function will terminate with an error.
 
 In other words, the ''cancel()'' mechanism does not alter the existing function contract.
 PHP standard library functions behave as if the operation had failed.
 
-Additionally, the ''CancellationError'' will not appear in ''get_last_error()'',
+Additionally, the ''Cancellation'' will not appear in ''get_last_error()'',
 but it may trigger an ''E_WARNING'' to maintain compatibility with expected behavior
 for functions like ''fwrite'' (if such behavior is specified in the documentation).
 
@@ -916,7 +917,7 @@ which can be an external system and is not covered by this **RFC**.
 The **Graceful Shutdown** mode can also be triggered using the function:
 
 <code php>
-Async\shutdown(?CancellationError $CancellationError = null): void {}
+Async\shutdown(?Cancellation $cancellation = null): void {}
 </code>
 
 from anywhere in the application.
@@ -1052,7 +1053,7 @@ No new constants are introduced.
 Static analyzers will need to implement new checks for safe async/await usage:
 
   - **Deadlock detection:** Identify potential deadlocks in async code
-  - **CancellationError suppression detection:** ''catch (\Throwable)'' that may hide CancellationError
+  - **Cancellation suppression detection:** ''catch (\Throwable)'' that may hide Cancellation
 
 **Libraries Using Fiber:**
 
@@ -1129,6 +1130,8 @@ The code will be split into several PRs upon agreement.
   * Refined Goals section: improved clarity and technical accuracy of core value propositions
   * Function naming compliance with PHP coding standards: renamed `currentCoroutine()` to `current_coroutine()`, `gracefulShutdown()` to `shutdown()`, `getCoroutines()` to `get_coroutines()`
   * Method renaming: `Coroutine::onFinally()` renamed to `Coroutine::finally()` for brevity
+  * Exception renaming: `CancellationError` renamed to `Cancellation` for better naming consistency with derived exceptions (e.g., `TimeoutCancellation`)
+  * Changed `Cancellation` inheritance from `\Error` to `\Throwable` to avoid confusion with regular errors and enable proper exception hierarchy
 
 ==== Version 1.6 (November 2025) ====
   * I/O functions have earned the right to be covered in a separate **RFC**.
@@ -1145,9 +1148,9 @@ The code will be split into several PRs upon agreement.
    * Extended glossary with Awaitable, Suspension, Graceful Shutdown, and Deadlock terms
    * Introduced ''FutureLike'' interface with single-assignment semantics and changed ''await()'' signature to accept ''FutureLike'' instead of Awaitable for type safety
    * Split RFC: Moved Scope and structured concurrency functionality to separate [[rfc:true_async_scope|Scope RFC]]. Base RFC now focuses on core async primitives (coroutines, await, cancellation)
-   * Documented that ''await()'' throws ''CancellationError'' when current coroutine is cancelled
-   * Documented that ''suspend()'' throws ''CancellationError'' when coroutine is cancelled while suspended
-   * Added exception override rules: ''CancellationError'' exceptions don't override each other (first wins), but other exceptions override ''CancellationError''
+   * Documented that ''await()'' throws ''Cancellation'' when current coroutine is cancelled
+   * Documented that ''suspend()'' throws ''Cancellation'' when coroutine is cancelled while suspended
+   * Added exception override rules: ''Cancellation'' exceptions don't override each other (first wins), but other exceptions override ''Cancellation''
    * Clarified self-cancellation behavior with ''suspend()'': self-cancellation only sets result without throwing exception immediately
 
 ==== Version 1.4 (September 2025) ====
