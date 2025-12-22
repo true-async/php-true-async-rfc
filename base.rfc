@@ -39,7 +39,7 @@ The **True Async** project pursues the following goals and values:
 | **Coroutine**              | An executable unit of code that can be suspended and resumed                   | Launching any function in non-blocking mode |
 | **OperationCancelled**     | A mechanism for cooperative canceling coroutine execution                      | Cancellation                                |
 | **Awaitable**              | An interface for objects that can be awaited (may produce different values)    | Awaitable interface                         |
-| **FutureLike**             | An interface for single-assignment awaitables with idempotent reads            | FutureLike interface                        |
+| **Completable**            | An interface for single-assignment awaitables with idempotent reads            | Completable interface                       |
 | **Suspension**             | The state when a coroutine pauses execution and yields control                 | Suspension                                  |
 | **Graceful Shutdown**      | A safe application termination mode that cancels all coroutines                | Graceful Shutdown                           |
 | **Deadlock**               | A condition where no coroutines can progress due to circular dependencies      | Deadlocks                                   |
@@ -54,7 +54,7 @@ This RFC introduces native support for concurrent programming in ''PHP'' through
   * ''await()'' function to wait for coroutine results
   * ''suspend()'' function to yield control between coroutines
   * ''Coroutine'' class representing an executable unit
-  * ''Awaitable'' and ''FutureLike'' interfaces for awaitable objects
+  * ''Awaitable'' and ''Completable'' interfaces for awaitable objects
   * ''OperationCancelled'' exception for cooperative cancellation
   * Graceful shutdown mechanism and deadlock detection
 
@@ -98,11 +98,11 @@ namespace Async {
     function spawn(callable $callable, mixed ...$args): Coroutine {}
 
     /**
-     * Waits for a FutureLike to complete and returns its result
+     * Waits for a Completable to complete and returns its result
      * @throws OperationCancelled if current coroutine is cancelled
      * @throws AwaitCancelledException if $cancellation is triggered
      */
-    function await(FutureLike $awaitable, ?Awaitable $cancellation = null): mixed {}
+    function await(Completable $awaitable, ?Awaitable $cancellation = null): mixed {}
 
     /**
      * Suspends current coroutine and yields control to scheduler
@@ -131,7 +131,7 @@ namespace Async {
     /**
      * Represents a coroutine - an executable unit that can be suspended and resumed
      */
-    final class Coroutine implements FutureLike {
+    final class Coroutine implements Completable {
         /**
          * Request cancellation of this coroutine
          */
@@ -171,7 +171,7 @@ namespace Async {
      * Interface for single-assignment awaitables with idempotent reads
      * Extends Awaitable with completion semantics
      */
-    interface FutureLike extends Awaitable {
+    interface Completable extends Awaitable {
         /**
          * Request cancellation
          */
@@ -320,7 +320,7 @@ provided that they are directly related to concurrency functionality.
 > A ''Coroutine'' is an ''execution container'', transparent to the code,
 > that can be suspended on demand and resumed at any time.
 
-The ''Coroutine'' class implements the ''FutureLike'' interface,
+The ''Coroutine'' class implements the ''Completable'' interface,
 meaning it completes once and preserves its final result (value or exception).
 
 Isolated execution contexts make it possible to switch between coroutines and execute tasks concurrently.
@@ -516,13 +516,13 @@ In the general case, objects implementing the ''Awaitable'' interface can act as
 they can change their state an unlimited number of times.
 This means that multiple calls to ''await <Awaitable>'' may produce different results.
 
-==== FutureLike interface ====
+==== Completable interface ====
 
-The ''FutureLike'' interface extends ''Awaitable'' and represents objects with **single-assignment semantics** — 
+The ''Completable'' interface extends ''Awaitable'' and represents objects with **single-assignment semantics** — 
 they complete once with a result and provide **idempotent reads**.
 
 <code php>
-interface Async\FutureLike extends Async\Awaitable {
+interface Async\Completable extends Async\Awaitable {
     public function cancel(?OperationCancelled $cancellation = null): void;
     public function isCompleted(): bool;
     public function isCancelled(): bool;
@@ -530,7 +530,7 @@ interface Async\FutureLike extends Async\Awaitable {
 </code>
 
 Unlike the base ''Awaitable'' interface which allows multiple state changes,
-''FutureLike'' implements single-assignment semantics:
+''Completable'' implements single-assignment semantics:
 
   * **Single-assignment**: The result is set exactly once (write-once)
   * **Idempotent reads**: Multiple ''await()'' calls always return the same result
@@ -538,11 +538,11 @@ Unlike the base ''Awaitable'' interface which allows multiple state changes,
 ==== Await ====
 
 <code php>
-Async\await(Async\FutureLike $awaitable, ?Async\Awaitable $cancellation = null): mixed
+Async\await(Async\Completable $awaitable, ?Async\Awaitable $cancellation = null): mixed
 </code>
 
 The ''await'' function is used to wait for the completion of another coroutine
-or any object that implements the ''FutureLike'' interface.
+or any object that implements the ''Completable'' interface.
 
 <code php>
 use function Async\spawn;
@@ -1155,6 +1155,7 @@ The code will be split into several PRs upon agreement.
   * Refined Goals section: improved clarity and technical accuracy of core value propositions
   * Function naming compliance with PHP coding standards: renamed `currentCoroutine()` to `current_coroutine()`, `gracefulShutdown()` to `shutdown()`, `getCoroutines()` to `get_coroutines()`
   * Method renaming: `Coroutine::onFinally()` renamed to `Coroutine::finally()` for brevity
+  * Interface renaming: `FutureLike` renamed to `Completable` (66% community vote) for clearer semantics - represents objects that can be completed
   * Exception renaming: `CancellationError` → `Cancellation` → `OperationCancelled` (final) for better semantics and avoiding conflicts with cancellation tokens
   * Moved `OperationCancelled` to **root namespace** (`\OperationCancelled`) as it's a fundamental PHP mechanism, not Async-specific
   * Changed `OperationCancelled` inheritance from `\Error` to `\Throwable` directly, following Python's `CancelledError` pattern (BaseException since 3.8)
@@ -1166,14 +1167,14 @@ The code will be split into several PRs upon agreement.
   * Rename `DeadlockError` to `DeadlockException`
 
 ==== Version 1.5 (October 2025) ====
-   * Added ''FutureLike'' interface methods: ''cancel()'', ''isCompleted()'', ''isCancelled()''
+   * Added ''Completable'' interface methods: ''cancel()'', ''isCompleted()'', ''isCancelled()''
    * Renamed ''Coroutine::isFinished()'' to ''Coroutine::isCompleted()''
    * Clarified exit/die behavior: always triggers Graceful Shutdown mode regardless of where called
    * Added rationale for "Cancellable by design" policy: explains why default cancellability reduces code complexity for read-heavy PHP workloads
    * RFC structure improvements: reorganized Cancellation section with proper subsections hierarchy
    * Moved "Coroutine lifetime" as subsection under Coroutine section
    * Extended glossary with Awaitable, Suspension, Graceful Shutdown, and Deadlock terms
-   * Introduced ''FutureLike'' interface with single-assignment semantics and changed ''await()'' signature to accept ''FutureLike'' instead of Awaitable for type safety
+   * Introduced ''Completable'' interface with single-assignment semantics and changed ''await()'' signature to accept ''Completable'' instead of Awaitable for type safety
    * Split RFC: Moved Scope and structured concurrency functionality to separate [[rfc:true_async_scope|Scope RFC]]. Base RFC now focuses on core async primitives (coroutines, await, cancellation)
    * Documented that ''await()'' throws ''OperationCancelled'' when current coroutine is cancelled
    * Documented that ''suspend()'' throws ''OperationCancelled'' when coroutine is cancelled while suspended
