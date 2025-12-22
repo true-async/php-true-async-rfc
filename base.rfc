@@ -67,7 +67,8 @@ This **RFC** defines the general rules for all input/output functions,
 but the exact behavior of specific I/O functions will be described in separate RFCs if needed.
 
 **What becomes incompatible:**
-  * **Fiber API cannot be used together with True Async** - attempting to create a Fiber while True Async is active throws ''FiberError''
+  * **Destructor execution context:** destructors no longer execute in Fibers, always run in scheduler context - code relying on destructor coroutine/Fiber context will break
+  * New root namespace class `\OperationCancelled` may conflict with existing userland code
 
 === API Overview ===
 
@@ -208,6 +209,19 @@ namespace Async {
     class DeadlockException extends Exception {
         public function __construct(string $message = "", int $code = 0, ?\Throwable $previous = null) {}
     }
+}
+
+// === Fiber Integration ===
+
+/**
+ * Extension to PHP's native Fiber class for True Async integration
+ */
+class Fiber {
+    /**
+     * Returns the coroutine associated with this fiber (when running in async context)
+     * @return Async\Coroutine|null Returns null if fiber not running in async context
+     */
+    public function getCoroutine(): ?\Async\Coroutine {}
 }
 
 ?>
@@ -630,6 +644,225 @@ try {
 }
 </code>
 
+==== Fiber Support ====
+
+**Fibers** are a type of **coroutine** that work as stackful generators with symmetric behavior.
+
+**Key principles:**
+  * **Fiber** is a coroutine that can be suspended and resumed at any time (see ''Async\suspend()''). Fibers fully inherit coroutine behavior.
+  * ''Fiber::start()'' and ''Fiber::resume()'' **block** the calling coroutine
+  * The methods ''Fiber::start()'' and ''Fiber::resume()'' return control to the coroutine from which they were called.
+  * ''Fibers'' can be suspended and resumed multiple times
+  * Each ''Fiber'' has an associated coroutine (accessible via ''Fiber::getCoroutine()'')
+
+=== Basic Usage ===
+
+<code php>
+use function Async\spawn;
+use function Async\await;
+
+$coroutine = spawn(function() {
+    // Create a fiber inside coroutine
+    $fiber = new Fiber(function() {
+        echo "Fiber executing\n";
+        return "fiber result";
+    });
+
+    // start() blocks until fiber completes or suspends
+    $result = $fiber->start();
+    echo "Result: $result\n";
+});
+
+await($coroutine);
+</code>
+
+=== Suspend and Resume ===
+
+<code php>
+$coroutine = spawn(function() {
+    $fiber = new Fiber(function() {
+        echo "Before suspend\n";
+        $value = Fiber::suspend("suspended value");
+        echo "Resumed with: $value\n";
+        return "done";
+    });
+
+    $suspended = $fiber->start();  // Returns "suspended value"
+    echo "Fiber suspended with: $suspended\n";
+
+    $result = $fiber->resume("resume value");  // Returns "done"
+    echo "Fiber returned: $result\n";
+});
+
+await($coroutine);
+</code>
+
+Fibers maintain symmetric behavior **relative to the coroutine where they were created**.
+This means that if Fibers are created in two different coroutines,
+they are not required to be symmetric with each other — only within their own coroutine's context.
+
+<code php>
+// Two coroutines, each with its own Fiber
+$c1 = spawn(function() {
+    $fiber = new Fiber(function() {
+        echo "C1-Fiber: step 1\n";
+        Fiber::suspend();
+        echo "C1-Fiber: step 2\n";
+    });
+
+    $fiber->start();
+    echo "C1: between calls\n";
+    $fiber->resume();
+});
+
+$c2 = spawn(function() {
+    $fiber = new Fiber(function() {
+        echo "C2-Fiber: step 1\n";
+        Fiber::suspend();
+        echo "C2-Fiber: step 2\n";
+    });
+
+    $fiber->start();
+    echo "C2: between calls\n";
+    $fiber->resume();
+});
+
+await($c1);
+await($c2);
+
+// Each Fiber is symmetric only within its own coroutine
+// They execute independently and don't interfere with each other
+</code>
+
+=== Fiber Ownership ===
+
+Coroutines typically don't just stop execution arbitrarily, they **await I/O events**.
+Fibers, however, can remain in a **"suspended state"** waiting for someone to call ''Fiber::resume()''.
+This is a fundamental distinction.
+
+**Ownership model:**
+  * Coroutines belong to the **Scheduler**, which manages and tracks them
+  * Fibers belong to **objects/variables** that hold their reference
+  * While the object is alive, the ''Fiber'' can remain in ''suspend'' state indefinitely
+  * The object essentially **"holds"** the Fiber in suspended state
+  * When the object is destroyed (reference count reaches zero), the Fiber's coroutine seeks to terminate execution
+
+<code php>
+$coroutine = spawn(function() {
+    $fiber = new Fiber(function() {
+        echo "Step 1\n";
+        Fiber::suspend();  // Fiber waits for explicit resume
+        echo "Step 2\n";
+        Fiber::suspend();  // Still waiting
+        echo "Step 3\n";
+    });
+
+    $fiber->start();      // Execute until first suspend
+
+    // $fiber variable OWNS the suspended fiber
+    // The Fiber waits here, not in scheduler queue
+    $fiber->resume();     // Explicit resume
+    $fiber->resume();     // Another explicit resume
+
+    // When $fiber goes out of scope, Fiber's coroutine terminates
+});
+</code>
+
+**Fiber destruction behavior:**
+
+When the ''Fiber'' object is destroyed (reference count reaches zero),
+the Fiber's coroutine resumes in a **special mode** where only ''finally'' blocks are executed.
+This behavior matches the current ''Fiber'' termination semantics and differs from explicit cancellation.
+
+<code php>
+$coroutine = spawn(function() {
+    $fiber = new Fiber(function() {
+        try {
+            echo "Step 1\n";
+            Fiber::suspend();
+            echo "Step 2 - never executes\n";  // Won't execute
+        } finally {
+            echo "Cleanup in finally\n";  // Will execute
+        }
+    });
+
+    $fiber->start();
+
+    // $fiber goes out of scope here
+    // Fiber's coroutine resumes only to execute finally blocks
+});
+</code>
+
+This ensures proper cleanup of resources when Fiber objects are garbage collected,
+while preventing execution of normal code paths.
+
+=== Accessing Fiber's Coroutine ===
+
+<code php>
+$coroutine = spawn(function() {
+    $fiber = new Fiber(function() {
+        Fiber::suspend();
+        return "done";
+    });
+
+    $fiber->start();
+
+    // Get fiber's associated coroutine
+    $fiberCoroutine = $fiber->getCoroutine();
+
+    echo "Coroutine ID: " . $fiberCoroutine->getId() . "\n";
+    echo "Is suspended: " . ($fiberCoroutine->isSuspended() ? "yes" : "no") . "\n";
+
+    // Can cancel fiber via its coroutine
+    $fiberCoroutine->cancel(new \OperationCancelled("cancelled"));
+});
+</code>
+
+The ''Fiber::getCoroutine()'' method returns the associated coroutine even **after the Fiber has terminated**. This allows inspection of the Fiber's final state and access to its result or exception.
+
+=== Deadlock Resolution for Fibers ===
+
+True Async implements **special deadlock detection** for Fibers that differs from regular coroutines:
+
+**Detection mechanism:**
+  * When the scheduler detects potential deadlock, it counts how many coroutines are Fiber-coroutines in **YIELD state**
+  * YIELD state means the Fiber has transferred control back to its parent coroutine via ''Fiber::suspend()''
+  * The Fiber is waiting for explicit ''Fiber::resume()'' call
+
+**Resolution strategy:**
+
+If **all remaining coroutines** are Fiber-coroutines in YIELD state, the scheduler performs **graceful cancellation** instead of throwing ''DeadlockException''. This happens because:
+  * Suspended Fibers belong to their variables/objects, not to the scheduler
+  * They are waiting for explicit resume, which is a valid suspended state
+  * This is not a true deadlock — it's intentional symmetric suspension
+
+**Behavior difference:**
+  * **Regular coroutines in deadlock**: Receive ''DeadlockException''
+  * **Only Fiber-coroutines suspended**: Graceful cancellation without exception
+
+<code php>
+use function Async\spawn;
+use function Async\await;
+
+$c = spawn(function() {
+    $fiber = new Fiber(function() {
+        Fiber::suspend();  // Waiting for resume
+        // If no resume happens and this is the only coroutine left,
+        // graceful cancellation occurs instead of DeadlockException
+    });
+
+    $fiber->start();
+
+    // Coroutine ends without resuming fiber
+    // This triggers graceful cancellation, not deadlock error
+});
+
+await($c);
+// No DeadlockException thrown
+</code>
+
+This design recognizes that suspended Fibers represent intentional state, not erroneous deadlock conditions.
+
 ==== Edge Behavior ====
 
 The use of ''spawn''/''await''/''suspend'' is allowed in any part of a PHP program.
@@ -905,7 +1138,7 @@ When an **unhandled exception** occurs in a **Coroutine**
 the **Graceful Shutdown** mode is initiated.
 Its goal is to safely terminate the application.
 
-**Graceful Shutdown** cancels all coroutines in ''globalScope'',
+**Graceful Shutdown** cancels all coroutines,
 then continues execution without restrictions, allowing the application to shut down naturally.
 **Graceful Shutdown** does not prevent the creation of new coroutines or close connection descriptors.
 However, if another unhandled exception is thrown during the **Graceful Shutdown** process,
@@ -1014,34 +1247,71 @@ class OperationCancelled extends \Throwable {}
   * This is similar to how PHP 7.0 introduced ''Error'' class - rare but possible conflict
   * Mitigation: Check for existing ''OperationCancelled'' class before upgrading to PHP 8.6+
 
-==== Fiber API Incompatibility ====
+==== Fiber API Extension ====
 
-Simultaneous use of the **True Async API** and the **Fiber API** is not possible,
-as Fibers and coroutines manage the same resources (execution context, stacks) in different ways:
-
-^ API        ^ Execution model                  ^ API level                                                ^
-| **Fibers** | Symmetric execution contexts     | Low-level API where the programmer explicitly controls switching |
-| **TrueAsync** | Switches contexts in an arbitrary order | High-level API where the programmer does not manage the switching |
-
-Thus, these two APIs are incompatible not only at the technical level but also at the logical level.
-
-If you try to create a ''Fiber'' inside a coroutine, you will get a ''FiberError'':
+This RFC extends PHP's native **''Fiber''** class with new method:
 
 <code php>
-use function Async\spawn;
-
-spawn(function() {
-    // This will throw FiberError
-    $fiber = new Fiber(function() {
-        echo "This won't work\n";
-    });
-});
+class Fiber {
+    public function getCoroutine(): ?\Async\Coroutine {}
+}
 </code>
 
-Error message: "Cannot create a fiber while an True Async is active"
+**BC Impact:**
+  * **No breaking changes** - only adds new method to existing Fiber class
+  * Fibers continue to work as before when True Async is not active
+  * When True Async is active, Fibers get additional functionality
+  * ''getCoroutine()'' returns ''null'' when fiber runs outside async context
 
-  - If ''new Fiber()'' is called first, subsequent ''Async\spawn'' calls will fail
-  - If ''Async\spawn'' is called first, any attempt to create a **Fiber** throws ''FiberError''
+**Compatibility:**
+  * Existing Fiber-based libraries continue to work without modifications
+  * Libraries can optionally detect async context via ''getCoroutine() !== null''
+  * No changes needed to existing Fiber usage patterns
+
+==== Destructor Execution Context ====
+
+**Critical change:** Object destructors can **no longer assume** which coroutine context they execute in:
+
+<code php>
+class Resource {
+    public function __destruct() {
+        // WRONG: Cannot assume we're in the same coroutine where object was created
+        // WRONG: Cannot assume we're in any specific Fiber context
+
+        // Destructors now execute in scheduler context, NOT in Fibers!
+    }
+}
+</code>
+
+**Key implications:**
+  * Destructors are **never executed inside Fibers** — they run in the scheduler's context
+  * Code that relied on destructor executing in specific coroutine/Fiber will break
+  * Destructors should not depend on coroutine-local state or Fiber context
+  * Use explicit cleanup methods (''close()'', ''dispose()'') for context-dependent cleanup
+
+**Migration:**
+<code php>
+// Before (BREAKS):
+class AsyncResource {
+    public function __destruct() {
+        // Assumed to run in same coroutine
+        $this->cleanup();
+    }
+}
+
+// After (CORRECT):
+class AsyncResource {
+    public function close() {
+        // Explicit cleanup in known context
+        $this->cleanup();
+    }
+
+    public function __destruct() {
+        // Only context-independent cleanup here
+        // No coroutine/Fiber assumptions
+    }
+}
+</code>
 
 ===== Proposed PHP Version(s) =====
 
@@ -1082,8 +1352,8 @@ Static analyzers will need to implement new checks for safe async/await usage:
 
 **Libraries Using Fiber:**
 
-Libraries that use the ''Fiber API'' will continue to work as expected,
-but cannot be used simultaneously with ''True Async''.
+Libraries that use the ''Fiber API'' will continue to work as expected.
+There may be behavior changes related to transparent asynchrony.
 
 ==== php.ini Defaults ====
 
@@ -1152,6 +1422,7 @@ The code will be split into several PRs upon agreement.
 ===== Changelog =====
 
 ==== Version 1.7 (December 2025) ====
+  * **Fiber integration:** added `Fiber::getCoroutine()` method, ownership model, deadlock resolution; BC BREAK: destructors run in scheduler context, not in Fibers
   * Refined Goals section: improved clarity and technical accuracy of core value propositions
   * Function naming compliance with PHP coding standards: renamed `currentCoroutine()` to `current_coroutine()`, `gracefulShutdown()` to `shutdown()`, `getCoroutines()` to `get_coroutines()`
   * Method renaming: `Coroutine::onFinally()` renamed to `Coroutine::finally()` for brevity
