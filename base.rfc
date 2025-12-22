@@ -1396,6 +1396,13 @@ Links to external references, discussions or RFCs
 
 		* **TrueAsync API RFC** - https://github.com/true-async/php-true-async-rfc/blob/main/true-async-api-rfc.md
 
+Community discussions:
+
+   * **Memory model and its impact on refactoring** - https://github.com/true-async/php-true-async-rfc/discussions/8
+   * **Async use cases** - https://github.com/true-async/php-true-async-rfc/discussions/9
+   * **Report on the feasibility of memory separation for static and global variables** - https://github.com/true-async/php-true-async-rfc/discussions/12
+   * **What if WordPress could be launched as a stateful application?** - https://github.com/true-async/php-true-async-rfc/discussions/16
+
 Additional links:
 
    * [[https://github.com/EdmondDantes/php-true-async-rfc/blob/main/comparison.md|Comparison of concurrency models in programming languages]]
