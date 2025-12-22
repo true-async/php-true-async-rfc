@@ -99,18 +99,18 @@ namespace Async {
     /**
      * Returns the currently executing coroutine
      */
-    function currentCoroutine(): Coroutine {}
+    function current_coroutine(): Coroutine {}
 
     /**
      * Initiates graceful shutdown of the application
      */
-    function gracefulShutdown(?CancellationError $cancellationError = null): void {}
+    function shutdown(?CancellationError $cancellationError = null): void {}
 
     /**
      * Returns array of all coroutines in the application
      * @return Coroutine[]
      */
-    function getCoroutines(): array {}
+    function get_coroutines(): array {}
 
     // === Core Classes ===
 
@@ -126,7 +126,7 @@ namespace Async {
         /**
          * Register a callback to be executed when coroutine completes
          */
-        public function onFinally(callable $callback): void {}
+        public function finally(callable $callback): void {}
 
         // State check methods
         public function isStarted(): bool {}
@@ -630,7 +630,7 @@ The use of ''spawn''/''await''/''suspend'' is allowed in any part of a PHP progr
 This is possible because the PHP script entry point forms the **main execution thread**,
 which is also considered a coroutine.
 
-As a result, operations like ''suspend'' and ''currentCoroutine()'' will behave the same way as in other cases.
+As a result, operations like ''suspend'' and ''current_coroutine()'' will behave the same way as in other cases.
 
 Asynchronous code will work as expected, including inside ''register_shutdown_function''.
 
@@ -668,12 +668,12 @@ class AsyncResource {
 
 Destructor execution is **deferred** until the async context allows it, and destructors run **asynchronously** like other async code.
 
-==== onFinally ====
+==== finally ====
 
-The ''onFinally'' method allows defining a callback function that will be invoked when a coroutine completes.
+The ''finally'' method allows defining a callback function that will be invoked when a coroutine completes.
 This method can be considered a direct analog of ''defer'' in Go.
 
-> ⚠️ **Important:** All ''onFinally'' handlers are executed concurrently in separate coroutines.
+> ⚠️ **Important:** All ''finally'' handlers are executed concurrently in separate coroutines.
 > This ensures that slow handlers do not block the completion of other handlers or the main execution flow.
 
 For ''Coroutine'', the callback receives the completed coroutine as a parameter:
@@ -689,20 +689,20 @@ function task(): void
 
 $coroutine = spawn('task');
 
-$coroutine->onFinally(function (Coroutine $completedCoroutine) {
+$coroutine->finally(function (Coroutine $completedCoroutine) {
     echo "Coroutine " . spl_object_id($completedCoroutine) . " completed\n";
 });
 
 </code>
 
-The ''onFinally'' semantics are most commonly used to release resources,
+The ''finally'' semantics are most commonly used to release resources,
 serving as a shorter alternative to ''try-finally'' blocks:
 
 <code php>
 function task(): void
 {
     $file = fopen('file.txt', 'r');
-    onFinally(fn() => fclose($file));
+    finally(fn() => fclose($file));
 
     throw new Exception("Task 1");
 }
@@ -916,7 +916,7 @@ which can be an external system and is not covered by this **RFC**.
 The **Graceful Shutdown** mode can also be triggered using the function:
 
 <code php>
-Async\gracefulShutdown(?CancellationError $CancellationError = null): void {}
+Async\shutdown(?CancellationError $CancellationError = null): void {}
 </code>
 
 from anywhere in the application.
@@ -986,7 +986,7 @@ about what the coroutine is waiting for, if it is in a waiting state.
 
 The format of this array depends on the implementation of the **Scheduler** and the **Reactor**.
 
-The ''Async\getCoroutines()'' method returns an array of all coroutines in the application.
+The ''Async\get_coroutines()'' method returns an array of all coroutines in the application.
 
 ===== Backward Incompatible Changes =====
 
@@ -1127,6 +1127,8 @@ The code will be split into several PRs upon agreement.
 
 ==== Version 1.7 (December 2025) ====
   * Refined Goals section: improved clarity and technical accuracy of core value propositions
+  * Function naming compliance with PHP coding standards: renamed `currentCoroutine()` to `current_coroutine()`, `gracefulShutdown()` to `shutdown()`, `getCoroutines()` to `get_coroutines()`
+  * Method renaming: `Coroutine::onFinally()` renamed to `Coroutine::finally()` for brevity
 
 ==== Version 1.6 (November 2025) ====
   * I/O functions have earned the right to be covered in a separate **RFC**.
