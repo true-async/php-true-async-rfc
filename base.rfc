@@ -1,6 +1,6 @@
 ====== PHP True Async ======
 
-  * Version: 1.6
+  * Version: 1.7
   * Date: 2025-11-20
   * Author: Edmond [HT], edmondifthen@proton.me
   * Status: Under discussion
@@ -19,15 +19,15 @@ The goal of this **RFC** is to establish a standard for writing concurrent code 
 
 The **True Async** project pursues the following goals and values:
 
-  * From a PHP developer's perspective, the **main value** of this implementation is that they DO NOT NEED to change existing code (or if changes are required, they should be minimal) to enable concurrency. Unlike explicit async models, this approach lets developers reuse existing synchronous code inside coroutines without modification.
+  * From a PHP developer's perspective, the **main value** is **minimizing code changes** required to enable concurrency. Unlike explicit async models (where async/await keywords must be added everywhere), this approach allows reusing existing synchronous code inside coroutines with minimal modifications, provided that developers account for concurrency considerations such as shared mutable state.
 
-  * Code that was originally written and intended to run outside of a Coroutine must work **EXACTLY THE SAME** inside a Coroutine without modifications. (provided that the programmer accounts for shared access to mutable memory)
+  * Code running inside a Coroutine **maintains the illusion of sequential execution**. Developers can write straightforward, sequential logic without explicit yield points or async markers, while the runtime handles concurrency transparently.
 
-  * A PHP developer should not have to think about how Coroutine switch and should not need to manage their switching—except in special cases where they consciously choose to intervene in this logic.
+  * Coroutine switching is managed automatically by the runtime. Developers do not need to manually control when and how coroutines switch, except when explicitly choosing to intervene (e.g., using `suspend()`).
 
-  * If there is existing code or a familiar style, such as AMPHP interfaces, Go coroutines, Swoole API, and others, it is best to use what is most recognizable to a broad range of developers.
+  * The API design prioritizes familiarity and adopts patterns recognizable to developers from existing ecosystems (AMPHP, Go coroutines, Swoole).
 
-  * The goal is to find a balance between flexibility and simplicity. On one hand, the implementation should allow leveraging existing solutions without requiring external libraries. On the other hand, it should avoid unnecessary complexity. Many design choices in this implementation are driven by the desire to free developers from concerns about compatibility with "external libraries" in favor of a standardized approach.
+  * The design balances flexibility and simplicity by providing essential concurrency primitives in the language core, eliminating dependency on external libraries while avoiding unnecessary complexity.
 
 ===== Proposal =====
 
@@ -1124,6 +1124,9 @@ https://github.com/true-async
 The code will be split into several PRs upon agreement.
 
 ===== Changelog =====
+
+==== Version 1.7 (December 2025) ====
+  * Refined Goals section: improved clarity and technical accuracy of core value propositions
 
 ==== Version 1.6 (November 2025) ====
   * I/O functions have earned the right to be covered in a separate **RFC**.
