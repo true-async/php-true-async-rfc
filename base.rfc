@@ -37,7 +37,7 @@ The **True Async** project pursues the following goals and values:
 
 | Term                       | Description                                                                    | Section                                     |
 | **Coroutine**              | An executable unit of code that can be suspended and resumed                   | Launching any function in non-blocking mode |
-| **OperationCancelled**     | Exception thrown when an operation is cancelled cooperatively                  | OperationCancelled                          |
+| **OperationCancelled**     | A mechanism for cooperative canceling coroutine execution                      | Cancellation                                |
 | **Awaitable**              | An interface for objects that can be awaited (may produce different values)    | Awaitable interface                         |
 | **FutureLike**             | An interface for single-assignment awaitables with idempotent reads            | FutureLike interface                        |
 | **Suspension**             | The state when a coroutine pauses execution and yields control                 | Suspension                                  |
@@ -148,7 +148,7 @@ namespace Async {
         public function isQueued(): bool {}
         public function isSuspended(): bool {}
         public function isCancelled(): bool {}
-        public function isOperationCancelledRequested(): bool {}
+        public function isCancellationRequested(): bool {}
         public function isCompleted(): bool {}
 
         // Debug methods
@@ -364,7 +364,7 @@ This state diagram illustrates the lifecycle of a coroutine, showing how it tran
 | ''isQueued(): bool''                | Returns ''true'' if the coroutine is queued.               | ''Queued''                       |
 | ''isSuspended(): bool''             | Returns ''true'' if the coroutine is suspended.            | ''Suspended''                    |
 | ''isCancelled(): bool''             | Returns ''true'' if the coroutine has been cancelled.      | ''Cancelled''                    |
-| ''isOperationCancelledRequested(): bool'' | Returns ''true'' if cancellation has been requested.       | ''Pending OperationCancelled''         |
+| ''isCancellationRequested(): bool'' | Returns ''true'' if cancellation has been requested.       | ''Pending Cancellation''         |
 | ''isCompleted(): bool''             | Returns ''true'' if the coroutine has completed execution. | ''Completed'', ''Cancelled''     |
 
 ==== Spawn function ====
