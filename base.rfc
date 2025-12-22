@@ -872,12 +872,7 @@ The ''Fiber::getCoroutine()'' method returns the associated coroutine even **aft
 
 === Deadlock Resolution for Fibers ===
 
-True Async implements **special deadlock detection** for Fibers that differs from regular coroutines:
-
-**Detection mechanism:**
-  * When the scheduler detects potential deadlock, it counts how many coroutines are Fiber-coroutines in **YIELD state**
-  * YIELD state means the Fiber has transferred control back to its parent coroutine via ''Fiber::suspend()''
-  * The Fiber is waiting for explicit ''Fiber::resume()'' call
+The ''Scheduler'' takes the special ''YIELD'' state into account when detecting a deadlock.
 
 **Resolution strategy:**
 
