@@ -1385,6 +1385,15 @@ Static analyzers will need to implement new checks for safe async/await usage:
 Libraries that use the ''Fiber API'' will continue to work as expected.
 There may be behavior changes related to transparent asynchrony.
 
+**Application Servers:**
+
+**FrankenPHP + TrueAsync** integration demonstrates how an application server can handle
+**multiple concurrent HTTP requests in a single thread** using coroutines.
+Each incoming request spawns a lightweight coroutine,
+enabling I/O multiplexing without blocking.
+
+Example: ''https://github.com/dunglas/frankenphp/blob/trueasync/examples/async_entrypoint.php''
+
 ==== php.ini Defaults ====
 
 	No new php.ini directives are introduced.
