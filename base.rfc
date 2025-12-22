@@ -1433,22 +1433,22 @@ The code will be split into several PRs upon agreement.
 ===== Changelog =====
 
 ==== Version 1.7 (December 2025) ====
-  * **Fiber integration:** added `Fiber::getCoroutine()` method, ownership model, deadlock resolution; BC BREAK: destructors run in scheduler context, not in Fibers
-  * Added Coroutine methods: `getId()`, `getResult()`, `getException()`, `getTrace()`
+  * **Fiber integration:** added ''Fiber::getCoroutine()'' method, ownership model, deadlock resolution; BC BREAK: destructors run in scheduler context, not in Fibers
+  * Added Coroutine methods: ''getId()'', ''getResult()'', ''getException()'', ''getTrace()''
   * Refined Goals section: improved clarity and technical accuracy of core value propositions
-  * Function naming compliance with PHP coding standards: renamed `currentCoroutine()` to `current_coroutine()`, `gracefulShutdown()` to `shutdown()`, `getCoroutines()` to `get_coroutines()`
-  * Method renaming: `Coroutine::onFinally()` renamed to `Coroutine::finally()` for brevity
-  * Interface renaming: `FutureLike` renamed to `Completable` (66% community vote) for clearer semantics; represents objects that can be completed
-  * Exception renaming: `CancellationError` → `Cancellation` for better semantics
-  * Moved `Cancellation` to **root namespace** (`\Cancellation`) as it's a fundamental PHP mechanism, not Async-specific
-  * Changed `Cancellation` inheritance from `\Error` to `\Throwable` directly, following Python's `CancelledError` pattern (BaseException since 3.8)
+  * Function naming compliance with PHP coding standards: renamed ''currentCoroutine()'' to ''current_coroutine()'', ''gracefulShutdown()'' to ''shutdown()'', ''getCoroutines()'' to ''get_coroutines()''
+  * Method renaming: ''Coroutine::onFinally()'' renamed to ''Coroutine::finally()'' for brevity
+  * Interface renaming: ''FutureLike'' renamed to ''Completable'' (66% community vote) for clearer semantics; represents objects that can be completed
+  * Exception renaming: ''CancellationError'' → ''Cancellation'' for better semantics
+  * Moved ''Cancellation'' to **root namespace** (''\Cancellation'') as it's a fundamental PHP mechanism, not Async-specific
+  * Changed ''Cancellation'' inheritance from ''\Error'' to ''\Throwable'' directly, following Python's ''CancelledError'' pattern (BaseException since 3.8)
   * Added backward compatibility notes about new root namespace class
-  * Rename `DeadlockException` to `DeadlockCancellation`
+  * Rename ''DeadlockException'' to ''DeadlockCancellation''
 
 ==== Version 1.6 (November 2025) ====
   * I/O functions have earned the right to be covered in a separate **RFC**.
   * Add basic exception Async\Exception according to the https://github.com/php/policies/blob/main/coding-standards-and-naming.rst#throwables
-  * Rename `DeadlockError` to `DeadlockException`
+  * Rename ''DeadlockError'' to ''DeadlockException''
 
 ==== Version 1.5 (October 2025) ====
    * Added ''Completable'' interface methods: ''cancel()'', ''isCompleted()'', ''isCancelled()''
