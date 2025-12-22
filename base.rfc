@@ -348,13 +348,13 @@ This state diagram illustrates the lifecycle of a coroutine, showing how it tran
 	- **Running** – The coroutine is actively executing.
 	- **Suspended** – Execution is paused, usually waiting for a result or I/O.
 	- **Completed** – The coroutine has finished (Successfully or with an exception).
-	- **Pending OperationCancelled** – A cancellation was requested; the coroutine is cleaning up.
+	- **Pending Cancellation** – A cancellation was requested; the coroutine is cleaning up.
 
 **Key Transitions:**
 	- ''spawn'' moves a coroutine from **Created** to **Running**.
 	- ''suspend'' and ''resume'' move it between **Running** and **Suspended**.
 	- ''return/exit'' ends it in **Completed**.
-	- ''cancel()'' initiates cancellation from **Running** or **Suspended**, leading to **Pending OperationCancelled**, and finally **Complete** with **Cancelled** flag.
+	- ''cancel()'' initiates cancellation from **Running** or **Suspended**, leading to **Pending Cancellation**, and finally **Complete** with **Cancelled** flag.
 
 === ''Coroutine'' state check methods ===
 
@@ -716,7 +716,7 @@ function task(): void
 spawn('task');
 </code>
 
-==== OperationCancelled ====
+==== Cancellation ====
 
 The ''cancellation'' operation allows interrupting the execution of a coroutine that is in a waiting state.
 A cancelled coroutine is **resumed** with a special ''OperationCancelled'' exception and continues its execution.
@@ -780,7 +780,7 @@ $coroutine->cancel(new \OperationCancelled("Cancelled"));
 await($coroutine); // throws RuntimeException, not OperationCancelled
 </code>
 
-=== OperationCancelled policy ===
+=== Cancellation policy ===
 
 This **RFC** intentionally does not define rules for tracking the execution time of cancelled coroutines.
 The reason is that cancellation operations may be long-running—for example,
@@ -817,7 +817,7 @@ $coroutine = spawn(function() use (&$coroutine) {
 });
 </code>
 
-=== OperationCancelled handling ===
+=== Cancellation handling ===
 
 In the context of coroutines, it is not recommended to use ''catch \Throwable'' or ''catch OperationCancelled''.
 
@@ -886,7 +886,7 @@ Caught OperationCancelled
 The end
 </code>
 
-=== OperationCancelled propagation ===
+=== Cancellation propagation ===
 
 The ''OperationCancelled'' affects **PHP** standard library functions differently.
 If it is thrown inside one of these functions that previously did not throw exceptions,
@@ -1078,7 +1078,7 @@ No new constants are introduced.
 Static analyzers will need to implement new checks for safe async/await usage:
 
   - **Deadlock detection:** Identify potential deadlocks in async code
-  - **OperationCancelled suppression detection:** ''catch (\Throwable)'' that may hide OperationCancelled
+  - **Cancellation suppression detection:** ''catch (\Throwable)'' that may hide OperationCancelled
 
 **Libraries Using Fiber:**
 
@@ -1170,7 +1170,7 @@ The code will be split into several PRs upon agreement.
    * Renamed ''Coroutine::isFinished()'' to ''Coroutine::isCompleted()''
    * Clarified exit/die behavior: always triggers Graceful Shutdown mode regardless of where called
    * Added rationale for "Cancellable by design" policy: explains why default cancellability reduces code complexity for read-heavy PHP workloads
-   * RFC structure improvements: reorganized OperationCancelled section with proper subsections hierarchy
+   * RFC structure improvements: reorganized Cancellation section with proper subsections hierarchy
    * Moved "Coroutine lifetime" as subsection under Coroutine section
    * Extended glossary with Awaitable, Suspension, Graceful Shutdown, and Deadlock terms
    * Introduced ''FutureLike'' interface with single-assignment semantics and changed ''await()'' signature to accept ''FutureLike'' instead of Awaitable for type safety
