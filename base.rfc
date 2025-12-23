@@ -1357,7 +1357,7 @@ There may be behavior changes related to transparent asynchrony.
 Each incoming request spawns a lightweight coroutine,
 enabling I/O multiplexing without blocking.
 
-Example: ''https://github.com/dunglas/frankenphp/blob/trueasync/examples/async_entrypoint.php''
+Example: ''https://github.com/true-async/frankenphp/blob/true-async/examples/async_entrypoint.php''
 
 ==== php.ini Defaults ====
 
