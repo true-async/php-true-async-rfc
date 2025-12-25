@@ -1,7 +1,7 @@
 ====== PHP True Async ======
 
   * Version: 1.7
-  * Date: 2025-12-22
+  * Date: 2025-12-25
   * Author: Edmond [HT], edmondifthen@proton.me
   * Status: Under discussion
   * First Published at: http://wiki.php.net/rfc/true_async
@@ -1434,7 +1434,7 @@ The code will be split into several PRs upon agreement.
 ===== Changelog =====
 
 ==== Version 1.7 (December 2025) ====
-  * **Fiber integration:** added ''Fiber::getCoroutine()'' method, ownership model, deadlock resolution; BC BREAK: destructors run in scheduler context, not in Fibers
+  * **Fiber integration:** added ''Fiber::getCoroutine()'' method, ownership model, deadlock resolution
   * Added Coroutine methods: ''getId()'', ''getResult()'', ''getException()'', ''getTrace()''
   * Refined Goals section: improved clarity and technical accuracy of core value propositions
   * Function naming compliance with PHP coding standards: renamed ''currentCoroutine()'' to ''current_coroutine()'', ''gracefulShutdown()'' to ''shutdown()'', ''getCoroutines()'' to ''get_coroutines()''
