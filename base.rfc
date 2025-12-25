@@ -23,7 +23,7 @@ The **True Async** project pursues the following goals and values:
 
   * Code running inside a Coroutine **maintains the illusion of sequential execution**. Developers can write straightforward, sequential logic without explicit yield points or async markers, while the runtime handles concurrency transparently.
 
-  * Coroutine switching is managed automatically by the runtime. Developers do not need to manually control when and how coroutines switch, except when explicitly choosing to intervene (e.g., using `suspend()`).
+  * Coroutine switching is managed automatically by the runtime. Developers do not need to manually control when and how coroutines switch, except when explicitly choosing to intervene (e.g., using ''suspend()'').
 
   * The API design prioritizes familiarity and adopts patterns recognizable to developers from existing ecosystems (AMPHP, Go coroutines, Swoole).
 
@@ -67,7 +67,7 @@ This **RFC** defines the general rules for all input/output functions,
 but the exact behavior of specific I/O functions will be described in separate RFCs if needed.
 
 **What becomes incompatible:**
-  * New root namespace class `\Cancellation` may conflict with existing userland code
+  * New root namespace class ''\Cancellation'' may conflict with existing userland code
 
 === API Overview ===
 
@@ -355,7 +355,7 @@ guarantees need special handling through proper ''Cancellation'' exception manag
 ==== Namespace ====
 
 All functions, classes, and constants defined in
-this **RFC** are located in the ''Async'' namespace (except for `Cancellation`).
+this **RFC** are located in the ''Async'' namespace (except for ''Cancellation'').
 Extensions are allowed to extend this namespace with functions and classes,
 provided that they are directly related to concurrency functionality.
 
@@ -1316,13 +1316,13 @@ PHP 8.6+
 
 ==== To SAPIs ====
 
-The use of asynchrony is **always available**, regardless of how `PHP` is integrated.
+The use of asynchrony is **always available**, regardless of how ''PHP'' is integrated.
 
 The **True Async** module activates the reactor within the context of ''php_request_startup\php_request_shutdown()''
 request processing.
 
-From the perspective of external integration, `PHP`’s behavior **remains unchanged**.
-This means that for all execution modes: from `FPM` to `CLI` asynchrony **does not require** any modifications to the SAPI code.
+From the perspective of external integration, ''PHP''’s behavior **remains unchanged**.
+This means that for all execution modes: from ''FPM'' to ''CLI'' asynchrony **does not require** any modifications to the SAPI code.
 
 ==== To Existing Extensions ====
 
@@ -1369,7 +1369,7 @@ None.
 ===== Future Scope =====
 
 This RFC focuses on core async functionality (coroutines, await, cancellation).
-For `Scope` and structured concurrency, please see the [[rfc:true_async_scope|Scope RFC]].
+For ''Scope'' and structured concurrency, please see the [[rfc:true_async_scope|Scope RFC]].
 
 === Reactor ===
 
