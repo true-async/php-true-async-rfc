@@ -1293,7 +1293,7 @@ This RFC extends PHP's native **''Fiber''** class with new method:
 
 <code php>
 class Fiber {
-    public function getCoroutine(): ?\Async\Coroutine {}
+    public function getCoroutine(): \Async\Coroutine {}
 }
 </code>
 
