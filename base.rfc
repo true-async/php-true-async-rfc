@@ -126,6 +126,12 @@ namespace Async {
      */
     function get_coroutines(): array {}
 
+    /**
+     * Registers a callback to be executed when the current coroutine completes
+     * Shorthand for current_coroutine()->finally($callback)
+     */
+    function finally(callable $callback): void {}
+
     // === Core Classes ===
 
     /**
@@ -156,9 +162,7 @@ namespace Async {
         /**
          * Returns the Coroutine exception when finished
          * If the Coroutine is not finished, it will return null
-         * If the Coroutine is cancelled, it will return an Cancellation
-         *
-         * @throws \RuntimeException if the Coroutine is running
+         * If the Coroutine is cancelled, it will return a Cancellation
          */
         public function getException(): mixed {}
 
@@ -304,7 +308,7 @@ echo await(spawn(file_get_contents(...), "https://php.net/"), spawn('sleep', 2))
 
 === Suspend ===
 
-Transferring control from the coroutine to the other coroutines.:
+Transferring control from the coroutine to the other coroutines:
 
 <code php>
 use function Async\spawn;
@@ -985,6 +989,9 @@ The ''finally'' semantics are most commonly used to release resources,
 serving as a shorter alternative to ''try-finally'' blocks:
 
 <code php>
+use function Async\finally;
+use function Async\spawn;
+
 function task(): void
 {
     $file = fopen('file.txt', 'r');
@@ -1230,7 +1237,7 @@ and generates warnings containing information about which **Coroutines** are in 
 and the exact lines of code where they were suspended.
 
 At the end of the application lifecycle, if a deadlock condition was detected, 
-a **DeadlockCancellation** exception is thrown as a fatal error. This exception extends **Error** 
+a **DeadlockCancellation** exception is thrown as a fatal error. This exception extends **Cancellation** 
 and indicates a critical architectural problem in the application design.
 The **DeadlockCancellation** is not intended to be caught during normal execution,
 but rather serves as a diagnostic tool to identify circular dependencies between coroutines.
@@ -1377,9 +1384,9 @@ At the moment, the Reactor component uses the ''LibUV'' library.
 This component should be implemented as a separate extension.
 
 ===== Voting Choices =====
-Yes or no vote.  2/3 required to pass. Voting ends 2026-02-01 at 00:00:00 UTC
+Yes or no vote.  2/3 required to pass. Voting ends 2026-02-16 at 00:00:00 UTC
 
-<doodle title="Accept True Async RFC 1.7?" voteType="single" closed="false" closeon="2026-02-01T00:00:00Z">
+<doodle title="Accept True Async RFC 1.7?" voteType="single" closed="false" closeon="2026-02-16T00:00:00Z">
    * Yes
    * No
    * Abstain
