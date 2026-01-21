@@ -224,24 +224,29 @@ namespace Async {
     /**
      * General exception class for Async namespace
      */
-    class Exception extends \Exception {}
+    class AsyncException extends \Exception {}
+
+    /**
+     * General error class for Async namespace
+     */
+    class AsyncError extends \Error {}
 
     /**
      * General Cancellation class for Async namespace
      */
-    class Cancellation extends \Cancellation {}
+    class AsyncCancellation extends \Cancellation {}
 
     /**
      * Exception thrown when await() is cancelled by $cancellation parameter
      */
-    class AwaitCancelledException extends Exception {
+    class AwaitCancelledException extends AsyncException {
         public function __construct(string $message = "", int $code = 0, ?\Throwable $previous = null) {}
     }
 
     /**
      * Fatal error thrown when deadlock is detected
      */
-    class DeadlockCancellation extends Cancellation {
+    class DeadlockError extends AsyncError {
         public function __construct(string $message = "", int $code = 0, ?\Throwable $previous = null) {}
     }
 }
@@ -881,14 +886,14 @@ The ''Scheduler'' takes the special ''YIELD'' state into account when detecting 
 **Resolution strategy:**
 
 If **all remaining coroutines** are Fiber-coroutines in ''YIELD'' state,
-the scheduler performs **graceful cancellation** instead of throwing ''DeadlockCancellation''.
+the scheduler performs **graceful cancellation** instead of throwing ''DeadlockError''.
 This happens because:
   * Suspended Fibers belong to their variables/objects, not to the scheduler
   * They are waiting for explicit resume, which is a valid suspended state
   * This is not a true deadlock. It's intentional symmetric suspension
 
 **Behavior difference:**
-  * **Regular coroutines in deadlock**: Receive ''DeadlockCancellation''
+  * **Regular coroutines in deadlock**: Receive ''DeadlockError''
   * **Only Fiber-coroutines suspended**: Graceful cancellation without exception
 
 <code php>
@@ -899,7 +904,7 @@ $coro = spawn(function() {
     $fiber = new Fiber(function() {
         Fiber::suspend();  // Waiting for resume
         // If no resume happens and this is the only coroutine left,
-        // graceful cancellation occurs instead of DeadlockCancellation
+        // graceful cancellation occurs instead of DeadlockError
     });
 
     $fiber->start();
@@ -909,7 +914,7 @@ $coro = spawn(function() {
 });
 
 await($coro);
-// No DeadlockCancellation thrown
+// No DeadlockError thrown
 </code>
 
 This design recognizes that suspended Fibers represent intentional state, not erroneous deadlock conditions.
@@ -1237,9 +1242,9 @@ and generates warnings containing information about which **Coroutines** are in 
 and the exact lines of code where they were suspended.
 
 At the end of the application lifecycle, if a deadlock condition was detected, 
-a **DeadlockCancellation** exception is thrown as a fatal error. This exception extends **Cancellation** 
+a **DeadlockError** is thrown as a fatal error
 and indicates a critical architectural problem in the application design.
-The **DeadlockCancellation** is not intended to be caught during normal execution,
+The **DeadlockError** is not intended to be caught during normal execution,
 but rather serves as a diagnostic tool to identify circular dependencies between coroutines.
 
 Example of deadlock situation:
@@ -1258,7 +1263,7 @@ $coroutine2 = spawn(function() use ($coroutine1) {
     await($coroutine1); // Waits for coroutine1 - deadlock!
 });
 
-// Results in: Fatal error: Uncaught Async\DeadlockCancellation: 
+// Results in: Fatal error: Uncaught Async\DeadlockError: 
 // Deadlock detected: no active coroutines, 2 coroutines in waiting
 </code>
 
@@ -1451,7 +1456,7 @@ The code will be split into several PRs upon agreement.
   * Moved ''Cancellation'' to **root namespace** (''\Cancellation'') as it's a fundamental PHP mechanism, not Async-specific
   * Changed ''Cancellation'' inheritance from ''\Error'' to ''\Throwable'' directly, following Python's ''CancelledError'' pattern (BaseException since 3.8)
   * Added backward compatibility notes about new root namespace class
-  * Rename ''DeadlockException'' to ''DeadlockCancellation''
+  * **Exception hierarchy refinement:** Renamed ''Exception'' → ''AsyncException'', ''Cancellation'' → ''AsyncCancellation''; added ''AsyncError'' extends ''\Error''; changed ''DeadlockCancellation'' → ''DeadlockError'' extends ''\Error'' for better semantics
 
 ==== Version 1.6 (November 2025) ====
   * I/O functions have earned the right to be covered in a separate **RFC**.
